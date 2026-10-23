@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/chuma-beep/mathua/internal/generator"
 	"github.com/chuma-beep/mathua/internal/grader"
@@ -46,33 +47,60 @@ func Register(reg *generator.Registry) {
 	registerBatch(reg)
 }
 
+func containsWord(q, word string) bool {
+	fields := strings.FieldsFunc(q, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-'
+	})
+	for _, f := range fields {
+		if f == word {
+			return true
+		}
+	}
+	return false
+}
+
 type vectorConceptGen struct{}
 
 func (g *vectorConceptGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	triples := [][3]int{
-		{3, 4, 5}, {4, 3, 5},
-		{6, 8, 10}, {8, 6, 10},
-		{5, 12, 13}, {12, 5, 13},
-		{8, 15, 17}, {15, 8, 17},
-		{9, 12, 15}, {12, 9, 15},
-		{7, 24, 25}, {24, 7, 25},
-	}
-	if ctx.Difficulty > 0.6 {
-		triples = append(triples,
-			[][3]int{{20, 21, 29}, {9, 40, 41}, {11, 60, 61}}...)
-	}
-	t := triples[rand.Intn(len(triples))]
-	x, y, mag := t[0], t[1], t[2]
-	if rand.Intn(2) == 0 {
-		x = -x
-	}
-	if rand.Intn(2) == 0 {
-		y = -y
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var x, y, mag int
+	var q, ex string
+	for {
+		m := smallInt(2, 4+tier*2)
+		n := smallInt(1, m-1)
+		k := smallInt(1, 2+tier)
+		x = k * (m*m - n*n)
+		y = k * (2 * m * n)
+		mag = k * (m*m + n*n)
+		if rand.Intn(2) == 0 {
+			x, y = y, x
+		}
+		if tier > 0 && rand.Intn(2) == 0 {
+			x = -x
+		}
+		if tier > 0 && rand.Intn(2) == 0 {
+			y = -y
+		}
+		ansStr := strconv.Itoa(mag)
+		q = fmt.Sprintf("What is the magnitude of vector \\((%d,%d)\\)?", x, y)
+		if mag == x || mag == -x || mag == y || mag == -y || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("Subgoal 1: State the Euclidean vector magnitude definition \\(\\|(x,y)\\| = \\sqrt{x^2 + y^2}\\).\n"+
+			"Subgoal 2: Substitute components \\(x = %d\\) and \\(y = %d\\): \\(\\sqrt{(%d)^2 + (%d)^2}\\).\n"+
+			"Subgoal 3: Evaluate squares and root: \\(\\sqrt{%d + %d} = \\sqrt{%d} = %d\\).",
+			x, y, x, y, x*x, y*y, x*x+y*y, mag)
+		break
 	}
 	return generator.Problem{
-		Question:    fmt.Sprintf("What is the magnitude of vector \\((%d,%d)\\)?", x, y),
-		Answer:      fmt.Sprintf("%d", mag),
-		Explanation: fmt.Sprintf("|(%d,%d)| = sqrt(%d²+%d²) = sqrt(%d+%d) = sqrt(%d) = %d", x, y, x, y, x*x, y*y, x*x+y*y, mag),
+		Question:    q,
+		Answer:      strconv.Itoa(mag),
+		Explanation: ex,
+		Facts: map[string]string{
+			"x":      strconv.Itoa(x),
+			"y":      strconv.Itoa(y),
+			"answer": strconv.Itoa(mag),
+		},
 	}
 }
 
@@ -104,14 +132,50 @@ func (g *vectorAddGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type vectorDotGen struct{}
 
 func (g *vectorDotGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
-	a, b := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-	c, d := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-	dot := a*c + b*d
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b, c, d, dot int
+	var q, ex string
+	for {
+		bound := 4 + tier*3
+		a = smallInt(1, bound)
+		b = smallInt(1, bound)
+		c = smallInt(1, bound)
+		d = smallInt(1, bound)
+		if tier > 0 && rand.Intn(2) == 0 {
+			a = -a
+		}
+		if tier > 0 && rand.Intn(2) == 0 {
+			b = -b
+		}
+		if tier > 0 && rand.Intn(2) == 0 {
+			c = -c
+		}
+		if tier > 0 && rand.Intn(2) == 0 {
+			d = -d
+		}
+		dot = a*c + b*d
+		ansStr := strconv.Itoa(dot)
+		q = fmt.Sprintf("Compute the dot product \\((%d,%d) \\cdot (%d,%d)\\).", a, b, c, d)
+		if dot == a || dot == -a || dot == b || dot == -b || dot == c || dot == -c || dot == d || dot == -d || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("Subgoal 1: State the definition of the dot product in \\(\\mathbb{R}^2\\): \\((u_1, u_2) \\cdot (v_1, v_2) = u_1 v_1 + u_2 v_2\\).\n"+
+			"Subgoal 2: Substitute vectors \\((%d,%d)\\) and \\((%d,%d)\\): \\((%d)(%d) + (%d)(%d)\\).\n"+
+			"Subgoal 3: Compute products and sum: \\(%d + (%d) = %d\\).",
+			a, b, c, d, a, c, b, d, a*c, b*d, dot)
+		break
+	}
 	return generator.Problem{
-		Question:    fmt.Sprintf("Compute the dot product: \\((%d,%d) \\cdot (%d,%d) =\\) ?", a, b, c, d),
-		Answer:      fmt.Sprintf("%d", dot),
-		Explanation: fmt.Sprintf("(%d,%d) · (%d,%d) = %d*%d + %d*%d = %d+%d = %d", a, b, c, d, a, c, b, d, a*c, b*d, dot),
+		Question:    q,
+		Answer:      strconv.Itoa(dot),
+		Explanation: ex,
+		Facts: map[string]string{
+			"u1":     strconv.Itoa(a),
+			"u2":     strconv.Itoa(b),
+			"v1":     strconv.Itoa(c),
+			"v2":     strconv.Itoa(d),
+			"answer": strconv.Itoa(dot),
+		},
 	}
 }
 
@@ -558,73 +622,152 @@ func (g *transformationsGen) Generate(ctx generator.GeneratorContext) generator.
 type spanGen struct{}
 
 func (g *spanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
-	switch mode {
-	case 0:
-		// Dimension of span of two vectors in R^2
-		dependent := rand.Intn(2) == 0
-		if dependent {
-			v1 := smallInt(1, 4)
-			v2 := smallInt(1, 4)
-			m := smallInt(2, 4)
-			w1 := m * v1
-			w2 := m * v2
-			return generator.Problem{
-				Question:    fmt.Sprintf("What is the dimension of the subspace \\(\\operatorname{span}\\{(%d,%d), (%d,%d)\\}\\) in \\(\\mathbb{R}^2\\)?", v1, v2, w1, w2),
-				Answer:      "1",
-				Explanation: fmt.Sprintf("The second vector is %d times the first vector, so they are linearly dependent. The dimension of their span is 1.", m),
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	for {
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			// Dimension of span of two vectors in R^2
+			dependent := rand.Intn(2) == 0
+			if dependent {
+				v1 := smallInt(2, 5+tier*2)
+				v2 := smallInt(2, 5+tier*2)
+				m := smallInt(2, 3+tier)
+				w1 := m * v1
+				w2 := m * v2
+				q := fmt.Sprintf("What is the dimension of the subspace \\(\\operatorname{span}\\{(%d,%d), (%d,%d)\\}\\) in \\(\\mathbb{R}^2\\)?", v1, v2, w1, w2)
+				ex := fmt.Sprintf("Subgoal 1: State the linear dependence criterion for span in \\(\\mathbb{R}^2\\): two non-zero vectors span a 1-dimensional line if they are proportional.\n"+
+					"Subgoal 2: Observe that vector \\((%d,%d)\\) equals %d times vector \\((%d,%d)\\).\n"+
+					"Subgoal 3: Conclude that the vectors are linearly dependent, so the subspace dimension is 1.",
+					w1, w2, m, v1, v2)
+				return generator.Problem{
+					Question:    q,
+					Answer:      "1",
+					Explanation: ex,
+					Facts: map[string]string{
+						"v1":     strconv.Itoa(v1),
+						"v2":     strconv.Itoa(v2),
+						"w1":     strconv.Itoa(w1),
+						"w2":     strconv.Itoa(w2),
+						"answer": "1",
+					},
+				}
 			}
-		}
-		v1 := smallInt(1, 4)
-		v2 := 0
-		w1 := 0
-		w2 := smallInt(1, 4)
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the dimension of the subspace \\(\\operatorname{span}\\{(%d,%d), (%d,%d)\\}\\) in \\(\\mathbb{R}^2\\)?", v1, v2, w1, w2),
-			Answer:      "2",
-			Explanation: "The determinant of the two vectors is nonzero, so they are linearly independent and span a 2-dimensional subspace.",
-		}
-	case 1:
-		// Linear combination scalar c
-		c := smallInt(2, 6+int(ctx.Difficulty*3))
-		x := smallInt(1, 5)
-		y := smallInt(1, 5)
-		cx := c * x
-		cy := c * y
-		return generator.Problem{
-			Question:    fmt.Sprintf("Find the scalar \\(c\\) such that \\((%d,%d) = c(%d,%d)\\), showing that \\((%d,%d)\\) lies in \\(\\operatorname{span}\\{(%d,%d)\\}\\).", cx, cy, x, y, cx, cy, x, y),
-			Answer:      fmt.Sprintf("%d", c),
-			Explanation: fmt.Sprintf("Equating coordinates gives \\(%d = c(%d)\\), which yields \\(c = %d\\).", cx, x, c),
-		}
-	case 2:
-		// Parameter k making vectors linearly dependent
-		a := smallInt(1, 4)
-		b := smallInt(1, 4)
-		m := smallInt(2, 4)
-		cVal := m * a
-		k := m * b
-		return generator.Problem{
-			Question:    fmt.Sprintf("For what integer value of \\(k\\) do the vectors \\(v = (%d,%d)\\) and \\(w = (%d,k)\\) fail to span \\(\\mathbb{R}^2\\)?", a, b, cVal),
-			Answer:      fmt.Sprintf("%d", k),
-			Explanation: fmt.Sprintf("The vectors fail to span \\(\\mathbb{R}^2\\) when their determinant is zero: \\((%d)(k) - (%d)(%d) = 0\\), which gives \\(k = %d\\).", a, b, cVal, k),
-		}
-	case 3:
-		// Dimension of 3 vectors with 0 in z coordinate
-		x := smallInt(1, 5)
-		y := smallInt(1, 5)
-		return generator.Problem{
-			Question:    fmt.Sprintf("Consider the vectors \\(v_1 = (1,0,0)\\), \\(v_2 = (0,1,0)\\) and \\(v_3 = (%d,%d,0)\\). What is the dimension of \\(\\operatorname{span}\\{v_1, v_2, v_3\\}\\)?", x, y),
-			Answer:      "2",
-			Explanation: "All three vectors lie in the xy-plane because their z-components are zero. The first two vectors form a basis for that plane, so the dimension is 2.",
-		}
-	default:
-		// Span of k standard basis vectors in R^n
-		k := smallInt(2, 4+int(ctx.Difficulty*2))
-		n := k + smallInt(1, 3)
-		return generator.Problem{
-			Question:    fmt.Sprintf("Let \\(S\\) be a subset of %d distinct standard unit basis vectors in \\(\\mathbb{R}^{%d}\\). What is the dimension of \\(\\operatorname{span}(S)\\)?", k, n),
-			Answer:      fmt.Sprintf("%d", k),
-			Explanation: fmt.Sprintf("Distinct standard basis vectors are mutually orthogonal and linearly independent. Therefore %d such vectors span a subspace of dimension %d.", k, k),
+			v1 := smallInt(2, 6+tier*2)
+			w2 := smallInt(2, 6+tier*2)
+			q := fmt.Sprintf("What is the dimension of the subspace \\(\\operatorname{span}\\{(%d,0), (0,%d)\\}\\) in \\(\\mathbb{R}^2\\)?", v1, w2)
+			ex := fmt.Sprintf("Subgoal 1: State the linear independence criterion for span in \\(\\mathbb{R}^2\\): two orthogonal non-zero vectors span the entire 2-dimensional space.\n"+
+				"Subgoal 2: Compute the determinant of matrix \\(\\begin{pmatrix} %d & 0 \\\\ 0 & %d \\end{pmatrix}\\), giving \\((%d)(%d) - 0 = %d \\ne 0\\).\n"+
+				"Subgoal 3: Conclude that the vectors are linearly independent, so the subspace dimension is 2.",
+				v1, w2, v1, w2, v1*w2)
+			return generator.Problem{
+				Question:    q,
+				Answer:      "2",
+				Explanation: ex,
+				Facts: map[string]string{
+					"v1":     strconv.Itoa(v1),
+					"w2":     strconv.Itoa(w2),
+					"answer": "2",
+				},
+			}
+		case 1:
+			// Linear combination scalar c
+			c := smallInt(2, 5+tier*3)
+			x := smallInt(2, 6+tier*2)
+			y := smallInt(2, 6+tier*2)
+			cx := c * x
+			cy := c * y
+			ansStr := strconv.Itoa(c)
+			q := fmt.Sprintf("Find the scalar \\(c\\) such that \\((%d,%d) = c(%d,%d)\\), showing that \\((%d,%d)\\) lies in \\(\\operatorname{span}\\{(%d,%d)\\}\\).", cx, cy, x, y, cx, cy, x, y)
+			if c == x || c == y || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the coordinate-wise scalar multiplication requirement \\((%d,%d) = c(%d,%d)\\), requiring \\(%d = c(%d)\\) and \\(%d = c(%d)\\).\n"+
+				"Subgoal 2: Solve the first coordinate equation for the scalar: \\(c = \\frac{%d}{%d}\\).\n"+
+				"Subgoal 3: Evaluate the quotient to find \\(c = %d\\).",
+				cx, cy, x, y, cx, x, cy, y, cx, x, c)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"cx":     strconv.Itoa(cx),
+					"cy":     strconv.Itoa(cy),
+					"x":      strconv.Itoa(x),
+					"y":      strconv.Itoa(y),
+					"answer": ansStr,
+				},
+			}
+		case 2:
+			// Parameter k making vectors linearly dependent
+			a := smallInt(2, 5+tier*2)
+			b := smallInt(2, 5+tier*2)
+			m := smallInt(2, 4+tier)
+			cVal := m * a
+			k := m * b
+			ansStr := strconv.Itoa(k)
+			q := fmt.Sprintf("For what integer value of \\(k\\) do the vectors \\(v = (%d,%d)\\) and \\(w = (%d,k)\\) fail to span \\(\\mathbb{R}^2\\)?", a, b, cVal)
+			if k == a || k == b || k == cVal || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the spanning condition: two vectors in \\(\\mathbb{R}^2\\) fail to span if and only if their determinant vanishes: \\((%d)(k) - (%d)(%d) = 0\\).\n"+
+				"Subgoal 2: Substitute parameters into the linear equation: \\(%d k - %d = 0\\), so \\(%d k = %d\\).\n"+
+				"Subgoal 3: Divide by coefficient to solve for \\(k\\): \\(k = \\frac{%d}{%d} = %d\\).",
+				a, b, cVal, a, b*cVal, a, b*cVal, b*cVal, a, k)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a":      strconv.Itoa(a),
+					"b":      strconv.Itoa(b),
+					"c":      strconv.Itoa(cVal),
+					"answer": ansStr,
+				},
+			}
+		case 3:
+			// Dimension of 3 vectors with 0 in z coordinate
+			x := smallInt(2, 7+tier*3)
+			y := smallInt(2, 7+tier*3)
+			q := fmt.Sprintf("Consider vectors \\(v_1 = (1,0,0)\\), \\(v_2 = (0,1,0)\\) and \\(v_3 = (%d,%d,0)\\). What is the dimension of \\(\\operatorname{span}\\{v_1, v_2, v_3\\}\\)?", x, y)
+			ex := fmt.Sprintf("Subgoal 1: State subspace confinement: all three vectors have zero \\(z\\)-component and thus lie in the \\(xy\\)-plane.\n"+
+				"Subgoal 2: Observe that \\(v_1 = (1,0,0)\\) and \\(v_2 = (0,1,0)\\) form an orthonormal basis for the \\(xy\\)-plane, while \\(v_3 = %d v_1 + %d v_2\\) is a linear combination of them.\n"+
+				"Subgoal 3: Conclude that the span equals the 2-dimensional \\(xy\\)-plane, so the dimension is 2.",
+				x, y)
+			return generator.Problem{
+				Question:    q,
+				Answer:      "2",
+				Explanation: ex,
+				Facts: map[string]string{
+					"x":      strconv.Itoa(x),
+					"y":      strconv.Itoa(y),
+					"answer": "2",
+				},
+			}
+		default:
+			// Span of k standard basis vectors in R^n: dimension of orthogonal complement
+			k := smallInt(2, 4+tier*2)
+			n := k + smallInt(2, 4+tier)
+			ans := n - k
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("Let \\(S\\) be a subset of %d distinct standard unit basis vectors in \\(\\mathbb{R}^{%d}\\). What is the dimension of the orthogonal complement \\((\\operatorname{span}(S))^\\perp\\)?", k, n)
+			if ans == k || ans == n || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the orthogonal complement dimension theorem: \\(\\dim(W^\\perp) = n - \\dim(W)\\) in \\(\\mathbb{R}^n\\).\n"+
+				"Subgoal 2: Substitute ambient dimension \\(n = %d\\) and span dimension \\(\\dim(\\operatorname{span}(S)) = %d\\): %d - %d.\n"+
+				"Subgoal 3: Evaluate dimension: %d.",
+				n, k, n, k, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"k":      strconv.Itoa(k),
+					"n":      strconv.Itoa(n),
+					"answer": ansStr,
+				},
+			}
 		}
 	}
 }
@@ -632,55 +775,127 @@ func (g *spanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type basisGen struct{}
 
 func (g *basisGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
-	switch mode {
-	case 0:
-		// Polynomial space P_n
-		n := smallInt(1, 5+int(ctx.Difficulty*3))
-		ans := n + 1
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the dimension of the vector space \\(\\mathcal{P}_{%d}\\) of real polynomials of degree at most %d?", n, n),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("A standard basis for \\(\\mathcal{P}_{%d}\\) is \\(\\{1, x, x^2, \\dots, x^{%d}\\}\\), which has %d elements. Thus \\(\\dim(\\mathcal{P}_{%d}) = %d\\).", n, n, ans, n, ans),
-		}
-	case 1:
-		// Matrix space M_{m x n}
-		m := smallInt(2, 4+int(ctx.Difficulty*2))
-		n := smallInt(2, 4+int(ctx.Difficulty*2))
-		ans := m * n
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the dimension of the vector space \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\) of all %d-by-%d real matrices?", m, n, m, n),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("The standard basis consists of single-entry matrix units \\(E_{ij}\\). With %d rows and %d columns, the dimension is %d.", m, n, ans),
-		}
-	case 2:
-		// Diagonal matrices D_n
-		n := smallInt(2, 6+int(ctx.Difficulty*4))
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the dimension of the subspace of all %d-by-%d diagonal matrices in \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\)?", n, n, n, n),
-			Answer:      fmt.Sprintf("%d", n),
-			Explanation: fmt.Sprintf("A diagonal matrix is completely determined by its %d diagonal entries, so its basis has %d matrices.", n, n),
-		}
-	case 3:
-		// Coordinates with respect to an upper triangular basis
-		a := smallInt(1, 3)
-		c1 := smallInt(1, 5+int(ctx.Difficulty*3))
-		c2 := smallInt(1, 4+int(ctx.Difficulty*2))
-		w1 := c1 + a*c2
-		w2 := c2
-		return generator.Problem{
-			Question:    fmt.Sprintf("Given the ordered basis \\(\\mathcal{B} = \\{(1,0), (%d,1)\\}\\), find the first coordinate \\(c_1\\) of the vector \\((%d,%d)\\) with respect to \\(\\mathcal{B}\\).", a, w1, w2),
-			Answer:      fmt.Sprintf("%d", c1),
-			Explanation: fmt.Sprintf("We solve \\(c_1(1,0) + c_2(%d,1) = (%d,%d)\\). The second component gives \\(c_2 = %d\\). The first component gives \\(c_1 + %d(%d) = %d\\), so \\(c_1 = %d - %d = %d\\).", a, w1, w2, w2, a, w2, w1, w1, a*w2, c1),
-		}
-	default:
-		// Symmetric matrices Sym_n
-		n := smallInt(2, 5)
-		ans := n * (n + 1) / 2
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the dimension of the subspace of all %d-by-%d real symmetric matrices in \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\)?", n, n, n, n),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("A symmetric matrix is determined by its diagonal and upper triangular entries. The number of independent entries is \\(\\frac{%d(%d + 1)}{2} = %d\\).", n, n, ans),
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	for {
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			// Polynomial space P_n
+			n := smallInt(2, 6+tier*4)
+			ans := n + 1
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("What is the dimension of the vector space \\(\\mathcal{P}_{%d}\\) of real polynomials of degree at most %d?", n, n)
+			if ans == n || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the standard monomial basis for \\(\\mathcal{P}_{%d}\\): \\(\\{1, x, x^2, \\dots, x^{%d}\\}\\).\n"+
+				"Subgoal 2: Count the basis elements: %d degree terms plus 1 constant term: %d + 1.\n"+
+				"Subgoal 3: Conclude that \\(\\dim(\\mathcal{P}_{%d}) = %d\\).",
+				n, n, n, n, n, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"n":      strconv.Itoa(n),
+					"answer": ansStr,
+				},
+			}
+		case 1:
+			// Matrix space M_{m x n}
+			m := smallInt(2, 4+tier*2)
+			n := smallInt(2, 4+tier*2)
+			ans := m * n
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("What is the dimension of the vector space \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\) of all %d-by-%d real matrices?", m, n, m, n)
+			if ans == m || ans == n || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the standard matrix unit basis \\(E_{ij}\\) for \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\).\n"+
+				"Subgoal 2: Multiply the row and column dimensions: \\((%d) \\times (%d)\\).\n"+
+				"Subgoal 3: Evaluate the product to find \\(\\dim = %d\\).",
+				m, n, m, n, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"m":      strconv.Itoa(m),
+					"n":      strconv.Itoa(n),
+					"answer": ansStr,
+				},
+			}
+		case 2:
+			// Trace-zero diagonal matrices
+			n := smallInt(3, 7+tier*3)
+			ans := n - 1
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("What is the dimension of the subspace of all %d-by-%d diagonal matrices with trace zero in \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\)?", n, n, n, n)
+			if ans == n || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the trace constraint on diagonal matrices: an \\(n \\times n\\) diagonal matrix has \\(n\\) free diagonal entries and the trace condition \\(d_{11} + \\dots + d_{nn} = 0\\) imposes 1 linear restriction.\n"+
+				"Subgoal 2: Subtract the linear restriction from total diagonal dimension: %d - 1.\n"+
+				"Subgoal 3: Evaluate dimension: %d.",
+				n, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"n":      strconv.Itoa(n),
+					"answer": ansStr,
+				},
+			}
+		case 3:
+			// Coordinates with respect to an upper triangular basis
+			a := smallInt(2, 4+tier)
+			c1 := smallInt(2, 6+tier*3)
+			c2 := smallInt(2, 5+tier*2)
+			w1 := c1 + a*c2
+			w2 := c2
+			ansStr := strconv.Itoa(c1)
+			q := fmt.Sprintf("Given the ordered basis \\(\\mathcal{B} = \\{(1,0), (%d,1)\\}\\), find the first coordinate \\(c_1\\) of the vector \\((%d,%d)\\) with respect to \\(\\mathcal{B}\\).", a, w1, w2)
+			if c1 == a || c1 == w1 || c1 == w2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: Set up the vector equation \\(c_1(1,0) + c_2(%d,1) = (%d,%d)\\).\n"+
+				"Subgoal 2: Solve the second component for \\(c_2 = %d\\) and substitute into the first equation: \\(c_1 + (%d)(%d) = %d\\).\n"+
+				"Subgoal 3: Solve for the first coordinate: \\(c_1 = %d - %d = %d\\).",
+				a, w1, w2, w2, a, w2, w1, w1, a*w2, c1)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a":      strconv.Itoa(a),
+					"w1":     strconv.Itoa(w1),
+					"w2":     strconv.Itoa(w2),
+					"answer": ansStr,
+				},
+			}
+		default:
+			// Symmetric matrices Sym_n
+			n := smallInt(2, 5+tier*2)
+			ans := n * (n + 1) / 2
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("What is the dimension of the subspace of all %d-by-%d real symmetric matrices in \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\)?", n, n, n, n)
+			if ans == n || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the symmetric matrix dimension theorem: \\(\\dim(\\operatorname{Sym}_n) = \\frac{n(n+1)}{2}\\).\n"+
+				"Subgoal 2: Substitute the matrix dimension \\(n = %d\\): \\(\\frac{(%d)(%d + 1)}{2} = \\frac{(%d)(%d)}{2}\\).\n"+
+				"Subgoal 3: Evaluate the product and divide by 2: \\(\\frac{%d}{2} = %d\\).",
+				n, n, n, n, n+1, n*(n+1), ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"n":      strconv.Itoa(n),
+					"answer": ansStr,
+				},
+			}
 		}
 	}
 }
@@ -982,96 +1197,201 @@ func (g *cosineSimilarityGen) Generate(ctx generator.GeneratorContext) generator
 type parametricGen struct{}
 
 func (g *parametricGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		x0, y0, dx, dy int
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var x0, y0, dx, dy int
+	var q, ans, ex string
+	for {
+		x0 = smallInt(1, 4+tier*3)
+		y0 = smallInt(1, 4+tier*3)
+		dx = smallInt(1, 3+tier*2)
+		dy = smallInt(1, 3+tier*2)
+		if tier > 0 && rand.Intn(2) == 0 {
+			x0 = -x0
+		}
+		if tier > 0 && rand.Intn(2) == 0 {
+			y0 = -y0
+		}
+		if rand.Intn(2) == 0 {
+			dx = -dx
+		}
+		if rand.Intn(2) == 0 {
+			dy = -dy
+		}
+		q = fmt.Sprintf("Find the parametric equations for the line through \\((%d,%d)\\) with direction vector \\((%d,%d)\\).", x0, y0, dx, dy)
+		ans = fmt.Sprintf("x=%d+%dt,y=%d+%dt", x0, dx, y0, dy)
+		ex = fmt.Sprintf("Subgoal 1: State the vector form of a line: \\(\\mathbf{r}(t) = \\mathbf{r}_0 + t \\mathbf{v}\\).\n"+
+			"Subgoal 2: Substitute initial point \\((%d,%d)\\) and direction vector \\((%d,%d)\\): \\((x,y) = (%d,%d) + t(%d,%d)\\).\n"+
+			"Subgoal 3: Separate into coordinate equations: \\(x = %d + %dt\\) and \\(y = %d + %dt\\).",
+			x0, y0, dx, dy, x0, y0, dx, dy, x0, dx, y0, dy)
+		break
 	}
-	directions := []entry{
-		{1, 2, 3, 4},
-		{0, 0, 1, 2},
-		{2, 3, -1, 2},
-		{-1, 1, 2, -3},
-		{0, 1, 1, 0},
-		{1, 0, 0, 1},
-		{3, 0, 1, 1},
-		{-2, 4, 3, -1},
-	}
-	e := directions[rand.Intn(len(directions))]
 	return generator.Problem{
-		Question:    fmt.Sprintf("Find the parametric equations for the line through \\((%d,%d)\\) with direction vector \\((%d,%d)\\).", e.x0, e.y0, e.dx, e.dy),
-		Answer:      fmt.Sprintf("x=%d+%dt,y=%d+%dt", e.x0, e.dx, e.y0, e.dy),
-		Explanation: fmt.Sprintf("The parametric form is (x,y) = (%d,%d) + t(%d,%d), so x=%d+%dt, y=%d+%dt.", e.x0, e.y0, e.dx, e.dy, e.x0, e.dx, e.y0, e.dy),
+		Question:    q,
+		Answer:      ans,
+		Explanation: ex,
+		Facts: map[string]string{
+			"x0":     strconv.Itoa(x0),
+			"y0":     strconv.Itoa(y0),
+			"dx":     strconv.Itoa(dx),
+			"dy":     strconv.Itoa(dy),
+			"answer": ans,
+		},
 	}
 }
 
 type innerProductGen struct{}
 
 func (g *innerProductGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
-	switch mode {
-	case 0:
-		// Weighted inner product
-		w1 := smallInt(1, 4)
-		w2 := smallInt(1, 4)
-		u1 := smallInt(1, 4)
-		u2 := smallInt(1, 4)
-		v1 := smallInt(1, 4)
-		v2 := smallInt(1, 4)
-		ans := w1*u1*v1 + w2*u2*v2
-		return generator.Problem{
-			Question:    fmt.Sprintf("Compute the weighted inner product \\(\\langle u, v \\rangle = %d u_1 v_1 + %d u_2 v_2\\) for \\(u = (%d,%d)\\) and \\(v = (%d,%d)\\).", w1, w2, u1, u2, v1, v2),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("Substituting components gives \\(\\langle u, v \\rangle = %d(%d)(%d) + %d(%d)(%d) = %d\\).", w1, u1, v1, w2, u2, v2, ans),
-		}
-	case 1:
-		// Orthogonality parameter k
-		a := smallInt(1, 4)
-		b := smallInt(1, 4)
-		m := smallInt(1, 3)
-		c := m * b
-		k := -m * a
-		return generator.Problem{
-			Question:    fmt.Sprintf("For what integer value of \\(k\\) are the vectors \\(u = (%d,%d)\\) and \\(v = (%d,k)\\) orthogonal under the standard dot product?", a, b, c),
-			Answer:      fmt.Sprintf("%d", k),
-			Explanation: fmt.Sprintf("Vectors are orthogonal when their inner product is zero: \\((%d)(%d) + (%d)(k) = 0\\), which gives \\(k = %d\\).", a, c, b, k),
-		}
-	case 2:
-		// Matrix-induced inner product
-		d1 := smallInt(1, 3)
-		d2 := smallInt(1, 3)
-		u1 := smallInt(1, 3)
-		u2 := smallInt(1, 3)
-		v1 := smallInt(1, 3)
-		v2 := smallInt(1, 3)
-		ans := d1*u1*v1 + d2*u2*v2
-		return generator.Problem{
-			Question:    fmt.Sprintf("For the diagonal matrix \\(A = \\begin{pmatrix} %d & 0 \\\\ 0 & %d \\end{pmatrix}\\), compute the induced inner product \\(\\langle u, v \\rangle_A = u^T A v\\) for \\(u = (%d,%d)\\) and \\(v = (%d,%d)\\).", d1, d2, u1, u2, v1, v2),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("Evaluating \\(u^T A v = %d(%d)(%d) + %d(%d)(%d)\\) gives %d.", d1, u1, v1, d2, u2, v2, ans),
-		}
-	case 3:
-		// Polynomial inner product \int_0^1 (2m x) * b dx = m b
-		m := smallInt(1, 4)
-		a := 2 * m
-		b := smallInt(1, 5)
-		ans := m * b
-		return generator.Problem{
-			Question:    fmt.Sprintf("On the vector space of polynomials with inner product \\(\\langle f, g \\rangle = \\int_0^1 f(x) g(x) \\, dx\\), compute \\(\\langle %d x, %d \\rangle\\).", a, b),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("The integral is \\(\\int_0^1 %d x \\cdot %d \\, dx = %d \\left[ \\frac{x^2}{2} \\right]_0^1 = %d \\left(\\frac{1}{2}\\right) = %d\\).", a, b, a*b, a*b, ans),
-		}
-	default:
-		// Orthogonal projection coefficient
-		v1 := smallInt(1, 3)
-		v2 := smallInt(1, 3)
-		vNormSq := v1*v1 + v2*v2
-		m := smallInt(1, 4+int(ctx.Difficulty*2))
-		u1 := m * v1
-		u2 := m * v2
-		dot := u1*v1 + u2*v2
-		return generator.Problem{
-			Question:    fmt.Sprintf("Find the scalar projection coefficient \\(c = \\frac{\\langle u, v \\rangle}{\\langle v, v \\rangle}\\) of \\(u = (%d,%d)\\) onto \\(v = (%d,%d)\\) under the standard dot product.", u1, u2, v1, v2),
-			Answer:      fmt.Sprintf("%d", m),
-			Explanation: fmt.Sprintf("We have \\(\\langle u, v \\rangle = %d(%d) + %d(%d) = %d\\) and \\(\\langle v, v \\rangle = %d^2 + %d^2 = %d\\). The projection coefficient is %d / %d = %d.", u1, v1, u2, v2, dot, v1, v2, vNormSq, dot, vNormSq, m),
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	for {
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			// Weighted inner product
+			w1 := smallInt(2, 4+tier)
+			w2 := smallInt(2, 4+tier)
+			u1 := smallInt(1, 4+tier*2)
+			u2 := smallInt(1, 4+tier*2)
+			v1 := smallInt(1, 4+tier*2)
+			v2 := smallInt(1, 4+tier*2)
+			ans := w1*u1*v1 + w2*u2*v2
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("Compute the weighted inner product \\(\\langle u, v \\rangle = %d u_1 v_1 + %d u_2 v_2\\) for \\(u = (%d,%d)\\) and \\(v = (%d,%d)\\).", w1, w2, u1, u2, v1, v2)
+			if ans == w1 || ans == w2 || ans == u1 || ans == u2 || ans == v1 || ans == v2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the weighted inner product definition: \\(\\langle u, v \\rangle = %d u_1 v_1 + %d u_2 v_2\\).\n"+
+				"Subgoal 2: Substitute components: \\((%d)(%d)(%d) + (%d)(%d)(%d)\\).\n"+
+				"Subgoal 3: Evaluate products and sum: %d + %d = %d.",
+				w1, w2, w1, u1, v1, w2, u2, v2, w1*u1*v1, w2*u2*v2, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"w1":     strconv.Itoa(w1),
+					"w2":     strconv.Itoa(w2),
+					"u1":     strconv.Itoa(u1),
+					"u2":     strconv.Itoa(u2),
+					"v1":     strconv.Itoa(v1),
+					"v2":     strconv.Itoa(v2),
+					"answer": ansStr,
+				},
+			}
+		case 1:
+			// Orthogonality parameter k
+			a := smallInt(2, 5+tier*2)
+			b := smallInt(2, 5+tier*2)
+			m := smallInt(2, 4+tier)
+			c := m * b
+			k := -m * a
+			ansStr := strconv.Itoa(k)
+			q := fmt.Sprintf("For what integer value of \\(k\\) are the vectors \\(u = (%d,%d)\\) and \\(v = (%d,k)\\) orthogonal under the standard dot product?", a, b, c)
+			if k == a || k == -a || k == b || k == -b || k == c || k == -c || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the orthogonality condition under dot product: \\(u \\cdot v = (%d)(%d) + (%d)(k) = 0\\).\n"+
+				"Subgoal 2: Set up linear equation: %d + %d k = 0, so %d k = -%d.\n"+
+				"Subgoal 3: Divide by coefficient to solve: \\(k = \\frac{-%d}{%d} = %d\\).",
+				a, c, b, a*c, b, b, a*c, a*c, b, k)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a":      strconv.Itoa(a),
+					"b":      strconv.Itoa(b),
+					"c":      strconv.Itoa(c),
+					"answer": ansStr,
+				},
+			}
+		case 2:
+			// Matrix-induced inner product
+			d1 := smallInt(2, 4+tier)
+			d2 := smallInt(2, 4+tier)
+			u1 := smallInt(1, 4+tier)
+			u2 := smallInt(1, 4+tier)
+			v1 := smallInt(1, 4+tier)
+			v2 := smallInt(1, 4+tier)
+			ans := d1*u1*v1 + d2*u2*v2
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("For the diagonal matrix \\(A = \\begin{pmatrix} %d & 0 \\\\ 0 & %d \\end{pmatrix}\\), compute the induced inner product \\(\\langle u, v \\rangle_A = u^T A v\\) for \\(u = (%d,%d)\\) and \\(v = (%d,%d)\\).", d1, d2, u1, u2, v1, v2)
+			if ans == d1 || ans == d2 || ans == u1 || ans == u2 || ans == v1 || ans == v2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the matrix-induced inner product definition: \\(\\langle u, v \\rangle_A = u^T A v\\).\n"+
+				"Subgoal 2: Expand quadratic form for diagonal \\(A\\): \\((%d)(%d)(%d) + (%d)(%d)(%d)\\).\n"+
+				"Subgoal 3: Compute products and sum: %d + %d = %d.",
+				d1, u1, v1, d2, u2, v2, d1*u1*v1, d2*u2*v2, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"d1":     strconv.Itoa(d1),
+					"d2":     strconv.Itoa(d2),
+					"u1":     strconv.Itoa(u1),
+					"u2":     strconv.Itoa(u2),
+					"v1":     strconv.Itoa(v1),
+					"v2":     strconv.Itoa(v2),
+					"answer": ansStr,
+				},
+			}
+		case 3:
+			// Polynomial inner product
+			m := smallInt(2, 5+tier*2)
+			a := 2 * m
+			b := smallInt(2, 5+tier*2)
+			ans := m * b
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("On the vector space of polynomials with inner product \\(\\langle f, g \\rangle = \\int_0^1 f(x) g(x) \\, dx\\), compute \\(\\langle %d x, %d \\rangle\\).", a, b)
+			if ans == a || ans == b || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the polynomial inner product integral: \\(\\langle f, g \\rangle = \\int_0^1 (%d x)(%d) \\, dx = %d \\int_0^1 x \\, dx\\).\n"+
+				"Subgoal 2: Evaluate the antiderivative at unit limits: \\(%d \\left[\\frac{x^2}{2}\\right]_0^1 = %d \\left(\\frac{1}{2}\\right)\\).\n"+
+				"Subgoal 3: Compute product: \\(%d \\times \\frac{1}{2} = %d\\).",
+				a, b, a*b, a*b, a*b, a*b, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a":      strconv.Itoa(a),
+					"b":      strconv.Itoa(b),
+					"answer": ansStr,
+				},
+			}
+		default:
+			// Orthogonal projection coefficient
+			v1 := smallInt(2, 4+tier)
+			v2 := smallInt(2, 4+tier)
+			vNormSq := v1*v1 + v2*v2
+			m := smallInt(2, 5+tier*2)
+			u1 := m * v1
+			u2 := m * v2
+			dot := u1*v1 + u2*v2
+			ansStr := strconv.Itoa(m)
+			q := fmt.Sprintf("Find the scalar projection coefficient \\(c = \\frac{\\langle u, v \\rangle}{\\langle v, v \\rangle}\\) of \\(u = (%d,%d)\\) onto \\(v = (%d,%d)\\) under the standard dot product.", u1, u2, v1, v2)
+			if m == u1 || m == u2 || m == v1 || m == v2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the projection coefficient definition: \\(c = \\frac{\\langle u, v \\rangle}{\\|v\\|^2}\\).\n"+
+				"Subgoal 2: Compute inner products: \\(\\langle u, v \\rangle = (%d)(%d) + (%d)(%d) = %d\\) and \\(\\|v\\|^2 = (%d)^2 + (%d)^2 = %d\\).\n"+
+				"Subgoal 3: Divide inner products: \\(c = \\frac{%d}{%d} = %d\\).",
+				u1, v1, u2, v2, dot, v1, v2, vNormSq, dot, vNormSq, m)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"u1":     strconv.Itoa(u1),
+					"u2":     strconv.Itoa(u2),
+					"v1":     strconv.Itoa(v1),
+					"v2":     strconv.Itoa(v2),
+					"answer": ansStr,
+				},
+			}
 		}
 	}
 }
@@ -1079,73 +1399,153 @@ func (g *innerProductGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type luGen struct{}
 
 func (g *luGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
-	switch mode {
-	case 0:
-		// det(A) = det(U)
-		u11 := smallInt(1, 4)
-		u22 := smallInt(1, 4)
-		u33 := smallInt(1, 4)
-		ans := u11 * u22 * u33
-		return generator.Problem{
-			Question:    fmt.Sprintf("An \\(n \\times n\\) matrix \\(A\\) has LU factorization \\(A = LU\\) where \\(L\\) is unit lower triangular and \\(U\\) has diagonal entries %d, %d and %d. Compute \\(\\det(A)\\).", u11, u22, u33),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("Since \\(L\\) is unit lower triangular, \\(\\det(L) = 1\\). The determinant of \\(U\\) is the product of its diagonal entries: \\(\\det(U) = (%d)(%d)(%d) = %d\\). Therefore \\(\\det(A) = \\det(L)\\det(U) = %d\\).", u11, u22, u33, ans, ans),
-		}
-	case 1:
-		// Forward solve Ly = b
-		l21 := smallInt(1, 4)
-		b1 := smallInt(1, 5)
-		y2 := smallInt(1, 5)
-		b2 := l21*b1 + y2
-		return generator.Problem{
-			Question:    fmt.Sprintf("In the first stage of solving \\(Ax = b\\) via \\(A = LU\\), solve \\(Ly = b\\) for \\(y_2\\) where \\(L = \\begin{pmatrix} 1 & 0 \\\\ %d & 1 \\end{pmatrix}\\) and \\(b = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\).", l21, b1, b2),
-			Answer:      fmt.Sprintf("%d", y2),
-			Explanation: fmt.Sprintf("Forward substitution gives \\(y_1 = %d\\). The second equation is \\(%d(y_1) + y_2 = %d\\), so \\(y_2 = %d - %d(%d) = %d\\).", b1, l21, b2, b2, l21, b1, y2),
-		}
-	case 2:
-		// Back substitution Ux = y
-		u11 := smallInt(1, 3)
-		u12 := smallInt(1, 3)
-		u22 := smallInt(1, 3)
-		x2 := smallInt(1, 4)
-		y2 := u22 * x2
-		x1 := smallInt(1, 4)
-		y1 := u11*x1 + u12*x2
-		_ = y1
-		return generator.Problem{
-			Question:    fmt.Sprintf("In the back substitution stage of solving \\(Ax = b\\), solve \\(Ux = y\\) for \\(x_2\\) where \\(U = \\begin{pmatrix} %d & %d \\\\ 0 & %d \\end{pmatrix}\\) and \\(y = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\).", u11, u12, u22, y1, y2),
-			Answer:      fmt.Sprintf("%d", x2),
-			Explanation: fmt.Sprintf("From the second row, \\(%d x_2 = %d\\), which yields \\(x_2 = %d / %d = %d\\).", u22, y2, y2, u22, x2),
-		}
-	case 3:
-		// Multiplier l_{21} in Gaussian elimination
-		a11 := smallInt(1, 4)
-		m := smallInt(2, 4)
-		a21 := m * a11
-		a12 := smallInt(1, 4)
-		a22 := smallInt(1, 5)
-		return generator.Problem{
-			Question:    fmt.Sprintf("In computing the LU factorization \\(A = LU\\) of \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) without pivoting, what is the entry \\(l_{21}\\) of the unit lower triangular factor \\(L\\)?", a11, a12, a21, a22),
-			Answer:      fmt.Sprintf("%d", m),
-			Explanation: fmt.Sprintf("The multiplier used to eliminate entry \\(a_{21}\\) using row 1 is \\(l_{21} = \\frac{a_{21}}{a_{11}} = \\frac{%d}{%d} = %d\\).", a21, a11, m),
-		}
-	default:
-		// Diagonal entry u_{22} in U
-		l21 := smallInt(1, 3)
-		u11 := smallInt(1, 4)
-		u12 := smallInt(1, 4)
-		u22 := smallInt(1, 5)
-		a11 := u11
-		a12 := u12
-		a21 := l21 * u11
-		a22 := l21*u12 + u22
-		_ = a11
-		_ = a21
-		return generator.Problem{
-			Question:    fmt.Sprintf("In computing the LU factorization \\(A = LU\\) of \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) where \\(L = \\begin{pmatrix} 1 & 0 \\\\ %d & 1 \\end{pmatrix}\\), what is the diagonal entry \\(u_{22}\\)?", a11, a12, a21, a22, l21),
-			Answer:      fmt.Sprintf("%d", u22),
-			Explanation: fmt.Sprintf("Matrix multiplication gives \\(a_{22} = l_{21} u_{12} + u_{22} = %d(%d) + u_{22} = %d\\). Thus \\(u_{22} = %d - %d = %d\\).", l21, u12, a22, a22, l21*u12, u22),
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	for {
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			// det(A) = det(U)
+			u11 := smallInt(2, 4+tier)
+			u22 := smallInt(2, 4+tier)
+			u33 := smallInt(2, 4+tier)
+			ans := u11 * u22 * u33
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("An \\(n \\times n\\) matrix \\(A\\) has LU factorization \\(A = LU\\) where \\(L\\) is unit lower triangular and \\(U\\) has diagonal entries %d, %d and %d. Compute \\(\\det(A)\\).", u11, u22, u33)
+			if ans == u11 || ans == u22 || ans == u33 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the determinant factorization property: \\(\\det(A) = \\det(L)\\det(U)\\), with \\(\\det(L) = 1\\) for unit triangular \\(L\\).\n"+
+				"Subgoal 2: Substitute upper triangular diagonal entries into the product formula: \\((%d)(%d)(%d)\\).\n"+
+				"Subgoal 3: Multiply the diagonal entries: \\(\\det(A) = %d \\times %d \\times %d = %d\\).",
+				u11, u22, u33, u11, u22, u33, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"u11":    strconv.Itoa(u11),
+					"u22":    strconv.Itoa(u22),
+					"u33":    strconv.Itoa(u33),
+					"answer": ansStr,
+				},
+			}
+		case 1:
+			// Forward solve Ly = b
+			l21 := smallInt(2, 4+tier)
+			b1 := smallInt(2, 5+tier*2)
+			y2 := smallInt(2, 5+tier*2)
+			b2 := l21*b1 + y2
+			ansStr := strconv.Itoa(y2)
+			q := fmt.Sprintf("In solving \\(Ax = b\\) via \\(A = LU\\), solve \\(Ly = b\\) for \\(y_2\\) where \\(L = \\begin{pmatrix} 1 & 0 \\\\ %d & 1 \\end{pmatrix}\\) and \\(b = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\).", l21, b1, b2)
+			if y2 == l21 || y2 == b1 || y2 == b2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the forward substitution equations: \\(y_1 = b_1 = %d\\) and \\(%d y_1 + y_2 = b_2 = %d\\).\n"+
+				"Subgoal 2: Substitute \\(y_1 = %d\\) into the second row equation: \\((%d)(%d) + y_2 = %d\\), so \\(%d + y_2 = %d\\).\n"+
+				"Subgoal 3: Subtract to solve for \\(y_2\\): \\(y_2 = %d - %d = %d\\).",
+				b1, l21, b2, b1, l21, b1, b2, l21*b1, b2, b2, l21*b1, y2)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"l21":    strconv.Itoa(l21),
+					"b1":     strconv.Itoa(b1),
+					"b2":     strconv.Itoa(b2),
+					"answer": ansStr,
+				},
+			}
+		case 2:
+			// Back substitution Ux = y
+			u11 := smallInt(2, 4+tier)
+			u12 := smallInt(1, 3+tier)
+			u22 := smallInt(2, 4+tier)
+			x2 := smallInt(2, 5+tier*2)
+			y2 := u22 * x2
+			x1 := smallInt(2, 5+tier*2)
+			y1 := u11*x1 + u12*x2
+			ansStr := strconv.Itoa(x2)
+			q := fmt.Sprintf("In the back substitution stage of solving \\(Ax = b\\), solve \\(Ux = y\\) for \\(x_2\\) where \\(U = \\begin{pmatrix} %d & %d \\\\ 0 & %d \\end{pmatrix}\\) and \\(y = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\).", u11, u12, u22, y1, y2)
+			if x2 == u11 || x2 == u12 || x2 == u22 || x2 == y1 || x2 == y2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the second row equation in upper-triangular system: \\(%d x_2 = y_2 = %d\\).\n"+
+				"Subgoal 2: Set up the division by pivot entry: \\(x_2 = \\frac{%d}{%d}\\).\n"+
+				"Subgoal 3: Evaluate the quotient to obtain \\(x_2 = %d\\).",
+				u22, y2, y2, u22, x2)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"u11":    strconv.Itoa(u11),
+					"u12":    strconv.Itoa(u12),
+					"u22":    strconv.Itoa(u22),
+					"y1":     strconv.Itoa(y1),
+					"y2":     strconv.Itoa(y2),
+					"answer": ansStr,
+				},
+			}
+		case 3:
+			// Multiplier l_{21} in Gaussian elimination
+			a11 := smallInt(2, 4+tier)
+			m := smallInt(2, 4+tier)
+			a21 := m * a11
+			a12 := smallInt(2, 5+tier)
+			a22 := smallInt(2, 6+tier*2)
+			ansStr := strconv.Itoa(m)
+			q := fmt.Sprintf("In computing the LU factorization \\(A = LU\\) of \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) without pivoting, what is the entry \\(l_{21}\\) of the unit lower triangular factor \\(L\\)?", a11, a12, a21, a22)
+			if m == a11 || m == a12 || m == a21 || m == a22 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the elimination row multiplier formula: \\(l_{21} = \\frac{a_{21}}{a_{11}}\\).\n"+
+				"Subgoal 2: Substitute first column entries \\(a_{21} = %d\\) and pivot \\(a_{11} = %d\\): \\(\\frac{%d}{%d}\\).\n"+
+				"Subgoal 3: Evaluate the quotient to find \\(l_{21} = %d\\).",
+				a21, a11, a21, a11, m)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a11":    strconv.Itoa(a11),
+					"a12":    strconv.Itoa(a12),
+					"a21":    strconv.Itoa(a21),
+					"a22":    strconv.Itoa(a22),
+					"answer": ansStr,
+				},
+			}
+		default:
+			// Diagonal entry u_{22} in U
+			l21 := smallInt(2, 4+tier)
+			u11 := smallInt(2, 4+tier)
+			u12 := smallInt(2, 4+tier)
+			u22 := smallInt(2, 5+tier*2)
+			a11 := u11
+			a12 := u12
+			a21 := l21 * u11
+			a22 := l21*u12 + u22
+			ansStr := strconv.Itoa(u22)
+			q := fmt.Sprintf("In computing the LU factorization \\(A = LU\\) of \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) where \\(L = \\begin{pmatrix} 1 & 0 \\\\ %d & 1 \\end{pmatrix}\\), what is the diagonal entry \\(u_{22}\\)?", a11, a12, a21, a22, l21)
+			if u22 == a11 || u22 == a12 || u22 == a21 || u22 == a22 || u22 == l21 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the matrix product identity for entry \\((2,2)\\): \\(a_{22} = l_{21} u_{12} + u_{22}\\).\n"+
+				"Subgoal 2: Substitute known matrix values: \\(%d = (%d)(%d) + u_{22} = %d + u_{22}\\).\n"+
+				"Subgoal 3: Subtract to solve for \\(u_{22}\\): \\(u_{22} = %d - %d = %d\\).",
+				a22, l21, u12, l21*u12, a22, l21*u12, u22)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a11":    strconv.Itoa(a11),
+					"a12":    strconv.Itoa(a12),
+					"a21":    strconv.Itoa(a21),
+					"a22":    strconv.Itoa(a22),
+					"l21":    strconv.Itoa(l21),
+					"answer": ansStr,
+				},
+			}
 		}
 	}
 }
@@ -1153,73 +1553,145 @@ func (g *luGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type qrGen struct{}
 
 func (g *qrGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	triples := [][3]int{
-		{3, 4, 5},
-		{4, 3, 5},
-		{6, 8, 10},
-		{8, 6, 10},
-		{5, 12, 13},
-		{12, 5, 13},
-	}
-	trip := triples[rand.Intn(len(triples))]
-	a, b, r := trip[0], trip[1], trip[2]
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	for {
+		m := smallInt(2, 4+tier*2)
+		n := smallInt(1, m-1)
+		k := smallInt(1, 2+tier)
+		a := k * (m*m - n*n)
+		b := k * (2 * m * n)
+		r := k * (m*m + n*n)
+		if rand.Intn(2) == 0 {
+			a, b = b, a
+		}
+		u := smallInt(2, 4+tier)
+		v := smallInt(2, 4+tier)
+		c := u*a - v*b
+		d := u*b + v*a
 
-	u := 1 + rand.Intn(3)
-	v := 1 + rand.Intn(3)
-	if rand.Intn(2) == 0 {
-		u = -u
-	}
-	c := u*a - v*b
-	d := u*b + v*a
-
-	switch rand.Intn(5) {
-	case 0:
-		return generator.Problem{
-			Question: fmt.Sprintf("The first column of real matrix \\(A\\) is \\(a_1 = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). In the QR decomposition \\(A = QR\\), find the diagonal entry \\(r_{11} = \\|a_1\\|\\).", a, b),
-			Answer:   fmt.Sprintf("%d", r),
-			Explanation: fmt.Sprintf("The entry \\(r_{11}\\) is the Euclidean norm of the first column: \\(r_{11} = \\sqrt{%d^2 + %d^2} = \\sqrt{%d} = %d\\).",
-				a, b, a*a+b*b, r),
-		}
-	case 1:
-		r12 := u * r
-		return generator.Problem{
-			Question: fmt.Sprintf("Consider matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) with columns \\(a_1\\) and \\(a_2\\). In the QR factorization \\(A = QR\\), compute the upper entry \\(r_{12} = q_1^T a_2\\).", a, c, b, d),
-			Answer:   fmt.Sprintf("%d", r12),
-			Explanation: fmt.Sprintf("The first normalized column is \\(q_1 = \\frac{1}{%d} \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Taking the inner product gives \\(r_{12} = q_1^T a_2 = \\frac{1}{%d}(%d \\cdot (%d) + %d \\cdot (%d)) = \\frac{%d}{%d} = %d\\).",
-				r, a, b, r, a, c, b, d, a*c+b*d, r, r12),
-		}
-	case 2:
-		r22 := v * r
-		return generator.Problem{
-			Question: fmt.Sprintf("Consider matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\). In the QR decomposition \\(A = QR\\) with positive diagonal entries, find \\(r_{22}\\).", a, c, b, d),
-			Answer:   fmt.Sprintf("%d", r22),
-			Explanation: fmt.Sprintf("Orthogonalizing \\(a_2\\) gives \\(v_2 = a_2 - r_{12} q_1 = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Its Euclidean length gives \\(r_{22} = \\|v_2\\| = %d\\).",
-				-v*b, v*a, r22),
-		}
-	case 3:
-		d1 := 1 + rand.Intn(5)
-		d2 := 1 + rand.Intn(5)
-		d3 := 1 + rand.Intn(4)
-		detR := d1 * d2 * d3
-		return generator.Problem{
-			Question: fmt.Sprintf("A \\(3 \\times 3\\) matrix \\(A\\) has QR decomposition \\(A = QR\\), where \\(Q\\) is an orthogonal matrix with \\(\\det(Q) = 1\\) and \\(R\\) has diagonal entries %d, %d and %d. Find \\(\\det(A)\\).", d1, d2, d3),
-			Answer:   fmt.Sprintf("%d", detR),
-			Explanation: fmt.Sprintf("Because \\(A = QR\\), the determinant satisfies \\(\\det(A) = \\det(Q) \\det(R)\\). For triangular matrix \\(R\\), the determinant is the product of diagonal entries: \\(\\det(R) = %d \\times %d \\times %d = %d\\). With \\(\\det(Q) = 1\\), \\(\\det(A) = %d\\).",
-				d1, d2, d3, detR, detR),
-		}
-	default:
-		r11 := 1 + rand.Intn(4)
-		r12 := rand.Intn(4) + 1
-		r22 := 1 + rand.Intn(4)
-		x2 := 1 + rand.Intn(5)
-		x1 := 1 + rand.Intn(5)
-		c2 := r22 * x2
-		c1 := r11*x1 + r12*x2
-		return generator.Problem{
-			Question: fmt.Sprintf("To solve the least-squares problem \\(Ax = b\\) via QR decomposition \\(Rx = Q^T b\\), let \\(R = \\begin{pmatrix} %d & %d \\\\ 0 & %d \\end{pmatrix}\\) and \\(Q^T b = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Find \\(x_1\\).", r11, r12, r22, c1, c2),
-			Answer:   fmt.Sprintf("%d", x1),
-			Explanation: fmt.Sprintf("From the second equation, \\(%d x_2 = %d\\) gives \\(x_2 = %d\\). Back substitution into the first row yields \\(%d x_1 + %d(%d) = %d\\), so \\(x_1 = %d\\).",
-				r22, c2, x2, r11, r12, x2, c1, x1),
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			ansStr := strconv.Itoa(r)
+			q := fmt.Sprintf("The first column of real matrix \\(A\\) is \\(a_1 = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). In the QR decomposition \\(A = QR\\), find the diagonal entry \\(r_{11} = \\|a_1\\|\\).", a, b)
+			if r == a || r == b || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the first column norm property in QR factorization: \\(r_{11} = \\|a_1\\| = \\sqrt{a_{11}^2 + a_{21}^2}\\).\n"+
+				"Subgoal 2: Substitute column entries: \\(\\sqrt{(%d)^2 + (%d)^2} = \\sqrt{%d + %d}\\).\n"+
+				"Subgoal 3: Evaluate square root to obtain diagonal entry: \\(\\sqrt{%d} = %d\\).",
+				a, b, a*a, b*b, a*a+b*b, r)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a":      strconv.Itoa(a),
+					"b":      strconv.Itoa(b),
+					"answer": ansStr,
+				},
+			}
+		case 1:
+			r12 := u * r
+			ansStr := strconv.Itoa(r12)
+			q := fmt.Sprintf("Consider matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) with columns \\(a_1\\) and \\(a_2\\). In the QR factorization \\(A = QR\\), compute the upper entry \\(r_{12} = q_1^T a_2\\).", a, c, b, d)
+			if r12 == a || r12 == b || r12 == c || r12 == d || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the Gram-Schmidt projection formula for \\(r_{12}\\): \\(r_{12} = q_1 \\cdot a_2 = \\frac{1}{r_{11}} (a_1 \\cdot a_2)\\).\n"+
+				"Subgoal 2: Compute inner product with first column norm \\(r_{11} = %d\\): \\(\\frac{1}{%d} ((%d)(%d) + (%d)(%d)) = \\frac{%d}{%d}\\).\n"+
+				"Subgoal 3: Evaluate the quotient to obtain \\(r_{12} = %d\\).",
+				r, r, a, c, b, d, a*c+b*d, r, r12)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a":      strconv.Itoa(a),
+					"b":      strconv.Itoa(b),
+					"c":      strconv.Itoa(c),
+					"d":      strconv.Itoa(d),
+					"answer": ansStr,
+				},
+			}
+		case 2:
+			r22 := v * r
+			ansStr := strconv.Itoa(r22)
+			q := fmt.Sprintf("Consider matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\). In the QR decomposition \\(A = QR\\) with positive diagonal entries, find \\(r_{22}\\).", a, c, b, d)
+			if r22 == a || r22 == b || r22 == c || r22 == d || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the second diagonal entry definition: \\(r_{22} = \\|a_2 - r_{12} q_1\\|\\).\n"+
+				"Subgoal 2: Compute orthogonal component \\(v_2 = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\) and take its Euclidean length: \\(\\sqrt{(%d)^2 + (%d)^2}\\).\n"+
+				"Subgoal 3: Evaluate norm to obtain \\(r_{22} = %d\\).",
+				-v*b, v*a, -v*b, v*a, r22)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a":      strconv.Itoa(a),
+					"b":      strconv.Itoa(b),
+					"c":      strconv.Itoa(c),
+					"d":      strconv.Itoa(d),
+					"answer": ansStr,
+				},
+			}
+		case 3:
+			d1 := smallInt(2, 4+tier)
+			d2 := smallInt(2, 4+tier)
+			d3 := smallInt(2, 4+tier)
+			detR := d1 * d2 * d3
+			ansStr := strconv.Itoa(detR)
+			q := fmt.Sprintf("A \\(3 \\times 3\\) matrix \\(A\\) has QR decomposition \\(A = QR\\), where \\(Q\\) is an orthogonal matrix with \\(\\det(Q) = 1\\) and \\(R\\) has diagonal entries %d, %d and %d. Find \\(\\det(A)\\).", d1, d2, d3)
+			if detR == d1 || detR == d2 || detR == d3 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the determinant product formula: \\(\\det(A) = \\det(Q) \\det(R)\\).\n"+
+				"Subgoal 2: Compute triangular determinant \\(\\det(R) = (%d)(%d)(%d)\\) and substitute \\(\\det(Q) = 1\\).\n"+
+				"Subgoal 3: Multiply factors: \\(\\det(A) = 1 \\times (%d \\times %d \\times %d) = %d\\).",
+				d1, d2, d3, d1, d2, d3, detR)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"d1":     strconv.Itoa(d1),
+					"d2":     strconv.Itoa(d2),
+					"d3":     strconv.Itoa(d3),
+					"answer": ansStr,
+				},
+			}
+		default:
+			r11 := smallInt(2, 4+tier)
+			r12 := smallInt(2, 4+tier)
+			r22 := smallInt(2, 4+tier)
+			x2 := smallInt(2, 5+tier*2)
+			x1 := smallInt(2, 5+tier*2)
+			c2 := r22 * x2
+			c1 := r11*x1 + r12*x2
+			ansStr := strconv.Itoa(x1)
+			q := fmt.Sprintf("To solve the least-squares problem \\(Ax = b\\) via QR decomposition \\(Rx = Q^T b\\), let \\(R = \\begin{pmatrix} %d & %d \\\\ 0 & %d \\end{pmatrix}\\) and \\(Q^T b = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Find \\(x_1\\).", r11, r12, r22, c1, c2)
+			if x1 == r11 || x1 == r12 || x1 == r22 || x1 == c1 || x1 == c2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the back substitution equations: \\(%d x_2 = %d\\) and \\(%d x_1 + %d x_2 = %d\\).\n"+
+				"Subgoal 2: Solve the second row for \\(x_2 = \\frac{%d}{%d} = %d\\) and substitute into row 1: \\(%d x_1 + (%d)(%d) = %d\\).\n"+
+				"Subgoal 3: Isolate and solve for \\(x_1\\): \\(%d x_1 = %d - %d = %d\\), so \\(x_1 = \\frac{%d}{%d} = %d\\).",
+				r22, c2, r11, r12, c1, c2, r22, x2, r11, r12, x2, c1, r11, c1, r12*x2, c1-r12*x2, c1-r12*x2, r11, x1)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"r11":    strconv.Itoa(r11),
+					"r12":    strconv.Itoa(r12),
+					"r22":    strconv.Itoa(r22),
+					"c1":     strconv.Itoa(c1),
+					"c2":     strconv.Itoa(c2),
+					"answer": ansStr,
+				},
+			}
 		}
 	}
 }
@@ -1227,73 +1699,144 @@ func (g *qrGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type svdGen struct{}
 
 func (g *svdGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	switch rand.Intn(5) {
-	case 0:
-		s1 := 2 + rand.Intn(8)
-		s2 := 1 + rand.Intn(s1-1)
-		eig1 := s1 * s1
-		eig2 := s2 * s2
-		return generator.Problem{
-			Question: fmt.Sprintf("The symmetric matrix \\(A^T A\\) has eigenvalues %d, %d and 0. Compute the largest singular value \\(\\sigma_1\\) of \\(A\\).", eig1, eig2),
-			Answer:   fmt.Sprintf("%d", s1),
-			Explanation: fmt.Sprintf("The singular values of \\(A\\) are the non-negative square roots of the eigenvalues of \\(A^T A\\): \\(\\sigma_1 = \\sqrt{%d} = %d\\).",
-				eig1, s1),
-		}
-	case 1:
-		s1 := 4 + rand.Intn(7)
-		s2 := 2 + rand.Intn(s1-2)
-		s3 := 1 + rand.Intn(s2-1)
-		return generator.Problem{
-			Question:    fmt.Sprintf("A matrix \\(A\\) has singular values %d, %d and %d. Find the spectral norm \\(\\|A\\|_2\\) of the matrix.", s1, s2, s3),
-			Answer:      fmt.Sprintf("%d", s1),
-			Explanation: fmt.Sprintf("The matrix 2-norm (spectral norm) equals the largest singular value: \\(\\|A\\|_2 = \\sigma_1 = %d\\).", s1),
-		}
-	case 2:
-		s1 := 2 + rand.Intn(5)
-		s2 := 1 + rand.Intn(4)
-		s3 := 1 + rand.Intn(3)
-		frobSq := s1*s1 + s2*s2 + s3*s3
-		return generator.Problem{
-			Question: fmt.Sprintf("A matrix \\(A\\) has singular values %d, %d and %d. Compute the squared Frobenius norm \\(\\|A\\|_F^2\\).", s1, s2, s3),
-			Answer:   fmt.Sprintf("%d", frobSq),
-			Explanation: fmt.Sprintf("The squared Frobenius norm is the sum of the squares of the singular values: \\(\\|A\\|_F^2 = %d^2 + %d^2 + %d^2 = %d + %d + %d = %d\\).",
-				s1, s2, s3, s1*s1, s2*s2, s3*s3, frobSq),
-		}
-	case 3:
-		minSig := 1 + rand.Intn(3)
-		mult := 2 + rand.Intn(5)
-		maxSig := minSig * mult
-		midSig := minSig + 1
-		if midSig >= maxSig {
-			midSig = minSig
-		}
-		return generator.Problem{
-			Question: fmt.Sprintf("An invertible real matrix \\(A\\) has singular values %d, %d and %d. Find the 2-norm condition number \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}}\\).", maxSig, midSig, minSig),
-			Answer:   fmt.Sprintf("%d", mult),
-			Explanation: fmt.Sprintf("The 2-norm condition number is the ratio of the largest to the smallest singular value: \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}} = \\frac{%d}{%d} = %d\\).",
-				maxSig, minSig, mult),
-		}
-	default:
-		numNonZero := 2 + rand.Intn(2)
-		numZero := 1 + rand.Intn(2)
-		vals := make([]string, 0, numNonZero+numZero)
-		for i := 0; i < numNonZero; i++ {
-			vals = append(vals, fmt.Sprintf("%d", 2+rand.Intn(7)))
-		}
-		for i := 0; i < numZero; i++ {
-			vals = append(vals, "0")
-		}
-		var listStr string
-		if len(vals) == 3 {
-			listStr = fmt.Sprintf("%s, %s and %s", vals[0], vals[1], vals[2])
-		} else {
-			listStr = fmt.Sprintf("%s, %s, %s and %s", vals[0], vals[1], vals[2], vals[3])
-		}
-		return generator.Problem{
-			Question: fmt.Sprintf("A real matrix \\(A\\) has singular values %s. Find the rank of \\(A\\).", listStr),
-			Answer:   fmt.Sprintf("%d", numNonZero),
-			Explanation: fmt.Sprintf("The rank of a matrix equals the number of nonzero singular values in its singular value decomposition. With %d nonzero singular values, \\(\\operatorname{rank}(A) = %d\\).",
-				numNonZero, numNonZero),
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	for {
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			s1 := smallInt(3, 7+tier*3)
+			s2 := smallInt(2, s1-1)
+			eig1 := s1 * s1
+			eig2 := s2 * s2
+			ansStr := strconv.Itoa(s1)
+			q := fmt.Sprintf("The symmetric matrix \\(A^T A\\) has eigenvalues %d, %d and 0. Compute the largest singular value \\(\\sigma_1\\) of \\(A\\).", eig1, eig2)
+			if s1 == eig1 || s1 == eig2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the definition of singular values from Gramian eigenvalues: \\(\\sigma_1 = \\sqrt{\\lambda_1(A^T A)}\\).\n"+
+				"Subgoal 2: Substitute the maximum eigenvalue \\(\\lambda_1 = %d\\): \\(\\sqrt{%d}\\).\n"+
+				"Subgoal 3: Evaluate the principal square root: \\(\\sigma_1 = %d\\).",
+				eig1, eig1, s1)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"eig1":   strconv.Itoa(eig1),
+					"eig2":   strconv.Itoa(eig2),
+					"answer": ansStr,
+				},
+			}
+		case 1:
+			s1 := smallInt(5, 8+tier*3)
+			s2 := smallInt(3, s1-1)
+			s3 := smallInt(1, s2-1)
+			k := smallInt(2, 4+tier)
+			ans := k * s1
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("A matrix \\(A\\) has singular values %d, %d and %d. Find the spectral norm \\(\\|%d A\\|_2\\) of the scaled matrix.", s1, s2, s3, k)
+			if ans == s1 || ans == s2 || ans == s3 || ans == k || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the scaled spectral norm property: \\(\\|k A\\|_2 = k \\|A\\|_2 = k \\sigma_{\\max}\\).\n"+
+				"Subgoal 2: Identify the maximum singular value \\(\\sigma_{\\max} = %d\\) and substitute scalar %d: \\((%d)(%d)\\).\n"+
+				"Subgoal 3: Evaluate product to find norm: %d.",
+				s1, k, k, s1, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"s1":     strconv.Itoa(s1),
+					"s2":     strconv.Itoa(s2),
+					"s3":     strconv.Itoa(s3),
+					"k":      strconv.Itoa(k),
+					"answer": ansStr,
+				},
+			}
+		case 2:
+			s1 := smallInt(2, 5+tier*2)
+			s2 := smallInt(2, 4+tier)
+			s3 := smallInt(1, 3+tier)
+			frobSq := s1*s1 + s2*s2 + s3*s3
+			ansStr := strconv.Itoa(frobSq)
+			q := fmt.Sprintf("A matrix \\(A\\) has singular values %d, %d and %d. Compute the squared Frobenius norm \\(\\|A\\|_F^2\\).", s1, s2, s3)
+			if frobSq == s1 || frobSq == s2 || frobSq == s3 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the unitary invariance identity for Frobenius norm: \\(\\|A\\|_F^2 = \\sum \\sigma_i^2\\).\n"+
+				"Subgoal 2: Substitute singular values into sum of squares: \\((%d)^2 + (%d)^2 + (%d)^2 = %d + %d + %d\\).\n"+
+				"Subgoal 3: Evaluate the sum to find \\(\\|A\\|_F^2 = %d\\).",
+				s1, s2, s3, s1*s1, s2*s2, s3*s3, frobSq)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"s1":     strconv.Itoa(s1),
+					"s2":     strconv.Itoa(s2),
+					"s3":     strconv.Itoa(s3),
+					"answer": ansStr,
+				},
+			}
+		case 3:
+			minSig := smallInt(2, 4+tier)
+			mult := smallInt(2, 5+tier*2)
+			maxSig := minSig * mult
+			midSig := minSig + smallInt(1, maxSig-minSig-1)
+			ansStr := strconv.Itoa(mult)
+			q := fmt.Sprintf("An invertible real matrix \\(A\\) has singular values %d, %d and %d. Find the 2-norm condition number \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}}\\).", maxSig, midSig, minSig)
+			if mult == maxSig || mult == midSig || mult == minSig || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the 2-norm condition number formula: \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}}\\).\n"+
+				"Subgoal 2: Identify extreme singular values \\(\\sigma_{\\max} = %d\\) and \\(\\sigma_{\\min} = %d\\): \\(\\frac{%d}{%d}\\).\n"+
+				"Subgoal 3: Evaluate the ratio to obtain condition number \\(\\kappa_2(A) = %d\\).",
+				maxSig, minSig, maxSig, minSig, mult)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"maxSig": strconv.Itoa(maxSig),
+					"midSig": strconv.Itoa(midSig),
+					"minSig": strconv.Itoa(minSig),
+					"answer": ansStr,
+				},
+			}
+		default:
+			numNonZero := smallInt(2, 3)
+			numZero := smallInt(1, 2)
+			vals := make([]int, 0, numNonZero+numZero)
+			for i := 0; i < numNonZero; i++ {
+				vals = append(vals, smallInt(4, 8+tier*2))
+			}
+			for i := 0; i < numZero; i++ {
+				vals = append(vals, 0)
+			}
+			var listStr string
+			if len(vals) == 3 {
+				listStr = fmt.Sprintf("%d, %d and %d", vals[0], vals[1], vals[2])
+			} else {
+				listStr = fmt.Sprintf("%d, %d, %d and %d", vals[0], vals[1], vals[2], vals[3])
+			}
+			ansStr := strconv.Itoa(numNonZero)
+			q := fmt.Sprintf("A real matrix \\(A\\) has singular values %s. Find the rank of \\(A\\).", listStr)
+			if containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the SVD rank theorem: the rank of a matrix equals the number of nonzero singular values.\n"+
+				"Subgoal 2: Count the nonzero entries in singular value list (%s): exactly %d nonzero values.\n"+
+				"Subgoal 3: Conclude that \\(\\operatorname{rank}(A) = %d\\).",
+				listStr, numNonZero, numNonZero)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"answer": ansStr,
+				},
+			}
 		}
 	}
 }
@@ -1301,58 +1844,138 @@ func (g *svdGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type jordanGen struct{}
 
 func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	switch rand.Intn(5) {
-	case 0:
-		alg := 3 + rand.Intn(3)
-		geom := 1 + rand.Intn(alg-1)
-		eig := 1 + rand.Intn(5)
-		return generator.Problem{
-			Question:    fmt.Sprintf("An eigenvalue \\(\\lambda = %d\\) of matrix \\(A\\) has algebraic multiplicity %d and geometric multiplicity \\(\\dim \\ker(A - %d I) = %d\\). How many Jordan blocks corresponding to \\(\\lambda\\) are in the Jordan canonical form of \\(A\\)?", eig, alg, eig, geom),
-			Answer:      fmt.Sprintf("%d", geom),
-			Explanation: fmt.Sprintf("The number of Jordan blocks corresponding to an eigenvalue equals its geometric multiplicity: \\(\\dim \\ker(A - \\lambda I) = %d\\).", geom),
-		}
-	case 1:
-		l1 := 1 + rand.Intn(4)
-		l2 := 1 + rand.Intn(4)
-		l3 := 1 + rand.Intn(4)
-		tr := 2*l1 + l2 + l3
-		return generator.Problem{
-			Question: fmt.Sprintf("A \\(4 \\times 4\\) matrix has Jordan blocks \\(J_2(%d)\\), \\(J_1(%d)\\) and \\(J_1(%d)\\). Compute the trace of the matrix.", l1, l2, l3),
-			Answer:   fmt.Sprintf("%d", tr),
-			Explanation: fmt.Sprintf("The trace of a matrix equals the sum of the diagonal entries in its Jordan normal form: \\(\\operatorname{tr}(A) = 2(%d) + %d + %d = %d + %d + %d = %d\\).",
-				l1, l2, l3, 2*l1, l2, l3, tr),
-		}
-	case 2:
-		l1 := 2 + rand.Intn(3)
-		l2 := 2 + rand.Intn(3)
-		detA := l1 * l1 * l2
-		return generator.Problem{
-			Question: fmt.Sprintf("A \\(3 \\times 3\\) matrix has Jordan canonical form consisting of a \\(2 \\times 2\\) block \\(J_2(%d)\\) and a \\(1 \\times 1\\) block \\(J_1(%d)\\). Find \\(\\det(A)\\).", l1, l2),
-			Answer:   fmt.Sprintf("%d", detA),
-			Explanation: fmt.Sprintf("Because Jordan normal form is triangular, the determinant is the product of all diagonal entries: \\(\\det(A) = %d^2 \\times %d = %d \\times %d = %d\\).",
-				l1, l2, l1*l1, l2, detA),
-		}
-	case 3:
-		alg := 3 + rand.Intn(3)
-		geom := 1 + rand.Intn(alg-1)
-		defect := alg - geom
-		eig := 2 + rand.Intn(4)
-		return generator.Problem{
-			Question: fmt.Sprintf("An eigenspace for eigenvalue \\(\\lambda = %d\\) has algebraic multiplicity %d and geometric multiplicity %d. How many generalized eigenvectors that are not ordinary eigenvectors are needed to complete a Jordan chain basis for this eigenspace?", eig, alg, geom),
-			Answer:   fmt.Sprintf("%d", defect),
-			Explanation: fmt.Sprintf("The number of additional generalized eigenvectors is the defect between algebraic multiplicity and geometric multiplicity: %d - %d = %d.",
-				alg, geom, defect),
-		}
-	default:
-		e1 := 2 + rand.Intn(3)
-		e2 := 1 + rand.Intn(2)
-		l1 := 1 + rand.Intn(4)
-		l2 := l1 + 1 + rand.Intn(3)
-		return generator.Problem{
-			Question: fmt.Sprintf("A matrix has minimal polynomial \\(m(\\lambda) = (\\lambda - %d)^{%d}(\\lambda - %d)^{%d}\\). What is the size of the largest Jordan block corresponding to eigenvalue %d?", l1, e1, l2, e2, l1),
-			Answer:   fmt.Sprintf("%d", e1),
-			Explanation: fmt.Sprintf("The size of the largest Jordan block for an eigenvalue equals its multiplicity as a root of the minimal polynomial. For eigenvalue %d, the exponent in \\(m(\\lambda)\\) is %d, so the largest block has size %d.",
-				l1, e1, e1),
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	for {
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			// Algebraic multiplicity from Jordan block sizes
+			eig := smallInt(2, 6+tier)
+			b1 := smallInt(1, 3)
+			b2 := smallInt(1, 3)
+			b3 := smallInt(1, 3)
+			ans := b1 + b2 + b3
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("In the Jordan canonical form of a matrix, the blocks corresponding to eigenvalue \\(\\lambda = %d\\) have sizes %d, %d and %d. What is the algebraic multiplicity of eigenvalue %d?", eig, b1, b2, b3, eig)
+			if ans == eig || ans == b1 || ans == b2 || ans == b3 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the algebraic multiplicity theorem for Jordan form: the algebraic multiplicity of an eigenvalue equals the sum of the sizes of its associated Jordan blocks.\n"+
+				"Subgoal 2: Sum the sizes of the Jordan blocks: %d + %d + %d.\n"+
+				"Subgoal 3: Evaluate the sum to find the algebraic multiplicity: %d.",
+				b1, b2, b3, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"eig":    strconv.Itoa(eig),
+					"b1":     strconv.Itoa(b1),
+					"b2":     strconv.Itoa(b2),
+					"b3":     strconv.Itoa(b3),
+					"answer": ansStr,
+				},
+			}
+		case 1:
+			l1 := smallInt(2, 5+tier)
+			l2 := smallInt(2, 5+tier)
+			l3 := smallInt(2, 5+tier)
+			tr := 2*l1 + l2 + l3
+			ansStr := strconv.Itoa(tr)
+			q := fmt.Sprintf("A \\(4 \\times 4\\) matrix has Jordan blocks \\(J_2(%d)\\), \\(J_1(%d)\\) and \\(J_1(%d)\\). Compute the trace of the matrix.", l1, l2, l3)
+			if tr == l1 || tr == l2 || tr == l3 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the similarity invariance of trace: \\(\\operatorname{tr}(A)\\) equals the sum of diagonal entries in Jordan normal form.\n"+
+				"Subgoal 2: Sum diagonal entries across all blocks: \\(2(%d) + %d + %d = %d + %d + %d\\).\n"+
+				"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(A) = %d\\).",
+				l1, l2, l3, 2*l1, l2, l3, tr)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"l1":     strconv.Itoa(l1),
+					"l2":     strconv.Itoa(l2),
+					"l3":     strconv.Itoa(l3),
+					"answer": ansStr,
+				},
+			}
+		case 2:
+			l1 := smallInt(2, 4+tier)
+			l2 := smallInt(2, 4+tier)
+			detA := l1 * l1 * l2
+			ansStr := strconv.Itoa(detA)
+			q := fmt.Sprintf("A \\(3 \\times 3\\) matrix has Jordan canonical form consisting of a \\(2 \\times 2\\) block \\(J_2(%d)\\) and a \\(1 \\times 1\\) block \\(J_1(%d)\\). Find \\(\\det(A)\\).", l1, l2)
+			if detA == l1 || detA == l2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the triangular determinant property: \\(\\det(A)\\) is the product of all diagonal entries in Jordan canonical form.\n"+
+				"Subgoal 2: Multiply diagonal entries across both blocks: \\((%d)^2 \\times %d = %d \\times %d\\).\n"+
+				"Subgoal 3: Evaluate the product to find \\(\\det(A) = %d\\).",
+				l1, l2, l1*l1, l2, detA)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"l1":     strconv.Itoa(l1),
+					"l2":     strconv.Itoa(l2),
+					"answer": ansStr,
+				},
+			}
+		case 3:
+			alg := smallInt(3, 5+tier*2)
+			geom := smallInt(1, alg-1)
+			defect := alg - geom
+			eig := smallInt(2, 5+tier)
+			ansStr := strconv.Itoa(defect)
+			q := fmt.Sprintf("An eigenspace for eigenvalue \\(\\lambda = %d\\) has algebraic multiplicity %d and geometric multiplicity %d. How many generalized eigenvectors that are not ordinary eigenvectors are needed to complete a Jordan chain basis for this eigenspace?", eig, alg, geom)
+			if defect == eig || defect == alg || defect == geom || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the generalized eigenvector defect formula: non-ordinary generalized eigenvectors equal algebraic minus geometric multiplicity.\n"+
+				"Subgoal 2: Substitute multiplicities: algebraic %d and geometric %d: %d - %d.\n"+
+				"Subgoal 3: Evaluate difference to find defect: %d.",
+				alg, geom, alg, geom, defect)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"eig":    strconv.Itoa(eig),
+					"alg":    strconv.Itoa(alg),
+					"geom":   strconv.Itoa(geom),
+					"answer": ansStr,
+				},
+			}
+		default:
+			e1 := smallInt(2, 4+tier)
+			e2 := smallInt(2, 4+tier)
+			l1 := smallInt(2, 5+tier)
+			l2 := l1 + smallInt(1, 3+tier)
+			ans := e1 + e2
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("A matrix has minimal polynomial \\(m(\\lambda) = (\\lambda - %d)^{%d}(\\lambda - %d)^{%d}\\). What is the sum of the sizes of the largest Jordan blocks for eigenvalues %d and %d?", l1, e1, l2, e2, l1, l2)
+			if ans == l1 || ans == l2 || ans == e1 || ans == e2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the minimal polynomial Jordan block theorem: the size of the largest Jordan block for each eigenvalue equals its exponent in \\(m(\\lambda)\\).\n"+
+				"Subgoal 2: Read maximum block sizes %d and %d for eigenvalues %d and %d: %d + %d.\n"+
+				"Subgoal 3: Evaluate sum of block sizes: %d.",
+				e1, e2, l1, l2, e1, e2, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"l1":     strconv.Itoa(l1),
+					"e1":     strconv.Itoa(e1),
+					"l2":     strconv.Itoa(l2),
+					"e2":     strconv.Itoa(e2),
+					"answer": ansStr,
+				},
+			}
 		}
 	}
 }
@@ -1362,57 +1985,130 @@ func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type subspaceGen struct{}
 
 func (g *subspaceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
-	switch mode {
-	case 0:
-		// Grassmann's dimension formula: dim(U + W) = dim(U) + dim(W) - dim(U cap W)
-		d12 := smallInt(1, 3)
-		d1 := d12 + smallInt(1, 3+int(ctx.Difficulty*2))
-		d2 := d12 + smallInt(1, 3+int(ctx.Difficulty*2))
-		ans := d1 + d2 - d12
-		return generator.Problem{
-			Question:    fmt.Sprintf("Two subspaces \\(U\\) and \\(W\\) of a vector space satisfy \\(\\dim(U) = %d\\), \\(\\dim(W) = %d\\) and \\(\\dim(U \\cap W) = %d\\). What is \\(\\dim(U + W)\\)?", d1, d2, d12),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("By Grassmann's dimension formula, \\(\\dim(U + W) = \\dim(U) + \\dim(W) - \\dim(U \\cap W) = %d + %d - %d = %d\\).", d1, d2, d12, ans),
-		}
-	case 1:
-		// Direct sum: dim(U \oplus W) = dim(U) + dim(W)
-		d1 := smallInt(1, 4+int(ctx.Difficulty*2))
-		d2 := smallInt(1, 4+int(ctx.Difficulty*2))
-		ans := d1 + d2
-		return generator.Problem{
-			Question:    fmt.Sprintf("If \\(V = U \\oplus W\\) is the direct sum of subspaces \\(U\\) and \\(W\\) with \\(\\dim(U) = %d\\) and \\(\\dim(W) = %d\\), what is \\(\\dim(V)\\)?", d1, d2),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("For a direct sum \\(U \\cap W = \\{0\\}\\), so \\(\\dim(U \\oplus W) = \\dim(U) + \\dim(W) = %d + %d = %d\\).", d1, d2, ans),
-		}
-	case 2:
-		// Orthogonal complement dimension: dim(W^\perp) = n - dim(W)
-		n := smallInt(3, 6+int(ctx.Difficulty*3))
-		dimW := smallInt(1, n-1)
-		ans := n - dimW
-		return generator.Problem{
-			Question:    fmt.Sprintf("In \\(\\mathbb{R}^{%d}\\), let \\(W\\) be a subspace of dimension %d. What is the dimension of the orthogonal complement \\(W^\\perp\\)?", n, dimW),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("In an \\(n\\)-dimensional space, \\(\\dim(W) + \\dim(W^\\perp) = n\\). Here \\(\\dim(W^\\perp) = %d - %d = %d\\).", n, dimW, ans),
-		}
-	case 3:
-		// Hyperplane defined by a single linear constraint
-		n := smallInt(3, 7+int(ctx.Difficulty*3))
-		ans := n - 1
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the dimension of the subspace in \\(\\mathbb{R}^{%d}\\) defined by the single equation \\(x_1 + x_2 + \\dots + x_{%d} = 0\\)?", n, n),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("A single nonzero homogeneous linear equation in \\(\\mathbb{R}^{%d}\\) imposes 1 constraint, so the dimension is %d - 1 = %d.", n, n, ans),
-		}
-	default:
-		// k independent linear equations
-		n := smallInt(4, 7+int(ctx.Difficulty*2))
-		k := smallInt(2, n-2)
-		ans := n - k
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the dimension of the subspace in \\(\\mathbb{R}^{%d}\\) defined by %d linearly independent homogeneous linear equations?", n, k),
-			Answer:      fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("Each independent constraint reduces the dimension of the solution space by 1. Therefore the dimension is %d - %d = %d.", n, k, ans),
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	for {
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			// Grassmann's dimension formula: dim(U + W) = dim(U) + dim(W) - dim(U cap W)
+			d12 := smallInt(1, 3+tier)
+			d1 := d12 + smallInt(1, 3+tier*2)
+			d2 := d12 + smallInt(1, 3+tier*2)
+			ans := d1 + d2 - d12
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("Two subspaces \\(U\\) and \\(W\\) of a vector space satisfy \\(\\dim(U) = %d\\), \\(\\dim(W) = %d\\) and \\(\\dim(U \\cap W) = %d\\). What is \\(\\dim(U + W)\\)?", d1, d2, d12)
+			if ans == d1 || ans == d2 || ans == d12 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State Grassmann's dimension formula: \\(\\dim(U + W) = \\dim(U) + \\dim(W) - \\dim(U \\cap W)\\).\n"+
+				"Subgoal 2: Substitute dimensions: \\((%d) + (%d) - (%d)\\).\n"+
+				"Subgoal 3: Evaluate arithmetic: %d + %d - %d = %d.",
+				d1, d2, d12, d1, d2, d12, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"dimU":   strconv.Itoa(d1),
+					"dimW":   strconv.Itoa(d2),
+					"dimCap": strconv.Itoa(d12),
+					"answer": ansStr,
+				},
+			}
+		case 1:
+			// Direct sum: dim(U \oplus W) = dim(U) + dim(W)
+			d1 := smallInt(2, 5+tier*2)
+			d2 := smallInt(2, 5+tier*2)
+			ans := d1 + d2
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("If \\(V = U \\oplus W\\) is the direct sum of subspaces \\(U\\) and \\(W\\) with \\(\\dim(U) = %d\\) and \\(\\dim(W) = %d\\), what is \\(\\dim(V)\\)?", d1, d2)
+			if ans == d1 || ans == d2 || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the direct sum dimension theorem: \\(\\dim(U \\oplus W) = \\dim(U) + \\dim(W)\\).\n"+
+				"Subgoal 2: Substitute subspace dimensions: \\((%d) + (%d)\\).\n"+
+				"Subgoal 3: Sum dimensions to find \\(\\dim(V) = %d\\).",
+				d1, d2, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"dimU":   strconv.Itoa(d1),
+					"dimW":   strconv.Itoa(d2),
+					"answer": ansStr,
+				},
+			}
+		case 2:
+			// Orthogonal complement dimension: dim(W^\perp) = n - dim(W)
+			n := smallInt(4, 7+tier*3)
+			dimW := smallInt(1, n-2)
+			ans := n - dimW
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("In \\(\\mathbb{R}^{%d}\\), let \\(W\\) be a subspace of dimension %d. What is the dimension of the orthogonal complement \\(W^\\perp\\)?", n, dimW)
+			if ans == n || ans == dimW || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the orthogonal complement dimension theorem: \\(\\dim(W) + \\dim(W^\\perp) = n\\).\n"+
+				"Subgoal 2: Substitute ambient dimension \\(n = %d\\) and subspace dimension \\(\\dim(W) = %d\\): \\((%d) - (%d)\\).\n"+
+				"Subgoal 3: Subtract to evaluate \\(\\dim(W^\\perp) = %d\\).",
+				n, dimW, n, dimW, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"n":      strconv.Itoa(n),
+					"dimW":   strconv.Itoa(dimW),
+					"answer": ansStr,
+				},
+			}
+		case 3:
+			// Hyperplane defined by a single linear constraint
+			n := smallInt(4, 8+tier*3)
+			ans := n - 1
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("What is the dimension of the subspace in \\(\\mathbb{R}^{%d}\\) defined by the single equation \\(x_1 + x_2 + \\dots + x_{%d} = 0\\)?", n, n)
+			if ans == n || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the hyperplane codimension theorem: a single non-trivial homogeneous linear equation defines a subspace of codimension 1.\n"+
+				"Subgoal 2: Subtract 1 constraint from ambient dimension \\(n = %d\\): %d - 1.\n"+
+				"Subgoal 3: Evaluate dimension: %d.",
+				n, n, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"n":      strconv.Itoa(n),
+					"answer": ansStr,
+				},
+			}
+		default:
+			// k independent linear equations
+			n := smallInt(5, 8+tier*2)
+			k := smallInt(2, n-2)
+			ans := n - k
+			ansStr := strconv.Itoa(ans)
+			q := fmt.Sprintf("What is the dimension of the subspace in \\(\\mathbb{R}^{%d}\\) defined by %d linearly independent homogeneous linear equations?", n, k)
+			if ans == n || ans == k || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State the constraint codimension theorem: \\(k\\) linearly independent constraints reduce dimension by \\(k\\): \\(\\dim = n - k\\).\n"+
+				"Subgoal 2: Substitute ambient dimension \\(n = %d\\) and constraint count \\(k = %d\\): %d - %d.\n"+
+				"Subgoal 3: Subtract to evaluate dimension: %d.",
+				n, k, n, k, ans)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"n":      strconv.Itoa(n),
+					"k":      strconv.Itoa(k),
+					"answer": ansStr,
+				},
+			}
 		}
 	}
 }
