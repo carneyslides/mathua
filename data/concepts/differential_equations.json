@@ -19,7 +19,7 @@
     "label": "Separable differential equations",
     "domain": "differential_equations",
     "subdomain": "differential_equations.first_order",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "ode.basics.concept",
       "calc.integral.substitution"

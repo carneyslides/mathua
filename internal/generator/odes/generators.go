@@ -76,48 +76,85 @@ func (g *conceptGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 type separableGen struct{}
 
 func (g *separableGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type qa struct {
-		q string
-		a string
-		e string
-	}
-	templates := []qa{
-		{
-			q: "Solve: \\(dy/dx = x/y\\)",
-			a: "y^2=x^2+C",
-			e: "Separate: \\(y dy = x dx\\). Integrate: \\(y^{2}/2 = x^{2}/2 + C\\). Multiply by 2: \\(y^{2} = x^{2} + C\\).",
-		},
-		{
-			q: "Solve: \\(dy/dx = x\\)",
-			a: "y=x^2/2+C",
-			e: "Rewrite as \\(dy = x dx\\). Integrate: \\(y = x^{2}/2 + C\\).",
-		},
-		{
-			q: "Solve: \\(dy/dx = 1/y\\)",
-			a: "y^2=2x+C",
-			e: "Separate: \\(y dy = dx\\). Integrate: \\(y^{2}/2 = x + C\\). Multiply by 2: \\(y^{2} = 2x + C\\).",
-		},
-		{
-			q: "Solve: \\(dy/dx = x^{2}/y\\)",
-			a: "y^2=(2/3)x^3+C",
-			e: "Separate: \\(y dy = x^{2} dx\\). Integrate: \\(y^{2}/2 = x^{3}/3 + C\\). Multiply by 2: \\(y^{2} = (2/3)x^{3} + C\\).",
-		},
-		{
-			q: "Solve: \\(dy/dx = x^{2}\\)",
-			a: "y=x^3/3+C",
-			e: "Rewrite as \\(dy = x^{2} dx\\). Integrate: \\(y = x^{3}/3 + C\\).",
-		},
-		{
-			q: "Solve: \\(dy/dx = 1/y^{2}\\)",
-			a: "y^3=3x+C",
-			e: "Separate: \\(y^{2} dy = dx\\). Integrate: \\(y^{3}/3 = x + C\\). Multiply by 3: \\(y^{3} = 3x + C\\).",
-		},
-	}
-	t := templates[rand.Intn(len(templates))]
-	return generator.Problem{
-		Question:    t.q,
-		Answer:      t.a,
-		Explanation: t.e,
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// y dy/dx = a x with y(0) = y0, evaluate [y(x1)]^2
+		a := smallInt(1, 4)
+		y0 := smallInt(1, 5)
+		x1 := smallInt(1, 4)
+		val := a*x1*x1 + y0*y0
+		return generator.Problem{
+			Question: fmt.Sprintf("Solve the separable initial value problem \\(y \\frac{dy}{dx} = %d x\\) with \\(y(0) = %d\\) (for \\(y > 0\\)). What is the value of \\([y(%d)]^2\\)?", a, y0, x1),
+			Answer:   fmt.Sprintf("%d", val),
+			Explanation: fmt.Sprintf(
+				"Separating variables gives \\(y dy = %d x dx\\). Integrating both sides yields \\(\\frac{y^2}{2} = \\frac{%d x^2}{2} + C\\), so \\(y^2 = %d x^2 + 2C\\). Using initial condition \\(y(0) = %d\\) gives \\(2C = (%d)^2 = %d\\). Thus \\(y(x)^2 = %d x^2 + %d\\). Evaluating at \\(x = %d\\) gives %d.",
+				a, a, a, y0, y0, y0*y0, a, y0*y0, x1, val,
+			),
+		}
+
+	case 1:
+		// dy/dx = (2 alpha x + b) y with y(0) = y0 -> y(x) = A exp(alpha x^2 + b x)
+		alpha := smallInt(1, 3)
+		b := smallInt(1, 4)
+		y0 := smallInt(1, 6)
+		coeff := 2 * alpha
+		return generator.Problem{
+			Question: fmt.Sprintf("The separable initial value problem \\(\\frac{dy}{dx} = (%d x + %d) y\\) with \\(y(0) = %d\\) has solution of the form \\(y(x) = A \\exp(%d x^2 + %d x)\\). What is the value of the coefficient \\(A\\)?", coeff, b, y0, alpha, b),
+			Answer:   fmt.Sprintf("%d", y0),
+			Explanation: fmt.Sprintf(
+				"Separating variables yields \\(\\frac{dy}{y} = (%d x + %d) dx\\). Integrating gives \\(\\ln|y| = %d x^2 + %d x + C\\), so \\(y(x) = A \\exp(%d x^2 + %d x)\\) where \\(A = e^C\\). Applying initial condition \\(y(0) = %d\\) gives %d.",
+				coeff, b, alpha, b, alpha, b, y0, y0,
+			),
+		}
+
+	case 2:
+		// dy/dx = 3 alpha x^2 + 2 beta x + c with y(0) = y0, evaluate y(x1)
+		alpha := smallInt(1, 3)
+		beta := smallInt(1, 3)
+		c := smallInt(1, 5)
+		y0 := smallInt(1, 5)
+		x1 := smallInt(1, 3)
+		aCoeff := 3 * alpha
+		bCoeff := 2 * beta
+		val := alpha*x1*x1*x1 + beta*x1*x1 + c*x1 + y0
+		return generator.Problem{
+			Question: fmt.Sprintf("Solve the separable initial value problem \\(\\frac{dy}{dx} = %d x^2 + %d x + %d\\) with \\(y(0) = %d\\). What is the value of \\(y(%d)\\)?", aCoeff, bCoeff, c, y0, x1),
+			Answer:   fmt.Sprintf("%d", val),
+			Explanation: fmt.Sprintf(
+				"Separating variables gives \\(dy = (%d x^2 + %d x + %d) dx\\). Integrating both sides yields \\(y(x) = %d x^3 + %d x^2 + %d x + C\\). Applying \\(y(0) = %d\\) gives \\(C = %d\\). Evaluating at \\(x = %d\\) gives %d.",
+				aCoeff, bCoeff, c, alpha, beta, c, y0, y0, x1, val,
+			),
+		}
+
+	case 3:
+		// Autonomous separable logistic/quadratic: dy/dx = a y - b y^2 = 0 non-zero equilibrium
+		b := smallInt(2, 5)
+		k := smallInt(2, 6+int(ctx.Difficulty*2))
+		a := b * k
+		return generator.Problem{
+			Question: fmt.Sprintf("For the autonomous separable differential equation \\(\\frac{dy}{dx} = %d y - %d y^2\\), what is the non-zero equilibrium solution \\(y\\)?", a, b),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf(
+				"Equilibrium solutions occur where the derivative vanishes: \\(\\frac{dy}{dx} = y(%d - %d y) = 0\\). Setting the non-zero factor to zero yields \\(%d - %d y = 0\\), so \\(y = \\frac{%d}{%d} = %d\\).",
+				a, b, a, b, a, b, k,
+			),
+		}
+
+	default:
+		// y^2 dy/dx = a with y(0) = y0, evaluate [y(x1)]^3
+		a := smallInt(1, 4)
+		y0 := smallInt(1, 4)
+		x1 := smallInt(1, 3)
+		val := 3*a*x1 + y0*y0*y0
+		return generator.Problem{
+			Question: fmt.Sprintf("Solve the separable differential equation \\(y^2 \\frac{dy}{dx} = %d\\) subject to initial condition \\(y(0) = %d\\). What is the value of \\([y(%d)]^3\\)?", a, y0, x1),
+			Answer:   fmt.Sprintf("%d", val),
+			Explanation: fmt.Sprintf(
+				"Separating variables gives \\(y^2 dy = %d dx\\). Integrating both sides gives \\(\\frac{y^3}{3} = %d x + C\\), so \\(y^3 = %d x + 3C\\). With \\(y(0) = %d\\), we find \\(3C = (%d)^3 = %d\\), yielding \\(y(x)^3 = %d x + %d\\). Evaluating at \\(x = %d\\) gives %d.",
+				a, a, 3*a, y0, y0, y0*y0*y0, 3*a, y0*y0*y0, x1, val,
+			),
+		}
 	}
 }
 
