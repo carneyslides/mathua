@@ -521,7 +521,7 @@ describe('onboard diagnostic flow', () => {
     expect(screen.getByRole('button', { name: 'Check Answer' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: "I don't know" }))
 
-    expect(await screen.findByText('No answer')).toBeInTheDocument()
+    expect(await screen.findByText('Q2 text')).toBeInTheDocument()
     expect(screen.queryByText(/Not quite/)).toBeNull()
     expect(vi.mocked(submitGoalAnswer)).toHaveBeenCalledWith('s1', 'c1', '', expect.any(Number), true)
   })

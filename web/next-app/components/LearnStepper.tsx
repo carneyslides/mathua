@@ -226,15 +226,15 @@ export default function LearnStepper({ conceptId, returnStack = [] }: Props) {
     load()
   }, [load])
 
-  // Re-fetch the ranked head on entering done: the scheduler has just
-  // ingested the last answer, so the head may have moved. Fetch in place —
+  // Re-fetch the ranked head on entering done or when re-entering a mastered concept:
   // navigation waits for the Continue click (deterministic for e2e).
   // A slow network must not strand the card: past the timeout the failure
   // branch (Practice again + Back to Profile) renders instead of a stale
   // spinner, and never a self-link.
+  const isMastered = readiness?.state === 'mastered'
   const hasDone = entries.some(e => e.kind === 'done')
   useEffect(() => {
-    if (!hasDone || nextFetchedRef.current) return
+    if ((!hasDone && !isMastered) || nextFetchedRef.current) return
     nextFetchedRef.current = true
     setNextLoading(true)
     const info = getUserInfo()
@@ -260,7 +260,7 @@ export default function LearnStepper({ conceptId, returnStack = [] }: Props) {
     }).catch(() => {
       nextFetchedRef.current = false
     }).finally(() => setNextLoading(false))
-  }, [hasDone])
+  }, [hasDone, isMastered, conceptId])
 
   // Take the next question: buffer first, fetching when empty.
   async function takeNext(diff: number): Promise<PracticeQuestion | null> {
@@ -579,6 +579,48 @@ export default function LearnStepper({ conceptId, returnStack = [] }: Props) {
 
       {error && <p className="mb-4 font-mono text-xs text-red-400">{error}</p>}
 
+      {isMastered && (
+        <div className="border border-mathua-green-faint bg-mathua-surface p-5 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="font-mono text-xs text-green-400">✓ You have mastered this concept</p>
+              <p className="mt-1 font-mono text-[11px] text-mathua-secondary">
+                You can move on to the next recommended concept or practice this lesson again below.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {nextShelf && (
+                <Link
+                  href={nextShelf.next.href}
+                  className="border border-mathua-blue text-mathua-blue hover:bg-mathua-blue-faint px-4 py-2 font-mono text-xs inline-flex items-center min-h-[40px]"
+                >
+                  Continue to Next Concept ({nextShelf.next.title}) →
+                </Link>
+              )}
+              {nextLoading && (
+                <span className="font-mono text-xs text-mathua-muted px-4 py-2 inline-flex items-center min-h-[40px]">
+                  Finding next concept…
+                </span>
+              )}
+              {!nextLoading && !nextShelf && (
+                <Link
+                  href="/learn"
+                  className="border border-mathua-blue text-mathua-blue hover:bg-mathua-blue-faint px-4 py-2 font-mono text-xs inline-flex items-center min-h-[40px]"
+                >
+                  Continue to Next Concept →
+                </Link>
+              )}
+              <Link
+                href="/profile"
+                className="border border-mathua-border px-4 py-2 font-mono text-xs text-mathua-secondary hover:border-mathua-blue hover:text-mathua-blue inline-flex items-center min-h-[40px]"
+              >
+                Profile
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* The reference layer, in the flow.
           This replaces the "Reference" link the done card used to carry to `/study`: the same
           material, reachable without leaving the questions, and impossible to wander off in —
@@ -625,7 +667,19 @@ export default function LearnStepper({ conceptId, returnStack = [] }: Props) {
                     MA has no skip affordance at all: the worked example is the
                     scaffolding for the question that follows (example-problem
                     pair), so the label must not invite bypassing it. */}
-                <button type="button" onClick={startPracticing} className="mt-5 border border-mathua-blue text-mathua-blue hover:bg-mathua-blue-faint px-6 py-2.5 font-mono text-xs min-h-[44px]">Next →</button>
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <button type="button" onClick={startPracticing} className="border border-mathua-blue text-mathua-blue hover:bg-mathua-blue-faint px-6 py-2.5 font-mono text-xs min-h-[44px]">
+                    {isMastered ? 'Practice again →' : 'Next →'}
+                  </button>
+                  {isMastered && (
+                    <Link
+                      href={nextShelf ? nextShelf.next.href : '/learn'}
+                      className="border border-mathua-border text-mathua-secondary hover:border-mathua-blue hover:text-mathua-blue px-6 py-2.5 font-mono text-xs min-h-[44px] inline-flex items-center"
+                    >
+                      Continue to Next Concept →
+                    </Link>
+                  )}
+                </div>
               </div>
             )
           }

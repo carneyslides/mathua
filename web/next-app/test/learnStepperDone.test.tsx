@@ -160,6 +160,24 @@ describe('LearnStepper done state (PR5)', () => {
     expect(links.some((h) => h.includes(`/learn?concept=${encodeURIComponent(CID)}`))).toBe(false)
   }, 15000)
 
+  it('provides an unambiguous Continue to Next Concept action when re-entering a mastered lesson', async () => {
+    vi.mocked(getLessonReadiness).mockResolvedValueOnce({
+      concept_id: CID,
+      ready: true,
+      weak: [],
+      missing: [],
+      state: 'mastered',
+      eligible: true,
+    })
+    render(<LearnStepper conceptId={CID} />)
+
+    expect(await screen.findByText(/You have mastered this concept/)).toBeTruthy()
+    const links = await screen.findAllByRole('link', { name: /Continue to Next Concept/ })
+    expect(links.length).toBeGreaterThan(0)
+    expect(links[0].getAttribute('href')).toMatch(/^\/learn\?concept=b/)
+    expect(screen.getByRole('button', { name: 'Practice again →' })).toBeTruthy()
+  })
+
   it('guards same-concept heads by id even when query params differ', () => {
     expect(headConceptId(`/learn?concept=${CID}&seed=42&difficulty=0.7&exclude=a`)).toBe(CID)
     expect(headConceptId('/learn?concept=other.id')).toBe('other.id')

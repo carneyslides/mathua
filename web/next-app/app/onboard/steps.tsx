@@ -358,13 +358,14 @@ export function DiagnosticStep({
           )}
           <div className="mt-2 flex items-center justify-between gap-2">
             <p className="font-mono text-[11px] text-mathua-muted">{answerFormat.hint}</p>
-            {!lastResult && !loading && (
+            {!lastResult && (
               <button
                 type="button"
                 onClick={onDontKnow}
-                className="shrink-0 font-mono text-[11px] text-mathua-muted hover:text-mathua-red underline underline-offset-2"
+                disabled={loading}
+                className="shrink-0 font-mono text-[11px] text-mathua-muted hover:text-mathua-red underline underline-offset-2 disabled:opacity-50"
               >
-                I don&apos;t know
+                {loading ? 'Submitting…' : "I don't know"}
               </button>
             )}
           </div>

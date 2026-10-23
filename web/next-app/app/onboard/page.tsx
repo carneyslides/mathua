@@ -38,6 +38,7 @@ type Step = 'welcome' | 'diagnostic' | 'results'
 // MA parity: the Diagnostic doesn't have to be completed at once — the
 // session id persists in sessionStorage so Back/refresh resumes it.
 const DIAG_KEY = 'mathua_diag_session_onboard'
+const STEP_KEY = 'mathua_onboard_step'
 
 // A guest run is a demo: the server opens a session against a student row
 // created from a typed name, and nothing can sign back into that row. Session
@@ -113,8 +114,12 @@ export default function OnboardPage() {
     // the pause is still offered separately, and only for a run that has not had
     // its scope changed underneath it.
     setDomains(result)
+    let saved = ''
+    let activeStep = ''
     try {
-      setHasPaused(!!sessionStorage.getItem(DIAG_KEY))
+      saved = sessionStorage.getItem(DIAG_KEY) || ''
+      activeStep = sessionStorage.getItem(STEP_KEY) || ''
+      setHasPaused(!!saved)
     } catch {
       setHasPaused(false)
     }
@@ -122,6 +127,9 @@ export default function OnboardPage() {
       setDemo(sessionStorage.getItem(DEMO_KEY) === '1')
     } catch {
       setDemo(false)
+    }
+    if (activeStep === 'diagnostic' && saved) {
+      void resumeDiagnostic(saved)
     }
   }, [mounted])
 
@@ -132,7 +140,10 @@ export default function OnboardPage() {
   function dropPausedRun() {
     if (!hasPaused) return
     sessionId.current = ''
-    try { sessionStorage.removeItem(DIAG_KEY) } catch { /* ignore */ }
+    try {
+      sessionStorage.removeItem(DIAG_KEY)
+      sessionStorage.removeItem(STEP_KEY)
+    } catch { /* ignore */ }
     setHasPaused(false)
   }
 
@@ -176,6 +187,7 @@ export default function OnboardPage() {
     sessionId.current = res.session_id
     try {
       sessionStorage.setItem(DIAG_KEY, res.session_id)
+      sessionStorage.setItem(STEP_KEY, 'diagnostic')
       setHasPaused(true)
     } catch { /* storage unavailable — session simply won't resume */ }
     setQuestion(res.question || '')
@@ -245,12 +257,14 @@ export default function OnboardPage() {
     }
   }
 
-  async function resumeDiagnostic() {
-    let sid = ''
-    try {
-      sid = sessionStorage.getItem(DIAG_KEY) || ''
-    } catch {
-      sid = ''
+  async function resumeDiagnostic(savedSid?: string) {
+    let sid = savedSid || ''
+    if (!sid) {
+      try {
+        sid = sessionStorage.getItem(DIAG_KEY) || ''
+      } catch {
+        sid = ''
+      }
     }
     if (!sid) return
     setLoading(true)
@@ -259,12 +273,17 @@ export default function OnboardPage() {
       if (data.done) {
         try {
           sessionStorage.removeItem(DIAG_KEY)
+          sessionStorage.removeItem(STEP_KEY)
         } catch { /* ignore */ }
         setHasPaused(false)
+        setStep('welcome')
         toast.error('That diagnostic already finished — start a fresh one below.')
         setLoading(false)
         return
       }
+      try {
+        sessionStorage.setItem(STEP_KEY, 'diagnostic')
+      } catch { /* ignore */ }
       sessionId.current = sid
       setQuestion(data.question || '')
       conceptId.current = data.concept_id || ''
@@ -288,8 +307,10 @@ export default function OnboardPage() {
     } catch {
       try {
         sessionStorage.removeItem(DIAG_KEY)
+        sessionStorage.removeItem(STEP_KEY)
       } catch { /* ignore */ }
       setHasPaused(false)
+      setStep('welcome')
       toast.error('Could not resume — that session expired. Start a fresh diagnostic.')
     } finally {
       setLoading(false)
@@ -311,11 +332,6 @@ export default function OnboardPage() {
       const correct = data.correct || false
       // An admitted unknown is not a wrong answer, so it does not get the wrong answer's words.
       // This step renders the feedback and no separate verdict line, so the label goes here.
-      const feedback = dontKnow ? 'No answer' : data.feedback || (correct ? 'Correct!' : 'Not quite.')
-      setAccuracy(prev => ({ correct: prev.correct + (correct ? 1 : 0), total: prev.total + 1 }))
-      setLastResult({ correct, feedback })
-      setRetryAvailable(data.done ? false : data.retry_available === true)
-      setRetryConcept(data.done ? '' : conceptId.current)
       if (data.progress) setProgress(data.progress)
 
       if (data.done) {
@@ -335,6 +351,21 @@ export default function OnboardPage() {
       if (!data.question) {
         throw new Error('The diagnostic returned no next question. Try again.')
       }
+
+      if (dontKnow) {
+        // Cleanly advance to the next probe without holding on a dead-end feedback card
+        setAccuracy(prev => ({ correct: prev.correct, total: prev.total + 1 }))
+        applyQuestion(data.question, data.concept_id || '', data.concept_name || '', data.grading_type || '')
+        setLoading(false)
+        return
+      }
+
+      const feedback = data.feedback || (correct ? 'Correct!' : 'Not quite.')
+      setAccuracy(prev => ({ correct: prev.correct + (correct ? 1 : 0), total: prev.total + 1 }))
+      setLastResult({ correct, feedback })
+      setRetryAvailable(data.retry_available === true)
+      setRetryConcept(conceptId.current)
+
       // Manual advance: stage the prefetched next question, reveal on Next.
       // The staged question stays hidden, so answer timing starts at reveal.
       pendingNext.current = {
@@ -358,6 +389,7 @@ export default function OnboardPage() {
           setStep('results')
           try {
             sessionStorage.removeItem(DIAG_KEY)
+            sessionStorage.removeItem(STEP_KEY)
           } catch { /* ignore */ }
           setHasPaused(false)
           setLoading(false)
@@ -380,6 +412,7 @@ export default function OnboardPage() {
       setStep('results')
       try {
         sessionStorage.removeItem(DIAG_KEY)
+        sessionStorage.removeItem(STEP_KEY)
       } catch { /* ignore */ }
       setHasPaused(false)
     } catch (e) {
@@ -493,7 +526,16 @@ export default function OnboardPage() {
         <section className="pt-8 min-w-0 overflow-hidden">
           {step !== 'welcome' && (
             <span className="flex mb-4">
-              <button type="button" onClick={() => setStep('welcome')} className="text-mathua-secondary text-sm hover:text-mathua-primary">← Back</button>
+              <button
+                type="button"
+                onClick={() => {
+                  try { sessionStorage.removeItem(STEP_KEY) } catch { /* ignore */ }
+                  setStep('welcome')
+                }}
+                className="text-mathua-secondary text-sm hover:text-mathua-primary"
+              >
+                ← Back
+              </button>
             </span>
           )}
 

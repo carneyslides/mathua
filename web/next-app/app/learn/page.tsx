@@ -24,6 +24,15 @@ function LearnEntry() {
   const [shelf, setShelf] = useState<Shelf | null>(null)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  const [hasDiag, setHasDiag] = useState(false)
+
+  useEffect(() => {
+    try {
+      setHasDiag(!!sessionStorage.getItem('mathua_diag_session_onboard'))
+    } catch {
+      setHasDiag(false)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -71,6 +80,22 @@ function LearnEntry() {
   return (
     <div className="mt-6 mb-16 px-4">
       <div className="max-w-2xl mx-auto">
+        {hasDiag && (
+          <div className="mb-4 border border-mathua-blue bg-mathua-surface p-4">
+            <p className="font-mono text-xs text-mathua-blue">Diagnostic test in progress</p>
+            <p className="mt-1 font-mono text-[11px] text-mathua-secondary">
+              You have an active diagnostic session. Resume it to find your starting point.
+            </p>
+            <div className="mt-3">
+              <Link
+                href="/onboard"
+                className="border border-mathua-blue text-mathua-blue hover:bg-mathua-blue-faint px-4 py-1.5 font-mono text-xs inline-flex items-center"
+              >
+                Resume diagnostic test →
+              </Link>
+            </div>
+          </div>
+        )}
         <NextUpCard shelf={shelf} />
         <Link href="/profile" className="mt-4 inline-block font-mono text-xs text-mathua-secondary hover:text-mathua-blue">← Profile</Link>
       </div>

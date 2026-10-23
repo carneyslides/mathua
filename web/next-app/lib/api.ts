@@ -1293,7 +1293,7 @@ export async function getNext(exclude?: string[]): Promise<RecommendationRes> {
   const params = new URLSearchParams()
   if (exclude?.length) params.set('exclude', exclude.join(','))
   const qs = params.toString()
-  const res = await authedFetch(`${API_BASE}/api/next${qs ? `?${qs}` : ''}`, { cache: 'no-store' })
+  const res = await authedFetch(`${API_BASE}/api/next${qs ? `?${qs}` : ''}`, { cache: 'no-store', timeoutMs: 10000 })
   if (!res.ok) await throwWithResponse(res, 'Could not load what to study next')
   const data = (await res.json()) as Partial<RecommendationRes>
   if (!data.primary) return fallback
