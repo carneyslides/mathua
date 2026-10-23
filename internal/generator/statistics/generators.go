@@ -709,24 +709,106 @@ func (g *exponentialDistGen) Generate(ctx generator.GeneratorContext) generator.
 type gammaDistGen struct{}
 
 func (g *gammaDistGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"How many parameters define the Gamma distribution?", "2", "Gamma is defined by shape k and a rate (or scale) parameter."},
-		{"If X has Gamma(shape=3, scale=2), what is the mean of X?", "6", "The mean of Gamma is shape times scale = 3 times 2."},
-		{"Is Gamma(shape=1) the same as an Exponential distribution? (yes/no)", "yes", "Gamma(shape=1, rate) = Exponential(rate)."},
-		{"Can a Gamma random variable take negative values? (yes/no)", "no", "The Gamma distribution is defined only for positive real numbers."},
-		{"The sum of 5 independent Exponential(rate=2) variables follows a Gamma distribution with what shape?", "5", "The sum of k independent Exp(rate) variables is Gamma(shape=k, rate)."},
-		{"Is chi-square with k degrees of freedom a special case of the Gamma distribution? (yes/no)", "yes", "Chi-square(k) = Gamma(shape=k/2, scale=2)."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type meanItem struct {
+			k     int
+			theta int
+		}
+		items := []meanItem{
+			{3, 4},
+			{4, 5},
+			{5, 2},
+			{6, 3},
+			{7, 4},
+			{8, 5},
+		}
+		it := items[rand.Intn(len(items))]
+		mean := it.k * it.theta
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Gamma}(k, \\theta)\\) have shape parameter \\(k = %d\\) and scale parameter \\(\\theta = %d\\). Calculate the expected value \\(E[X]\\).", it.k, it.theta),
+			Answer:   fmt.Sprintf("%d", mean),
+			Explanation: fmt.Sprintf("The expected value of a Gamma distribution with shape \\(k\\) and scale \\(\\theta\\) is \\(E[X] = k \\theta = %d \\times %d = %d\\).",
+				it.k, it.theta, mean),
+		}
+	case 1:
+		type varItem struct {
+			k     int
+			theta int
+		}
+		items := []varItem{
+			{2, 3},
+			{3, 4},
+			{4, 3},
+			{5, 2},
+			{6, 4},
+			{2, 5},
+		}
+		it := items[rand.Intn(len(items))]
+		v := it.k * it.theta * it.theta
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Gamma}(k, \\theta)\\) have shape \\(k = %d\\) and scale \\(\\theta = %d\\). Calculate the variance \\(\\operatorname{Var}(X)\\).", it.k, it.theta),
+			Answer:   fmt.Sprintf("%d", v),
+			Explanation: fmt.Sprintf("The variance of a Gamma distribution with shape \\(k\\) and scale \\(\\theta\\) is \\(\\operatorname{Var}(X) = k \\theta^2 = %d \\times %d^2 = %d \\times %d = %d\\).",
+				it.k, it.theta, it.k, it.theta*it.theta, v),
+		}
+	case 2:
+		type sdItem struct {
+			k     int
+			theta int
+			sd    int
+		}
+		items := []sdItem{
+			{4, 3, 6},
+			{4, 5, 10},
+			{9, 2, 6},
+			{9, 4, 12},
+			{16, 2, 8},
+			{16, 3, 12},
+		}
+		it := items[rand.Intn(len(items))]
+		v := it.k * it.theta * it.theta
+		return generator.Problem{
+			Question: fmt.Sprintf("A random variable \\(X\\) follows a Gamma distribution with shape \\(k = %d\\) and scale \\(\\theta = %d\\). Find the standard deviation \\(\\sigma\\).", it.k, it.theta),
+			Answer:   fmt.Sprintf("%d", it.sd),
+			Explanation: fmt.Sprintf("The variance is \\(\\operatorname{Var}(X) = k \\theta^2 = %d \\times %d^2 = %d\\). Therefore, the standard deviation is \\(\\sigma = \\sqrt{k \\theta^2} = \\sqrt{%d} = %d\\).",
+				it.k, it.theta, v, v, it.sd),
+		}
+	case 3:
+		k1List := []int{2, 3, 4, 5}
+		k2List := []int{3, 4, 5, 6}
+		thetaList := []int{2, 3, 4}
+		k1 := k1List[rand.Intn(len(k1List))]
+		k2 := k2List[rand.Intn(len(k2List))]
+		th := thetaList[rand.Intn(len(thetaList))]
+		sumK := k1 + k2
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X_1 \\sim \\operatorname{Gamma}(%d, %d)\\) and \\(X_2 \\sim \\operatorname{Gamma}(%d, %d)\\) be independent random variables sharing scale parameter \\(\\theta = %d\\). What is the shape parameter \\(k_{\\text{sum}}\\) of their sum \\(S = X_1 + X_2\\)?", k1, th, k2, th, th),
+			Answer:   fmt.Sprintf("%d", sumK),
+			Explanation: fmt.Sprintf("The sum of independent Gamma variables sharing the same scale parameter has shape parameter equal to the sum of the individual shapes: \\(k_{\\text{sum}} = k_1 + k_2 = %d + %d = %d\\).",
+				k1, k2, sumK),
+		}
+	default:
+		type modeItem struct {
+			k     int
+			theta int
+		}
+		items := []modeItem{
+			{4, 3},
+			{5, 2},
+			{6, 4},
+			{3, 5},
+			{7, 3},
+			{8, 2},
+		}
+		it := items[rand.Intn(len(items))]
+		mode := (it.k - 1) * it.theta
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X\\) follow a Gamma distribution with shape parameter \\(k = %d\\) and scale parameter \\(\\theta = %d\\). Find the mode of \\(X\\).", it.k, it.theta),
+			Answer:   fmt.Sprintf("%d", mode),
+			Explanation: fmt.Sprintf("For shape parameter \\(k \\ge 1\\), the mode of \\(\\operatorname{Gamma}(k, \\theta)\\) is \\((k - 1)\\theta = (%d - 1) \\times %d = %d \\times %d = %d\\).",
+				it.k, it.theta, it.k-1, it.theta, mode),
+		}
 	}
 }
 
