@@ -391,31 +391,75 @@ func (g *cramerGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type eigenConceptGen struct{}
 
 func (g *eigenConceptGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	if rand.Intn(2) == 0 {
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Av = lambda v
+		lambda := smallInt(1, 5+int(ctx.Difficulty*3))
+		k := smallInt(1, 3)
+		b := smallInt(-2, 3)
+		a := lambda - b*k
+		d := smallInt(-2, 3)
+		c := k * (lambda - d)
 		return generator.Problem{
-			Question:    "What is an eigenvalue \\(\\lambda\\) of a square matrix \\(A\\)?",
-			Answer:      "A scalar \\(\\lambda\\) such that \\(\\det(A-\\lambda I)=0\\), equivalently \\(Av=\\lambda v\\) for some nonzero \\(v\\)",
-			Explanation: "An eigenvalue \\(\\lambda\\) satisfies \\(\\det(A-\\lambda I)=0\\), meaning there exists a nonzero vector \\(v\\) with \\(Av=\\lambda v\\).",
+			Question:    fmt.Sprintf("The vector \\(v = \\begin{pmatrix} 1 \\\\ %d \\end{pmatrix}\\) is an eigenvector of matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\). Find the corresponding eigenvalue \\(\\lambda\\).", k, a, b, c, d),
+			Answer:      fmt.Sprintf("%d", lambda),
+			Explanation: fmt.Sprintf("An eigenvector satisfies \\(Av = \\lambda v\\). Computing the first component of \\(Av\\) gives \\(%d(1) + (%d)(%d) = %d\\). Therefore \\(\\lambda = %d\\).", a, b, k, lambda, lambda),
 		}
-	}
-	scale := int(1 + ctx.Difficulty*5)
-	a, d := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-	if a == 0 {
-		a = 1
-	}
-	if d == 0 {
-		d = 2
-	}
-	lambda := rand.Intn(max(1, scale*2)) - scale
-	det := (a - lambda) * (d - lambda)
-	answer := "no"
-	if det == 0 {
-		answer = "yes"
-	}
-	return generator.Problem{
-		Question:    fmt.Sprintf("Is \\(\\lambda=%d\\) an eigenvalue of matrix \\(%s\\)?", lambda, formatMatrix2([][]int{{a, 0}, {0, d}})),
-		Answer:      answer,
-		Explanation: fmt.Sprintf("det(A-λI) = det([[%d,%d],[%d,%d]]) = (%d)*(%d) = %d. Since det %s 0, λ=%d %s an eigenvalue.", a-lambda, 0, 0, d-lambda, a-lambda, d-lambda, det, map[bool]string{true: "=", false: "≠"}[det == 0], lambda, map[bool]string{true: "is", false: "is not"}[det == 0]),
+	case 1:
+		// tr(A) = lambda1 + lambda2, with A = P diag(lambda1, lambda2) P^-1 for
+		// P = [[1,1],[1,2]]. Building A this way makes the stated lambda1 an
+		// actual eigenvalue; arbitrary entries would make the premise false.
+		l1 := smallInt(-4, 4)
+		l2 := smallInt(-4, 4)
+		a := 2*l1 - l2
+		b := l2 - l1
+		c := 2*l1 - 2*l2
+		d := 2*l2 - l1
+		tr := a + d
+		return generator.Problem{
+			Question:    fmt.Sprintf("The matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) has one eigenvalue \\(\\lambda_1 = %d\\). Using the trace formula \\(\\operatorname{tr}(A) = \\lambda_1 + \\lambda_2\\), compute the second eigenvalue \\(\\lambda_2\\).", a, b, c, d, l1),
+			Answer:      fmt.Sprintf("%d", l2),
+			Explanation: fmt.Sprintf("The trace of a square matrix is the sum of its eigenvalues: \\(\\operatorname{tr}(A) = %d + (%d) = %d\\). Thus \\(\\lambda_2 = \\operatorname{tr}(A) - \\lambda_1 = %d - (%d) = %d\\).", a, d, tr, tr, l1, l2),
+		}
+	case 2:
+		// det(A) = lambda1 * lambda2
+		a := smallInt(-4, 4)
+		d := smallInt(-4, 4)
+		b := smallInt(-3, 3)
+		c := smallInt(-3, 3)
+		det := a*d - b*c
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\), what is the product of its eigenvalues \\(\\lambda_1 \\lambda_2\\)?", a, b, c, d),
+			Answer:      fmt.Sprintf("%d", det),
+			Explanation: fmt.Sprintf("The product of all eigenvalues of a matrix equals its determinant: \\(\\lambda_1 \\lambda_2 = \\det(A) = (%d)(%d) - (%d)(%d) = %d\\).", a, d, b, c, det),
+		}
+	case 3:
+		// c * lambda
+		lambda := smallInt(-5, 5)
+		for lambda == 0 {
+			lambda = smallInt(-5, 5)
+		}
+		c := smallInt(2, 5)
+		ans := c * lambda
+		return generator.Problem{
+			Question:    fmt.Sprintf("If matrix \\(A\\) has an eigenvalue \\(\\lambda = %d\\), what is the corresponding eigenvalue of the scaled matrix \\(%d A\\)?", lambda, c),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("For any scalar \\(c\\), the eigenvalues of \\(cA\\) are \\(c\\lambda\\). Here \\(%d \\cdot (%d) = %d\\).", c, lambda, ans),
+		}
+	default:
+		// lambda + c
+		lambda := smallInt(-5, 5)
+		c := smallInt(-5, 5)
+		for c == 0 {
+			c = smallInt(-5, 5)
+		}
+		ans := lambda + c
+		return generator.Problem{
+			Question:    fmt.Sprintf("If matrix \\(A\\) has an eigenvalue \\(\\lambda = %d\\), what is the corresponding eigenvalue of the shifted matrix \\(A + %d I\\)?", lambda, c),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("If \\(Av = \\lambda v\\), then \\((A + %d I)v = Av + %d v = (%d + %d)v = %d v\\). The eigenvalue is %d.", c, c, lambda, c, ans, ans),
+		}
 	}
 }
 
@@ -455,79 +499,129 @@ func (g *transformationsGen) Generate(ctx generator.GeneratorContext) generator.
 type spanGen struct{}
 
 func (g *spanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
-	if rand.Intn(2) == 0 {
-		v1, v2 := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-		w1, w2 := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-		if v1 == 0 && v2 == 0 {
-			v1, v2 = 1, 0
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Dimension of span of two vectors in R^2
+		dependent := rand.Intn(2) == 0
+		if dependent {
+			v1 := smallInt(1, 4)
+			v2 := smallInt(1, 4)
+			m := smallInt(2, 4)
+			w1 := m * v1
+			w2 := m * v2
+			return generator.Problem{
+				Question:    fmt.Sprintf("What is the dimension of the subspace \\(\\operatorname{span}\\{(%d,%d), (%d,%d)\\}\\) in \\(\\mathbb{R}^2\\)?", v1, v2, w1, w2),
+				Answer:      "1",
+				Explanation: fmt.Sprintf("The second vector is %d times the first vector, so they are linearly dependent. The dimension of their span is 1.", m),
+			}
 		}
-		if w1 == 0 && w2 == 0 {
-			w1, w2 = 0, 1
-		}
-		det := v1*w2 - v2*w1
-		answer := "no"
-		if det != 0 {
-			answer = "yes"
-		}
+		v1 := smallInt(1, 4)
+		v2 := 0
+		w1 := 0
+		w2 := smallInt(1, 4)
 		return generator.Problem{
-			Question:    fmt.Sprintf("Do the vectors \\(v=(%d,%d)\\) and \\(w=(%d,%d)\\) span \\(\\mathbb{R}^{2}\\)?", v1, v2, w1, w2),
-			Answer:      answer,
-			Explanation: fmt.Sprintf("det([[%d,%d],[%d,%d]]) = %d. Since determinant is %s, the vectors %s span R².", v1, v2, w1, w2, det, map[bool]string{true: "nonzero", false: "zero"}[det != 0], answer),
+			Question:    fmt.Sprintf("What is the dimension of the subspace \\(\\operatorname{span}\\{(%d,%d), (%d,%d)\\}\\) in \\(\\mathbb{R}^2\\)?", v1, v2, w1, w2),
+			Answer:      "2",
+			Explanation: "The determinant of the two vectors is nonzero, so they are linearly independent and span a 2-dimensional subspace.",
 		}
-	}
-	k := rand.Intn(max(1, scale)) + 2
-	if rand.Intn(2) == 0 {
-		k = -k
-	}
-	v1, v2 := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-	if v1 == 0 && v2 == 0 {
-		v1, v2 = 1, 2
-	}
-	w1, w2 := k*v1, k*v2
-	return generator.Problem{
-		Question:    fmt.Sprintf("Do the vectors \\(v=(%d,%d)\\) and \\(w=(%d,%d)\\) span \\(\\mathbb{R}^{2}\\)?", v1, v2, w1, w2),
-		Answer:      "no",
-		Explanation: fmt.Sprintf("w = %d*v, so the vectors are linearly dependent. Two dependent vectors cannot span R².", k),
+	case 1:
+		// Linear combination scalar c
+		c := smallInt(2, 6+int(ctx.Difficulty*3))
+		x := smallInt(1, 5)
+		y := smallInt(1, 5)
+		cx := c * x
+		cy := c * y
+		return generator.Problem{
+			Question:    fmt.Sprintf("Find the scalar \\(c\\) such that \\((%d,%d) = c(%d,%d)\\), showing that \\((%d,%d)\\) lies in \\(\\operatorname{span}\\{(%d,%d)\\}\\).", cx, cy, x, y, cx, cy, x, y),
+			Answer:      fmt.Sprintf("%d", c),
+			Explanation: fmt.Sprintf("Equating coordinates gives \\(%d = c(%d)\\), which yields \\(c = %d\\).", cx, x, c),
+		}
+	case 2:
+		// Parameter k making vectors linearly dependent
+		a := smallInt(1, 4)
+		b := smallInt(1, 4)
+		m := smallInt(2, 4)
+		cVal := m * a
+		k := m * b
+		return generator.Problem{
+			Question:    fmt.Sprintf("For what integer value of \\(k\\) do the vectors \\(v = (%d,%d)\\) and \\(w = (%d,k)\\) fail to span \\(\\mathbb{R}^2\\)?", a, b, cVal),
+			Answer:      fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("The vectors fail to span \\(\\mathbb{R}^2\\) when their determinant is zero: \\((%d)(k) - (%d)(%d) = 0\\), which gives \\(k = %d\\).", a, b, cVal, k),
+		}
+	case 3:
+		// Dimension of 3 vectors with 0 in z coordinate
+		x := smallInt(1, 5)
+		y := smallInt(1, 5)
+		return generator.Problem{
+			Question:    fmt.Sprintf("Consider the vectors \\(v_1 = (1,0,0)\\), \\(v_2 = (0,1,0)\\) and \\(v_3 = (%d,%d,0)\\). What is the dimension of \\(\\operatorname{span}\\{v_1, v_2, v_3\\}\\)?", x, y),
+			Answer:      "2",
+			Explanation: "All three vectors lie in the xy-plane because their z-components are zero. The first two vectors form a basis for that plane, so the dimension is 2.",
+		}
+	default:
+		// Span of k standard basis vectors in R^n
+		k := smallInt(2, 4+int(ctx.Difficulty*2))
+		n := k + smallInt(1, 3)
+		return generator.Problem{
+			Question:    fmt.Sprintf("Let \\(S\\) be a subset of %d distinct standard unit basis vectors in \\(\\mathbb{R}^{%d}\\). What is the dimension of \\(\\operatorname{span}(S)\\)?", k, n),
+			Answer:      fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("Distinct standard basis vectors are mutually orthogonal and linearly independent. Therefore %d such vectors span a subspace of dimension %d.", k, k),
+		}
 	}
 }
 
 type basisGen struct{}
 
 func (g *basisGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
-	qType := rand.Intn(3)
-	switch qType {
+	mode := rand.Intn(5)
+	switch mode {
 	case 0:
+		// Polynomial space P_n
+		n := smallInt(1, 5+int(ctx.Difficulty*3))
+		ans := n + 1
 		return generator.Problem{
-			Question:    "What is the dimension of \\(\\mathbb{R}^{3}\\)?",
-			Answer:      "3",
-			Explanation: "\\(\\mathbb{R}^{3}\\) has dimension 3 because it has a basis of 3 vectors, e.g., \\(\\{(1,0,0), (0,1,0), (0,0,1)\\}\\).",
+			Question:    fmt.Sprintf("What is the dimension of the vector space \\(\\mathcal{P}_{%d}\\) of real polynomials of degree at most %d?", n, n),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("A standard basis for \\(\\mathcal{P}_{%d}\\) is \\(\\{1, x, x^2, \\dots, x^{%d}\\}\\), which has %d elements. Thus \\(\\dim(\\mathcal{P}_{%d}) = %d\\).", n, n, ans, n, ans),
 		}
 	case 1:
+		// Matrix space M_{m x n}
+		m := smallInt(2, 4+int(ctx.Difficulty*2))
+		n := smallInt(2, 4+int(ctx.Difficulty*2))
+		ans := m * n
 		return generator.Problem{
-			Question:    "What is the dimension of \\(\\mathbb{R}^{2}\\)?",
-			Answer:      "2",
-			Explanation: "\\(\\mathbb{R}^{2}\\) has dimension 2 because it has a basis of 2 vectors, e.g., \\(\\{(1,0), (0,1)\\}\\).",
+			Question:    fmt.Sprintf("What is the dimension of the vector space \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\) of all %d-by-%d real matrices?", m, n, m, n),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The standard basis consists of single-entry matrix units \\(E_{ij}\\). With %d rows and %d columns, the dimension is %d.", m, n, ans),
+		}
+	case 2:
+		// Diagonal matrices D_n
+		n := smallInt(2, 6+int(ctx.Difficulty*4))
+		return generator.Problem{
+			Question:    fmt.Sprintf("What is the dimension of the subspace of all %d-by-%d diagonal matrices in \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\)?", n, n, n, n),
+			Answer:      fmt.Sprintf("%d", n),
+			Explanation: fmt.Sprintf("A diagonal matrix is completely determined by its %d diagonal entries, so its basis has %d matrices.", n, n),
+		}
+	case 3:
+		// Coordinates with respect to an upper triangular basis
+		a := smallInt(1, 3)
+		c1 := smallInt(1, 5+int(ctx.Difficulty*3))
+		c2 := smallInt(1, 4+int(ctx.Difficulty*2))
+		w1 := c1 + a*c2
+		w2 := c2
+		return generator.Problem{
+			Question:    fmt.Sprintf("Given the ordered basis \\(\\mathcal{B} = \\{(1,0), (%d,1)\\}\\), find the first coordinate \\(c_1\\) of the vector \\((%d,%d)\\) with respect to \\(\\mathcal{B}\\).", a, w1, w2),
+			Answer:      fmt.Sprintf("%d", c1),
+			Explanation: fmt.Sprintf("We solve \\(c_1(1,0) + c_2(%d,1) = (%d,%d)\\). The second component gives \\(c_2 = %d\\). The first component gives \\(c_1 + %d(%d) = %d\\), so \\(c_1 = %d - %d = %d\\).", a, w1, w2, w2, a, w2, w1, w1, a*w2, c1),
 		}
 	default:
-		v1, v2 := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-		w1, w2 := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-		if v1 == 0 && v2 == 0 {
-			v1, v2 = 1, 0
-		}
-		if w1 == 0 && w2 == 0 {
-			w1, w2 = 0, 1
-		}
-		det := v1*w2 - v2*w1
-		answer := "no"
-		if det != 0 {
-			answer = "yes"
-		}
+		// Symmetric matrices Sym_n
+		n := smallInt(2, 5)
+		ans := n * (n + 1) / 2
 		return generator.Problem{
-			Question:    fmt.Sprintf("Is the set \\(\\{(%d,%d), (%d,%d)\\}\\) a basis for \\(\\mathbb{R}^{2}\\)?", v1, v2, w1, w2),
-			Answer:      answer,
-			Explanation: fmt.Sprintf("det = %d, so the vectors are %s. Since they %s span R² and are %s, they %s a basis.", det, map[bool]string{true: "linearly independent", false: "linearly dependent"}[det != 0], map[bool]string{true: "do", false: "do not"}[det != 0], map[bool]string{true: "independent", false: "dependent"}[det != 0], map[bool]string{true: "form", false: "do not form"}[det != 0]),
+			Question:    fmt.Sprintf("What is the dimension of the subspace of all %d-by-%d real symmetric matrices in \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\)?", n, n, n, n),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("A symmetric matrix is determined by its diagonal and upper triangular entries. The number of independent entries is \\(\\frac{%d(%d + 1)}{2} = %d\\).", n, n, ans),
 		}
 	}
 }
@@ -757,216 +851,355 @@ func (g *parametricGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type innerProductGen struct{}
 
 func (g *innerProductGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
-	}
-	easy := []entry{
-		{"Is inner product 〈u,v〉=u·v positive definite? (yes/no)", "yes", "u·u=|u|²≥0 and =0 iff u=0."},
-		{"Are orthogonal vectors u·v=0? (yes/no)", "yes", "Definition of orthogonality."},
-		{"Does Cauchy-Schwarz state |〈u,v〉|≤||u||·||v||? (yes/no)", "yes", "Cauchy-Schwarz inequality."},
-		{"Is every symmetric bilinear form an inner product? (yes/no)", "no", "Needs positive definiteness too: xᵀAx with indefinite A fails."},
-	}
-	hard := []entry{
-		{"Is 〈u,v〉=2u₁v₁+u₂v₂ an inner product on R²? (yes/no)", "yes", "Weighted dot with positive weights is inner product."},
-		{"Does Gram-Schmidt use projections via inner products? (yes/no)", "yes", "Orthogonalization via subtract projections."},
-		{"Is every inner product induced by a positive-definite matrix? (yes/no)", "yes", "〈u,v〉=uᵀAv with A SPD."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: dot products and norms (unique answers).
-		type dotEntry struct {
-			question string
-			answer   string
-			reason   string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Weighted inner product
+		w1 := smallInt(1, 4)
+		w2 := smallInt(1, 4)
+		u1 := smallInt(1, 4)
+		u2 := smallInt(1, 4)
+		v1 := smallInt(1, 4)
+		v2 := smallInt(1, 4)
+		ans := w1*u1*v1 + w2*u2*v2
+		return generator.Problem{
+			Question:    fmt.Sprintf("Compute the weighted inner product \\(\\langle u, v \\rangle = %d u_1 v_1 + %d u_2 v_2\\) for \\(u = (%d,%d)\\) and \\(v = (%d,%d)\\).", w1, w2, u1, u2, v1, v2),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Substituting components gives \\(\\langle u, v \\rangle = %d(%d)(%d) + %d(%d)(%d) = %d\\).", w1, u1, v1, w2, u2, v2, ans),
 		}
-		dotTable := []dotEntry{
-			{"Compute (1,2)·(3,4) (enter a number)", "11", "1·3+2·4 = 11."},
-			{"What is (1,0)·(0,1)? (enter a number)", "0", "Perpendicular unit vectors: dot is 0."},
-			{"What is ||(3,4)||? (enter a number)", "5", "sqrt(9+16) = 5."},
+	case 1:
+		// Orthogonality parameter k
+		a := smallInt(1, 4)
+		b := smallInt(1, 4)
+		m := smallInt(1, 3)
+		c := m * b
+		k := -m * a
+		return generator.Problem{
+			Question:    fmt.Sprintf("For what integer value of \\(k\\) are the vectors \\(u = (%d,%d)\\) and \\(v = (%d,k)\\) orthogonal under the standard dot product?", a, b, c),
+			Answer:      fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("Vectors are orthogonal when their inner product is zero: \\((%d)(%d) + (%d)(k) = 0\\), which gives \\(k = %d\\).", a, c, b, k),
 		}
-		d := dotTable[rand.Intn(len(dotTable))]
-		return generator.Problem{Question: d.question, Answer: d.answer, Explanation: d.reason}
+	case 2:
+		// Matrix-induced inner product
+		d1 := smallInt(1, 3)
+		d2 := smallInt(1, 3)
+		u1 := smallInt(1, 3)
+		u2 := smallInt(1, 3)
+		v1 := smallInt(1, 3)
+		v2 := smallInt(1, 3)
+		ans := d1*u1*v1 + d2*u2*v2
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the diagonal matrix \\(A = \\begin{pmatrix} %d & 0 \\\\ 0 & %d \\end{pmatrix}\\), compute the induced inner product \\(\\langle u, v \\rangle_A = u^T A v\\) for \\(u = (%d,%d)\\) and \\(v = (%d,%d)\\).", d1, d2, u1, u2, v1, v2),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Evaluating \\(u^T A v = %d(%d)(%d) + %d(%d)(%d)\\) gives %d.", d1, u1, v1, d2, u2, v2, ans),
+		}
+	case 3:
+		// Polynomial inner product \int_0^1 (2m x) * b dx = m b
+		m := smallInt(1, 4)
+		a := 2 * m
+		b := smallInt(1, 5)
+		ans := m * b
+		return generator.Problem{
+			Question:    fmt.Sprintf("On the vector space of polynomials with inner product \\(\\langle f, g \\rangle = \\int_0^1 f(x) g(x) \\, dx\\), compute \\(\\langle %d x, %d \\rangle\\).", a, b),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The integral is \\(\\int_0^1 %d x \\cdot %d \\, dx = %d \\left[ \\frac{x^2}{2} \\right]_0^1 = %d \\left(\\frac{1}{2}\\right) = %d\\).", a, b, a*b, a*b, ans),
+		}
+	default:
+		// Orthogonal projection coefficient
+		v1 := smallInt(1, 3)
+		v2 := smallInt(1, 3)
+		vNormSq := v1*v1 + v2*v2
+		m := smallInt(1, 4+int(ctx.Difficulty*2))
+		u1 := m * v1
+		u2 := m * v2
+		dot := u1*v1 + u2*v2
+		return generator.Problem{
+			Question:    fmt.Sprintf("Find the scalar projection coefficient \\(c = \\frac{\\langle u, v \\rangle}{\\langle v, v \\rangle}\\) of \\(u = (%d,%d)\\) onto \\(v = (%d,%d)\\) under the standard dot product.", u1, u2, v1, v2),
+			Answer:      fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf("We have \\(\\langle u, v \\rangle = %d(%d) + %d(%d) = %d\\) and \\(\\langle v, v \\rangle = %d^2 + %d^2 = %d\\). The projection coefficient is %d / %d = %d.", u1, v1, u2, v2, dot, v1, v2, vNormSq, dot, vNormSq, m),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 type luGen struct{}
 
 func (g *luGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
-	}
-	easy := []entry{
-		{"Does LU decomposition write A=LU with L lower unit and U upper? (yes/no)", "yes", "LU factors invertible; solve via forward/back substitution."},
-		{"Is LU without pivoting possible only if leading principals nonzero? (yes/no)", "yes", "Need nonzero pivots."},
-		{"Does LU solve Ax=b via Ly=b then Ux=y? (yes/no)", "yes", "Two triangular solves."},
-		{"Does every invertible matrix admit LU without row swaps? (yes/no)", "no", "Zero leading pivots need permutation P: PA=LU."},
-	}
-	hard := []entry{
-		{"For A=[[2,1],[4,3]], is L=[[1,0],[2,1]] and U=[[2,1],[0,1]]? (yes/no)", "yes", "Multiply L×U = A."},
-		{"Does PA=LU with permutation P handle zero pivots? (yes/no)", "yes", "Partial pivoting."},
-		{"Is determinant det(A)=det(U) for LU with unit L? (yes/no)", "yes", "det(L)=1, so det(A)=product of U diagonal."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: triangular solves and determinants (unique answers).
-		type luEntry struct {
-			question string
-			answer   string
-			reason   string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// det(A) = det(U)
+		u11 := smallInt(1, 4)
+		u22 := smallInt(1, 4)
+		u33 := smallInt(1, 4)
+		ans := u11 * u22 * u33
+		return generator.Problem{
+			Question:    fmt.Sprintf("An \\(n \\times n\\) matrix \\(A\\) has LU factorization \\(A = LU\\) where \\(L\\) is unit lower triangular and \\(U\\) has diagonal entries %d, %d and %d. Compute \\(\\det(A)\\).", u11, u22, u33),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Since \\(L\\) is unit lower triangular, \\(\\det(L) = 1\\). The determinant of \\(U\\) is the product of its diagonal entries: \\(\\det(U) = (%d)(%d)(%d) = %d\\). Therefore \\(\\det(A) = \\det(L)\\det(U) = %d\\).", u11, u22, u33, ans, ans),
 		}
-		luTable := []luEntry{
-			{"Ly=b with L=[[1,0],[2,1]], b=[1,3]. What is y_2? (enter a number)", "1", "y_1=1, then 2·1+y_2=3 gives y_2=1."},
-			{"LU with unit L and U diagonal (2,3): what is det(A)? (enter a number)", "6", "det(L)=1, so det(A) = 2·3 = 6."},
-			{"How many triangular solves does Ax=b need via LU? (enter a number)", "2", "Forward Ly=b, then back Ux=y."},
+	case 1:
+		// Forward solve Ly = b
+		l21 := smallInt(1, 4)
+		b1 := smallInt(1, 5)
+		y2 := smallInt(1, 5)
+		b2 := l21*b1 + y2
+		return generator.Problem{
+			Question:    fmt.Sprintf("In the first stage of solving \\(Ax = b\\) via \\(A = LU\\), solve \\(Ly = b\\) for \\(y_2\\) where \\(L = \\begin{pmatrix} 1 & 0 \\\\ %d & 1 \\end{pmatrix}\\) and \\(b = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\).", l21, b1, b2),
+			Answer:      fmt.Sprintf("%d", y2),
+			Explanation: fmt.Sprintf("Forward substitution gives \\(y_1 = %d\\). The second equation is \\(%d(y_1) + y_2 = %d\\), so \\(y_2 = %d - %d(%d) = %d\\).", b1, l21, b2, b2, l21, b1, y2),
 		}
-		v := luTable[rand.Intn(len(luTable))]
-		return generator.Problem{Question: v.question, Answer: v.answer, Explanation: v.reason}
+	case 2:
+		// Back substitution Ux = y
+		u11 := smallInt(1, 3)
+		u12 := smallInt(1, 3)
+		u22 := smallInt(1, 3)
+		x2 := smallInt(1, 4)
+		y2 := u22 * x2
+		x1 := smallInt(1, 4)
+		y1 := u11*x1 + u12*x2
+		_ = y1
+		return generator.Problem{
+			Question:    fmt.Sprintf("In the back substitution stage of solving \\(Ax = b\\), solve \\(Ux = y\\) for \\(x_2\\) where \\(U = \\begin{pmatrix} %d & %d \\\\ 0 & %d \\end{pmatrix}\\) and \\(y = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\).", u11, u12, u22, y1, y2),
+			Answer:      fmt.Sprintf("%d", x2),
+			Explanation: fmt.Sprintf("From the second row, \\(%d x_2 = %d\\), which yields \\(x_2 = %d / %d = %d\\).", u22, y2, y2, u22, x2),
+		}
+	case 3:
+		// Multiplier l_{21} in Gaussian elimination
+		a11 := smallInt(1, 4)
+		m := smallInt(2, 4)
+		a21 := m * a11
+		a12 := smallInt(1, 4)
+		a22 := smallInt(1, 5)
+		return generator.Problem{
+			Question:    fmt.Sprintf("In computing the LU factorization \\(A = LU\\) of \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) without pivoting, what is the entry \\(l_{21}\\) of the unit lower triangular factor \\(L\\)?", a11, a12, a21, a22),
+			Answer:      fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf("The multiplier used to eliminate entry \\(a_{21}\\) using row 1 is \\(l_{21} = \\frac{a_{21}}{a_{11}} = \\frac{%d}{%d} = %d\\).", a21, a11, m),
+		}
+	default:
+		// Diagonal entry u_{22} in U
+		l21 := smallInt(1, 3)
+		u11 := smallInt(1, 4)
+		u12 := smallInt(1, 4)
+		u22 := smallInt(1, 5)
+		a11 := u11
+		a12 := u12
+		a21 := l21 * u11
+		a22 := l21*u12 + u22
+		_ = a11
+		_ = a21
+		return generator.Problem{
+			Question:    fmt.Sprintf("In computing the LU factorization \\(A = LU\\) of \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) where \\(L = \\begin{pmatrix} 1 & 0 \\\\ %d & 1 \\end{pmatrix}\\), what is the diagonal entry \\(u_{22}\\)?", a11, a12, a21, a22, l21),
+			Answer:      fmt.Sprintf("%d", u22),
+			Explanation: fmt.Sprintf("Matrix multiplication gives \\(a_{22} = l_{21} u_{12} + u_{22} = %d(%d) + u_{22} = %d\\). Thus \\(u_{22} = %d - %d = %d\\).", l21, u12, a22, a22, l21*u12, u22),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 type qrGen struct{}
 
 func (g *qrGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
+	triples := [][3]int{
+		{3, 4, 5},
+		{4, 3, 5},
+		{6, 8, 10},
+		{8, 6, 10},
+		{5, 12, 13},
+		{12, 5, 13},
 	}
-	easy := []entry{
-		{"Does QR write A=QR with Q orthogonal and R upper triangular? (yes/no)", "yes", "QR via Gram-Schmidt."},
-		{"Is Q's columns orthonormal? (yes/no)", "yes", "QᵀQ=I."},
-		{"Does QR solve least squares via R x = Qᵀb? (yes/no)", "yes", "Normal equations stability."},
-		{"Is R lower triangular? (yes/no)", "no", "R is upper triangular by construction."},
+	trip := triples[rand.Intn(len(triples))]
+	a, b, r := trip[0], trip[1], trip[2]
+
+	u := 1 + rand.Intn(3)
+	v := 1 + rand.Intn(3)
+	if rand.Intn(2) == 0 {
+		u = -u
 	}
-	hard := []entry{
-		{"For A=[[1,1],[1,0]], is Q's first column normalized (1,1)/√2? (yes/no)", "yes", "Gram-Schmidt on columns."},
-		{"Does Householder reflection give stable QR? (yes/no)", "yes", "Householder is stable."},
-		{"Is R's diagonal positive if using standard Gram-Schmidt? (yes/no)", "yes", "By convention."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: Gram-Schmidt quantities (unique answers).
-		type qrEntry struct {
-			question string
-			answer   string
-			reason   string
+	c := u*a - v*b
+	d := u*b + v*a
+
+	switch rand.Intn(5) {
+	case 0:
+		return generator.Problem{
+			Question: fmt.Sprintf("The first column of real matrix \\(A\\) is \\(a_1 = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). In the QR decomposition \\(A = QR\\), find the diagonal entry \\(r_{11} = \\|a_1\\|\\).", a, b),
+			Answer:   fmt.Sprintf("%d", r),
+			Explanation: fmt.Sprintf("The entry \\(r_{11}\\) is the Euclidean norm of the first column: \\(r_{11} = \\sqrt{%d^2 + %d^2} = \\sqrt{%d} = %d\\).",
+				a, b, a*a+b*b, r),
 		}
-		qrTable := []qrEntry{
-			{"Gram-Schmidt on (1,1): what is ||(1,1)||? (enter like sqrt(2))", "sqrt(2)", "sqrt(1+1) = sqrt(2)."},
-			{"R is 2x2 upper triangular. How many possibly-nonzero entries? (enter a number)", "3", "Two diagonal plus one above: 3."},
-			{"Least squares via Rx=Qᵀb with upper-triangular R: forward or back substitution? (type one word)", "back", "Upper-triangular systems solve bottom-up: back substitution."},
+	case 1:
+		r12 := u * r
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) with columns \\(a_1\\) and \\(a_2\\). In the QR factorization \\(A = QR\\), compute the upper entry \\(r_{12} = q_1^T a_2\\).", a, c, b, d),
+			Answer:   fmt.Sprintf("%d", r12),
+			Explanation: fmt.Sprintf("The first normalized column is \\(q_1 = \\frac{1}{%d} \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Taking the inner product gives \\(r_{12} = q_1^T a_2 = \\frac{1}{%d}(%d \\cdot (%d) + %d \\cdot (%d)) = \\frac{%d}{%d} = %d\\).",
+				r, a, b, r, a, c, b, d, a*c+b*d, r, r12),
 		}
-		v := qrTable[rand.Intn(len(qrTable))]
-		return generator.Problem{Question: v.question, Answer: v.answer, Explanation: v.reason}
+	case 2:
+		r22 := v * r
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\). In the QR decomposition \\(A = QR\\) with positive diagonal entries, find \\(r_{22}\\).", a, c, b, d),
+			Answer:   fmt.Sprintf("%d", r22),
+			Explanation: fmt.Sprintf("Orthogonalizing \\(a_2\\) gives \\(v_2 = a_2 - r_{12} q_1 = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Its Euclidean length gives \\(r_{22} = \\|v_2\\| = %d\\).",
+				-v*b, v*a, r22),
+		}
+	case 3:
+		d1 := 1 + rand.Intn(5)
+		d2 := 1 + rand.Intn(5)
+		d3 := 1 + rand.Intn(4)
+		detR := d1 * d2 * d3
+		return generator.Problem{
+			Question: fmt.Sprintf("A \\(3 \\times 3\\) matrix \\(A\\) has QR decomposition \\(A = QR\\), where \\(Q\\) is an orthogonal matrix with \\(\\det(Q) = 1\\) and \\(R\\) has diagonal entries %d, %d and %d. Find \\(\\det(A)\\).", d1, d2, d3),
+			Answer:   fmt.Sprintf("%d", detR),
+			Explanation: fmt.Sprintf("Because \\(A = QR\\), the determinant satisfies \\(\\det(A) = \\det(Q) \\det(R)\\). For triangular matrix \\(R\\), the determinant is the product of diagonal entries: \\(\\det(R) = %d \\times %d \\times %d = %d\\). With \\(\\det(Q) = 1\\), \\(\\det(A) = %d\\).",
+				d1, d2, d3, detR, detR),
+		}
+	default:
+		r11 := 1 + rand.Intn(4)
+		r12 := rand.Intn(4) + 1
+		r22 := 1 + rand.Intn(4)
+		x2 := 1 + rand.Intn(5)
+		x1 := 1 + rand.Intn(5)
+		c2 := r22 * x2
+		c1 := r11*x1 + r12*x2
+		return generator.Problem{
+			Question: fmt.Sprintf("To solve the least-squares problem \\(Ax = b\\) via QR decomposition \\(Rx = Q^T b\\), let \\(R = \\begin{pmatrix} %d & %d \\\\ 0 & %d \\end{pmatrix}\\) and \\(Q^T b = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Find \\(x_1\\).", r11, r12, r22, c1, c2),
+			Answer:   fmt.Sprintf("%d", x1),
+			Explanation: fmt.Sprintf("From the second equation, \\(%d x_2 = %d\\) gives \\(x_2 = %d\\). Back substitution into the first row yields \\(%d x_1 + %d(%d) = %d\\), so \\(x_1 = %d\\).",
+				r22, c2, x2, r11, r12, x2, c1, x1),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 type svdGen struct{}
 
 func (g *svdGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
-	}
-	easy := []entry{
-		{"Does SVD write A=UΣVᵀ with U,V orthogonal and Σ diagonal? (yes/no)", "yes", "SVD exists for any real matrix."},
-		{"Are singular values σ_i ≥0? (yes/no)", "yes", "By definition."},
-		{"Does rank(A) equal number of nonzero singular values? (yes/no)", "yes", "Counting."},
-		{"Is SVD defined only for square matrices? (yes/no)", "no", "SVD exists for any m×n real matrix."},
-	}
-	hard := []entry{
-		{"Is σ_i = sqrt(eig(AᵀA))? (yes/no)", "yes", "Singular values via AᵀA."},
-		{"Does truncated SVD give best low-rank approximation? (yes/no)", "yes", "Eckart-Young theorem."},
-		{"Is U's columns left singular vectors, V's right? (yes/no)", "yes", "By construction."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: singular-value arithmetic (unique answers).
-		type svdEntry struct {
-			question string
-			answer   string
-			reason   string
+	switch rand.Intn(5) {
+	case 0:
+		s1 := 2 + rand.Intn(8)
+		s2 := 1 + rand.Intn(s1 - 1)
+		eig1 := s1 * s1
+		eig2 := s2 * s2
+		return generator.Problem{
+			Question: fmt.Sprintf("The symmetric matrix \\(A^T A\\) has eigenvalues %d, %d and 0. Compute the largest singular value \\(\\sigma_1\\) of \\(A\\).", eig1, eig2),
+			Answer:   fmt.Sprintf("%d", s1),
+			Explanation: fmt.Sprintf("The singular values of \\(A\\) are the non-negative square roots of the eigenvalues of \\(A^T A\\): \\(\\sigma_1 = \\sqrt{%d} = %d\\).",
+				eig1, s1),
 		}
-		svdTable := []svdEntry{
-			{"A has singular values 5, 2, 0. What is rank(A)? (enter a number)", "2", "Two nonzero singular values: rank 2."},
-			{"Best rank-1 approximation keeps how many singular values? (enter a number)", "1", "Truncate to the top one (Eckart-Young)."},
-			{"AᵀA has eigenvalues 9, 4, 0. What is the largest singular value? (enter a number)", "3", "σ = sqrt(eig): sqrt(9) = 3."},
+	case 1:
+		s1 := 4 + rand.Intn(7)
+		s2 := 2 + rand.Intn(s1 - 2)
+		s3 := 1 + rand.Intn(s2 - 1)
+		return generator.Problem{
+			Question: fmt.Sprintf("A matrix \\(A\\) has singular values %d, %d and %d. Find the spectral norm \\(\\|A\\|_2\\) of the matrix.", s1, s2, s3),
+			Answer:   fmt.Sprintf("%d", s1),
+			Explanation: fmt.Sprintf("The matrix 2-norm (spectral norm) equals the largest singular value: \\(\\|A\\|_2 = \\sigma_1 = %d\\).", s1),
 		}
-		v := svdTable[rand.Intn(len(svdTable))]
-		return generator.Problem{Question: v.question, Answer: v.answer, Explanation: v.reason}
+	case 2:
+		s1 := 2 + rand.Intn(5)
+		s2 := 1 + rand.Intn(4)
+		s3 := 1 + rand.Intn(3)
+		frobSq := s1*s1 + s2*s2 + s3*s3
+		return generator.Problem{
+			Question: fmt.Sprintf("A matrix \\(A\\) has singular values %d, %d and %d. Compute the squared Frobenius norm \\(\\|A\\|_F^2\\).", s1, s2, s3),
+			Answer:   fmt.Sprintf("%d", frobSq),
+			Explanation: fmt.Sprintf("The squared Frobenius norm is the sum of the squares of the singular values: \\(\\|A\\|_F^2 = %d^2 + %d^2 + %d^2 = %d + %d + %d = %d\\).",
+				s1, s2, s3, s1*s1, s2*s2, s3*s3, frobSq),
+		}
+	case 3:
+		minSig := 1 + rand.Intn(3)
+		mult := 2 + rand.Intn(5)
+		maxSig := minSig * mult
+		midSig := minSig + 1
+		if midSig >= maxSig {
+			midSig = minSig
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("An invertible real matrix \\(A\\) has singular values %d, %d and %d. Find the 2-norm condition number \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}}\\).", maxSig, midSig, minSig),
+			Answer:   fmt.Sprintf("%d", mult),
+			Explanation: fmt.Sprintf("The 2-norm condition number is the ratio of the largest to the smallest singular value: \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}} = \\frac{%d}{%d} = %d\\).",
+				maxSig, minSig, mult),
+		}
+	default:
+		numNonZero := 2 + rand.Intn(2)
+		numZero := 1 + rand.Intn(2)
+		vals := make([]string, 0, numNonZero+numZero)
+		for i := 0; i < numNonZero; i++ {
+			vals = append(vals, fmt.Sprintf("%d", 2+rand.Intn(7)))
+		}
+		for i := 0; i < numZero; i++ {
+			vals = append(vals, "0")
+		}
+		var listStr string
+		if len(vals) == 3 {
+			listStr = fmt.Sprintf("%s, %s and %s", vals[0], vals[1], vals[2])
+		} else {
+			listStr = fmt.Sprintf("%s, %s, %s and %s", vals[0], vals[1], vals[2], vals[3])
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("A real matrix \\(A\\) has singular values %s. Find the rank of \\(A\\).", listStr),
+			Answer:   fmt.Sprintf("%d", numNonZero),
+			Explanation: fmt.Sprintf("The rank of a matrix equals the number of nonzero singular values in its singular value decomposition. With %d nonzero singular values, \\(\\operatorname{rank}(A) = %d\\).",
+				numNonZero, numNonZero),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 type jordanGen struct{}
 
 func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
-	}
-	easy := []entry{
-		{"Does Jordan form exist for every complex matrix? (yes/no)", "yes", "Jordan canonical form over C."},
-		{"Is diagonalizable matrices' Jordan blocks all 1×1? (yes/no)", "yes", "No nontrivial blocks."},
-		{"Does Jordan block J_2(λ) have λ on diagonal and 1 above? (yes/no)", "yes", "[[λ,1],[0,λ]]."},
-		{"Is every real matrix diagonalizable over R? (yes/no)", "no", "Rotations have no real eigenvectors; Jordan blocks appear."},
-	}
-	hard := []entry{
-		{"Is matrix [[2,1],[0,2]] already in Jordan form? (yes/no)", "yes", "Single Jordan block for eigenvalue 2."},
-		{"Does minimal polynomial exponent equal largest Jordan block size? (yes/no)", "yes", "Block size gives exponent."},
-		{"Is number of Jordan blocks for λ equal to geometric multiplicity? (yes/no)", "yes", "Counting blocks."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: block counts and shapes (unique answers).
-		type jorEntry struct {
-			question string
-			answer   string
-			reason   string
+	switch rand.Intn(5) {
+	case 0:
+		alg := 3 + rand.Intn(3)
+		geom := 1 + rand.Intn(alg - 1)
+		eig := 1 + rand.Intn(5)
+		return generator.Problem{
+			Question: fmt.Sprintf("An eigenvalue \\(\\lambda = %d\\) of matrix \\(A\\) has algebraic multiplicity %d and geometric multiplicity \\(\\dim \\ker(A - %d I) = %d\\). How many Jordan blocks corresponding to \\(\\lambda\\) are in the Jordan canonical form of \\(A\\)?", eig, alg, eig, geom),
+			Answer:   fmt.Sprintf("%d", geom),
+			Explanation: fmt.Sprintf("The number of Jordan blocks corresponding to an eigenvalue equals its geometric multiplicity: \\(\\dim \\ker(A - \\lambda I) = %d\\).", geom),
 		}
-		jorTable := []jorEntry{
-			{"[[2,1],[0,2]] is one Jordan block. How many blocks? (enter a number)", "1", "Single block for eigenvalue 2."},
-			{"A 3x3 diagonalizable matrix: how many Jordan blocks? (enter a number)", "3", "All blocks 1×1: three of them."},
-			{"J_2(λ) is 2x2. What sits above the diagonal? (enter a number)", "1", "Ones on the superdiagonal by definition."},
+	case 1:
+		l1 := 1 + rand.Intn(4)
+		l2 := 1 + rand.Intn(4)
+		l3 := 1 + rand.Intn(4)
+		tr := 2*l1 + l2 + l3
+		return generator.Problem{
+			Question: fmt.Sprintf("A \\(4 \\times 4\\) matrix has Jordan blocks \\(J_2(%d)\\), \\(J_1(%d)\\) and \\(J_1(%d)\\). Compute the trace of the matrix.", l1, l2, l3),
+			Answer:   fmt.Sprintf("%d", tr),
+			Explanation: fmt.Sprintf("The trace of a matrix equals the sum of the diagonal entries in its Jordan normal form: \\(\\operatorname{tr}(A) = 2(%d) + %d + %d = %d + %d + %d = %d\\).",
+				l1, l2, l3, 2*l1, l2, l3, tr),
 		}
-		v := jorTable[rand.Intn(len(jorTable))]
-		return generator.Problem{Question: v.question, Answer: v.answer, Explanation: v.reason}
+	case 2:
+		l1 := 2 + rand.Intn(3)
+		l2 := 2 + rand.Intn(3)
+		detA := l1 * l1 * l2
+		return generator.Problem{
+			Question: fmt.Sprintf("A \\(3 \\times 3\\) matrix has Jordan canonical form consisting of a \\(2 \\times 2\\) block \\(J_2(%d)\\) and a \\(1 \\times 1\\) block \\(J_1(%d)\\). Find \\(\\det(A)\\).", l1, l2),
+			Answer:   fmt.Sprintf("%d", detA),
+			Explanation: fmt.Sprintf("Because Jordan normal form is triangular, the determinant is the product of all diagonal entries: \\(\\det(A) = %d^2 \\times %d = %d \\times %d = %d\\).",
+				l1, l2, l1*l1, l2, detA),
+		}
+	case 3:
+		alg := 3 + rand.Intn(3)
+		geom := 1 + rand.Intn(alg - 1)
+		defect := alg - geom
+		eig := 2 + rand.Intn(4)
+		return generator.Problem{
+			Question: fmt.Sprintf("An eigenspace for eigenvalue \\(\\lambda = %d\\) has algebraic multiplicity %d and geometric multiplicity %d. How many generalized eigenvectors that are not ordinary eigenvectors are needed to complete a Jordan chain basis for this eigenspace?", eig, alg, geom),
+			Answer:   fmt.Sprintf("%d", defect),
+			Explanation: fmt.Sprintf("The number of additional generalized eigenvectors is the defect between algebraic multiplicity and geometric multiplicity: %d - %d = %d.",
+				alg, geom, defect),
+		}
+	default:
+		e1 := 2 + rand.Intn(3)
+		e2 := 1 + rand.Intn(2)
+		l1 := 1 + rand.Intn(4)
+		l2 := l1 + 1 + rand.Intn(3)
+		return generator.Problem{
+			Question: fmt.Sprintf("A matrix has minimal polynomial \\(m(\\lambda) = (\\lambda - %d)^{%d}(\\lambda - %d)^{%d}\\). What is the size of the largest Jordan block corresponding to eigenvalue %d?", l1, e1, l2, e2, l1),
+			Answer:   fmt.Sprintf("%d", e1),
+			Explanation: fmt.Sprintf("The size of the largest Jordan block for an eigenvalue equals its multiplicity as a root of the minimal polynomial. For eigenvalue %d, the exponent in \\(m(\\lambda)\\) is %d, so the largest block has size %d.",
+				l1, e1, e1),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 // ----- subspace -----
@@ -974,42 +1207,57 @@ func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type subspaceGen struct{}
 
 func (g *subspaceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
-	}
-	tableEasy := []entry{
-		{"Does the line y = x + 1 form a subspace of R^2? (yes/no)", "no", "It misses the origin: no subspace lacks 0."},
-		{"Is {(0,0)} a subspace of R^2? (yes/no)", "yes", "The zero subspace always qualifies."},
-		{"Is the union of the x-axis and y-axis a subspace of R^2? (yes/no)", "no", "(1,0)+(0,1) = (1,1) escapes the union."},
-		{"Do the subspaces of R^2 consist exactly of {0}, lines through origin, R^2? (yes/no)", "yes", "One nonzero vector spans a line; two independent ones span all of R^2."},
-	}
-	tableHard := []entry{
-		{"Two planes through the origin in R^3 meet in a line. Their sum has dimension? (enter a number)", "3", "Grassmann: 2+2-1 = 3."},
-		{"A complement of a line in R^2 has dimension? (enter a number)", "1", "dim A + dim B = dim V: 1 + 1 = 2."},
-		{"Is the sum of three lines in R^2 with pairwise trivial intersection direct? (yes/no)", "no", "(1,0)+(0,1)-(1,1) = 0 is a nontrivial relation."},
-	}
-	pool := tableEasy
-	if scale > 3 {
-		pool = append(tableEasy, tableHard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: dimension counts (unique answers).
-		type dimEntry struct {
-			question string
-			answer   string
-			reason   string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Grassmann's dimension formula: dim(U + W) = dim(U) + dim(W) - dim(U cap W)
+		d12 := smallInt(1, 3)
+		d1 := d12 + smallInt(1, 3+int(ctx.Difficulty*2))
+		d2 := d12 + smallInt(1, 3+int(ctx.Difficulty*2))
+		ans := d1 + d2 - d12
+		return generator.Problem{
+			Question:    fmt.Sprintf("Two subspaces \\(U\\) and \\(W\\) of a vector space satisfy \\(\\dim(U) = %d\\), \\(\\dim(W) = %d\\) and \\(\\dim(U \\cap W) = %d\\). What is \\(\\dim(U + W)\\)?", d1, d2, d12),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("By Grassmann's dimension formula, \\(\\dim(U + W) = \\dim(U) + \\dim(W) - \\dim(U \\cap W) = %d + %d - %d = %d\\).", d1, d2, d12, ans),
 		}
-		dimTable := []dimEntry{
-			{"Two planes through the origin in R^3 meet in a line. Their sum has dimension? (enter a number)", "3", "Grassmann: 2+2-1 = 3."},
-			{"A complement of a line in R^2 has dimension? (enter a number)", "1", "dim A + dim B = dim V: 1 + 1 = 2."},
-			{"The zero subspace of R^5 has dimension? (enter a number)", "0", "Only the zero vector: dimension 0."},
+	case 1:
+		// Direct sum: dim(U \oplus W) = dim(U) + dim(W)
+		d1 := smallInt(1, 4+int(ctx.Difficulty*2))
+		d2 := smallInt(1, 4+int(ctx.Difficulty*2))
+		ans := d1 + d2
+		return generator.Problem{
+			Question:    fmt.Sprintf("If \\(V = U \\oplus W\\) is the direct sum of subspaces \\(U\\) and \\(W\\) with \\(\\dim(U) = %d\\) and \\(\\dim(W) = %d\\), what is \\(\\dim(V)\\)?", d1, d2),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("For a direct sum \\(U \\cap W = \\{0\\}\\), so \\(\\dim(U \\oplus W) = \\dim(U) + \\dim(W) = %d + %d = %d\\).", d1, d2, ans),
 		}
-		d := dimTable[rand.Intn(len(dimTable))]
-		return generator.Problem{Question: d.question, Answer: d.answer, Explanation: d.reason}
+	case 2:
+		// Orthogonal complement dimension: dim(W^\perp) = n - dim(W)
+		n := smallInt(3, 6+int(ctx.Difficulty*3))
+		dimW := smallInt(1, n-1)
+		ans := n - dimW
+		return generator.Problem{
+			Question:    fmt.Sprintf("In \\(\\mathbb{R}^{%d}\\), let \\(W\\) be a subspace of dimension %d. What is the dimension of the orthogonal complement \\(W^\\perp\\)?", n, dimW),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("In an \\(n\\)-dimensional space, \\(\\dim(W) + \\dim(W^\\perp) = n\\). Here \\(\\dim(W^\\perp) = %d - %d = %d\\).", n, dimW, ans),
+		}
+	case 3:
+		// Hyperplane defined by a single linear constraint
+		n := smallInt(3, 7+int(ctx.Difficulty*3))
+		ans := n - 1
+		return generator.Problem{
+			Question:    fmt.Sprintf("What is the dimension of the subspace in \\(\\mathbb{R}^{%d}\\) defined by the single equation \\(x_1 + x_2 + \\dots + x_{%d} = 0\\)?", n, n),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("A single nonzero homogeneous linear equation in \\(\\mathbb{R}^{%d}\\) imposes 1 constraint, so the dimension is %d - 1 = %d.", n, n, ans),
+		}
+	default:
+		// k independent linear equations
+		n := smallInt(4, 7+int(ctx.Difficulty*2))
+		k := smallInt(2, n-2)
+		ans := n - k
+		return generator.Problem{
+			Question:    fmt.Sprintf("What is the dimension of the subspace in \\(\\mathbb{R}^{%d}\\) defined by %d linearly independent homogeneous linear equations?", n, k),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Each independent constraint reduces the dimension of the solution space by 1. Therefore the dimension is %d - %d = %d.", n, k, ans),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }

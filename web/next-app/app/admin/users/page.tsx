@@ -175,7 +175,12 @@ export default function AdminUsersPage() {
                     return (
                       <tr key={u.id} className="border-b border-mathua-border last:border-b-0 align-top">
                         <td className="px-3 py-2 min-w-0">
-                          <div className="text-mathua-primary truncate">{labelFor(u)}</div>
+                          <Link
+                            href={`/admin/users/detail?id=${encodeURIComponent(u.id)}`}
+                            className="block text-mathua-primary truncate hover:underline"
+                          >
+                            {labelFor(u)}
+                          </Link>
                           {/* The id is how an administrator names a person over chat, and the
                               provider flag answers "why can't they sign in with a password" —
                               both are facts about the account, not credentials. */}

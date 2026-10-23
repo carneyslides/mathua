@@ -559,9 +559,87 @@ func (s *Server) handleAdminContent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{"concepts": out, "total": matched})
 }
 
-// adminUserDetail backs GET /api/admin/users/{id}. It returns the non-sensitive projection and
-// the account's role history from the audit trail, so "when were they made an admin and by whom"
-// is answered from the trail rather than a maintained column.
+// adminUserActivity is the counts-only projection shown beside an account. It answers "how
+// much has this person used the product and what did they send us" without exposing a single
+// question, answer or attempt row: a moderator investigating a report needs the shape of the
+// account, not a window onto the learner's work.
+type adminUserActivity struct {
+	XPTotal               int    `json:"xp_total"`
+	XPToday               int    `json:"xp_today"`
+	ConceptsTouched       int    `json:"concepts_touched"`
+	ConceptsMastered      int    `json:"concepts_mastered"`
+	Attempts              int    `json:"attempts"`
+	LastAttemptAt         string `json:"last_attempt_at"`
+	LastActiveDay         string `json:"last_active_day"`
+	DiagnosticCompletedAt string `json:"diagnostic_completed_at"`
+	ReportsFiled          int    `json:"reports_filed"`
+}
+
+// adminUserActivity reads the counts from the accessors that already own them. It returns an
+// error rather than zeros on a failed read, because a profile that silently says "0 attempts"
+// for a database error is worse than one that says it could not load.
+func (s *Server) adminUserActivity(id string) (adminUserActivity, error) {
+	var out adminUserActivity
+	total, today, err := s.repo.GetXP(id)
+	if err != nil {
+		return out, err
+	}
+	out.XPTotal, out.XPToday = total, today
+
+	progress, err := s.repo.GetAllProgress(id)
+	if err != nil {
+		return out, err
+	}
+	for _, p := range progress {
+		if p == nil {
+			continue
+		}
+		out.ConceptsTouched++
+		if p.Status == "MASTERED" {
+			out.ConceptsMastered++
+		}
+	}
+
+	attempts, err := s.repo.GetAttemptsForStudent(id)
+	if err != nil {
+		return out, err
+	}
+	out.Attempts = len(attempts)
+	for _, a := range attempts {
+		if ts := a.Timestamp.UTC().Format(time.RFC3339); ts > out.LastAttemptAt {
+			out.LastAttemptAt = ts
+		}
+	}
+
+	// Five years is not a retention policy, it is wide enough that a dormant account still
+	// shows its last active day instead of looking like an account that never started.
+	days, err := s.repo.GetDailyActivity(id, 365*5)
+	if err != nil {
+		return out, err
+	}
+	if len(days) > 0 {
+		out.LastActiveDay = days[len(days)-1].Date
+	}
+
+	if at, ok, err := s.repo.DiagnosticCompletedAt(id); err != nil {
+		return out, err
+	} else if ok {
+		out.DiagnosticCompletedAt = at.UTC().Format(time.RFC3339)
+	}
+
+	filed, err := s.repo.CountReportsByReporter(id)
+	if err != nil {
+		return out, err
+	}
+	out.ReportsFiled = filed
+	return out, nil
+}
+
+// adminUserDetail backs GET /api/admin/users/{id}. It returns the non-sensitive projection, the
+// account's role history from the audit trail, the counts-only activity summary and the reports
+// that account filed. The reporter's own reports are included because the question an
+// administrator arrives with is usually "who is this and what did they send", and the reports
+// list is the only place the two meet.
 func (s *Server) adminUserDetail(w http.ResponseWriter, r *http.Request, id string) {
 	user, err := s.repo.GetAdminUser(id)
 	if err != nil {
@@ -577,7 +655,20 @@ func (s *Server) adminUserDetail(w http.ResponseWriter, r *http.Request, id stri
 		writeError(w, "failed to read role history", 500)
 		return
 	}
-	writeJSON(w, map[string]interface{}{"user": user, "history": history})
+	activity, err := s.adminUserActivity(id)
+	if err != nil {
+		log.Printf("admin user activity %s: %v", id, err)
+		writeError(w, "failed to read account activity", 500)
+		return
+	}
+	reports, err := s.repo.ListReportsByReporter(id, 20)
+	if err != nil {
+		writeError(w, "failed to read reports", 500)
+		return
+	}
+	writeJSON(w, map[string]interface{}{
+		"user": user, "history": history, "activity": activity, "reports": reports,
+	})
 }
 
 // GET /api/admin/audit?entity_type=&entity_id=&limit=&offset= — the trail, newest first.

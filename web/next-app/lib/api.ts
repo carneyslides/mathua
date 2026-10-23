@@ -1724,6 +1724,60 @@ export async function adminOverview(): Promise<AdminOverview> {
 	return validateResponse(AdminOverviewSchema, await res.json(), 'adminOverview')
 }
 
+// The account page reads one response: profile, role history, counts and the reports that
+// account filed. Splitting it into four requests would give the page four ways to half-load,
+// and the counts would disagree with the list while the slower one was still arriving.
+const AdminActivitySchema = z.object({
+	xp_total: z.number(),
+	xp_today: z.number(),
+	concepts_touched: z.number(),
+	concepts_mastered: z.number(),
+	attempts: z.number(),
+	last_attempt_at: z.string(),
+	last_active_day: z.string(),
+	diagnostic_completed_at: z.string(),
+	reports_filed: z.number(),
+})
+
+// Only the fields the page renders. A report carries the learner's answer and the expected
+// answer; the account page does not need either to say who sent it, and a schema that omits
+// them is why they cannot appear here by accident.
+const AdminUserReportSchema = z.object({
+	id: z.number(),
+	kind: z.string(),
+	concept_id: z.string(),
+	reason: z.string(),
+	status: z.string(),
+	detail: z.string(),
+	created_at: z.string(),
+})
+
+export type AdminUserReport = z.infer<typeof AdminUserReportSchema>
+export type AdminActivity = z.infer<typeof AdminActivitySchema>
+
+export interface AdminUserDetail {
+	user: AdminUser
+	history: AdminAuditEvent[]
+	activity: AdminActivity
+	reports: AdminUserReport[]
+}
+
+export async function getAdminUser(id: string): Promise<AdminUserDetail> {
+	const res = await authedFetch(`${API_BASE}/api/admin/users/${encodeURIComponent(id)}`, { cache: 'no-store' })
+	if (!res.ok) await throwWithResponse(res, 'Could not load that account')
+	const data = await res.json()
+	return validateResponse(
+		z.object({
+			user: AdminUserSchema,
+			history: z.array(AdminAuditEventSchema),
+			activity: AdminActivitySchema,
+			reports: z.array(AdminUserReportSchema),
+		}),
+		data,
+		'adminUserDetail',
+	)
+}
+
 export async function searchAdminUsers(q: string): Promise<AdminUsersRes> {
 	const params = new URLSearchParams()
 	if (q.trim()) params.set('q', q.trim())

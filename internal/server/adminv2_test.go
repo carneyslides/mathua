@@ -27,6 +27,62 @@ var staffOnlyRoutes = []struct{ method, path string }{
 	{"GET", "/api/admin/content"},
 }
 
+func TestAdminUserDetailCarriesActivityAndReports(t *testing.T) {
+	e := newAdminEnv(t)
+
+	// A contact message, the exact shape that shows as "(no concept)" in the queue: the profile
+	// page is the only place that answers "who sent this", so the report has to arrive here.
+	rec := e.do(t, "POST", "/api/reports", e.studentTok,
+		`{"kind":"message","source":"contact","reason":"other","detail":"the view jumps while scrolling on a phone"}`)
+	if rec.Code != 200 {
+		t.Fatalf("file report: %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = e.do(t, "GET", "/api/admin/users/"+e.studentID, e.adminTok, "")
+	if rec.Code != 200 {
+		t.Fatalf("detail: %d %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		User     storage.AdminUser `json:"user"`
+		Activity struct {
+			ReportsFiled    int `json:"reports_filed"`
+			ConceptsTouched int `json:"concepts_touched"`
+			Attempts        int `json:"attempts"`
+		} `json:"activity"`
+		Reports []storage.QuestionReport `json:"reports"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.User.ID != e.studentID {
+		t.Errorf("user.id = %q, want %q", body.User.ID, e.studentID)
+	}
+	if body.Activity.ReportsFiled != 1 {
+		t.Errorf("reports_filed = %d, want 1", body.Activity.ReportsFiled)
+	}
+	if len(body.Reports) != 1 || body.Reports[0].Kind != "message" {
+		t.Fatalf("reports = %+v, want the message just filed", body.Reports)
+	}
+	if body.Reports[0].ReporterID != e.studentID {
+		t.Errorf("report reporter = %q, want %q", body.Reports[0].ReporterID, e.studentID)
+	}
+}
+
+// Counts, not content. The page must not carry an answer the learner typed, because a moderator
+// has no business reading it to settle a report about a generator.
+func TestAdminUserDetailOmitsLearnerAnswers(t *testing.T) {
+	e := newAdminEnv(t)
+	rec := e.do(t, "GET", "/api/admin/users/"+e.studentID, e.adminTok, "")
+	if rec.Code != 200 {
+		t.Fatalf("detail: %d %s", rec.Code, rec.Body.String())
+	}
+	for _, forbidden := range []string{`"answer"`, `"expected"`, `"question"`} {
+		if strings.Contains(rec.Body.String(), forbidden) {
+			t.Errorf("detail body contains %s: %s", forbidden, rec.Body.String())
+		}
+	}
+}
+
 func TestAdminV2RejectsUnauthenticated(t *testing.T) {
 	e := newAdminEnv(t)
 	for _, rt := range staffOnlyRoutes {

@@ -660,6 +660,15 @@ type Repository interface {
 
 	CreateReport(r QuestionReport) (int64, error)
 	ListReports(status string, limit, offset int) ([]QuestionReport, error)
+	// ListReportsByReporter returns one account's reports, newest first, whatever their
+	// status. It answers "what has this person sent us", which is the question the admin
+	// user page asks, and it is deliberately not the moderation queue: a resolved report
+	// still explains the learner's experience.
+	ListReportsByReporter(reporterID string, limit int) ([]QuestionReport, error)
+	// CountReportsByReporter counts that account's reports across every status. The list is
+	// capped so the page stays quick; the count is not, so a repeat reporter is visible even
+	// when the list is truncated.
+	CountReportsByReporter(reporterID string) (int, error)
 	// GetReportByOrigin finds an imported report by the id it had in the database it came
 	// from, which is the number the admin page and a colleague both quote.
 	GetReportByOrigin(originID string) (*QuestionReport, error)

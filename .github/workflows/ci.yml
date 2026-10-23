@@ -164,13 +164,18 @@ jobs:
         with:
           name: web-build
           path: web/next-app/out
-      # The browser download is the expensive part; the apt dependencies it also
-      # wants are not cacheable and are cheap.
+      # Without this cache the browser download dominated the job. With it, the apt
+      # half dominated: `--with-deps` fetched 25.9 MB from azure.archive.ubuntu.com
+      # at 44 kB/s and took 9m49s on 23 October 2026, which turned a 4-minute shard
+      # into a 15-minute one. The Ubuntu 24.04 runner image already carries the
+      # libraries Chromium needs, so install only the browser. If a library is ever
+      # missing, Chromium refuses to launch on the first test rather than quietly
+      # skipping it; put `--with-deps` back for that one run.
       - uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('web/next-app/package-lock.json') }}
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install chromium
       # Sharded single-worker e2e: the graph and 3D suites crash Chromium
       # ("session closed") when two heavy specs share a runner. Two shards on two
       # runners keeps that isolation and runs them at the same time.

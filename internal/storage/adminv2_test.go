@@ -324,3 +324,66 @@ func TestAdminV2_InvitationLifecycle(t *testing.T) {
 		t.Error("expected error re-revoking already revoked invitation")
 	}
 }
+
+// The admin user page lists one account's reports so a message that names no concept still has a
+// sender. Two facts matter: the list is filtered to that account and newest first, and the count
+// includes resolved reports that the recent list no longer needs to show.
+func TestAdminV2ReportsByReporter(t *testing.T) {
+	s := newAdminV2Store(t)
+
+	one, err := s.CreateStudent("One")
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := s.CreateStudent("Two")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	filed := func(reporter, detail string) int64 {
+		t.Helper()
+		id, err := s.CreateReport(QuestionReport{
+			ReporterID: reporter, Kind: "message", Source: "contact",
+			Reason: "other", Detail: detail,
+		})
+		if err != nil {
+			t.Fatalf("create report: %v", err)
+		}
+		return id
+	}
+	first := filed(one.ID, "the view jumps on scroll")
+	second := filed(one.ID, "divide by zero marks the right answer wrong")
+	filed(two.ID, "a different learner")
+
+	got, err := s.ListReportsByReporter(one.ID, 10)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d reports, want 2", len(got))
+	}
+	if got[0].ID != second || got[1].ID != first {
+		t.Errorf("order = [%d %d], want newest first [%d %d]", got[0].ID, got[1].ID, second, first)
+	}
+	for _, r := range got {
+		if r.ReporterID != one.ID {
+			t.Errorf("report %d belongs to %s, not %s", r.ID, r.ReporterID, one.ID)
+		}
+	}
+
+	if n, err := s.CountReportsByReporter(one.ID); err != nil || n != 2 {
+		t.Errorf("count one = %d, %v, want 2", n, err)
+	}
+	if n, err := s.CountReportsByReporter(two.ID); err != nil || n != 1 {
+		t.Errorf("count two = %d, %v, want 1", n, err)
+	}
+	if n, err := s.CountReportsByReporter("nobody"); err != nil || n != 0 {
+		t.Errorf("count unknown = %d, %v, want 0", n, err)
+	}
+
+	// The cap is a page rule, not a data rule: asking for one returns one and the count stays 2.
+	short, err := s.ListReportsByReporter(one.ID, 1)
+	if err != nil || len(short) != 1 {
+		t.Errorf("limited list = %d, %v, want 1", len(short), err)
+	}
+}

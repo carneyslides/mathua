@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import Header from '../../../components/Header'
 import BottomTabs from '../../../components/BottomTabs'
 import Footer from '../../../components/Footer'
@@ -181,7 +182,20 @@ function ReportCard({ report, canModerate, onChanged }: { report: QuestionReport
       {open && (
         <div className="border-t border-mathua-border p-4">
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px] text-mathua-secondary">
-            <div><dt className="text-mathua-muted">Reported by</dt><dd>{report.reporter_id || '(anon)'}</dd></div>
+            <div>
+              <dt className="text-mathua-muted">Reported by</dt>
+              <dd>
+                {report.reporter_id ? (
+                  <Link
+                    href={`/admin/users/detail?id=${encodeURIComponent(report.reporter_id)}`}
+                    className="break-all text-mathua-blue hover:underline"
+                    title="Open this account"
+                  >
+                    {report.reporter_id}
+                  </Link>
+                ) : '(anon)'}
+              </dd>
+            </div>
             <div><dt className="text-mathua-muted">When</dt><dd>{report.created_at}</dd></div>
             <div><dt className="text-mathua-muted">Source</dt><dd>{report.source || '—'}</dd></div>
             <div><dt className="text-mathua-muted">Lesson</dt><dd>{report.lesson_id || '—'}</dd></div>

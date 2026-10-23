@@ -53,6 +53,41 @@ func (s *PostgresStore) GetReport(id int64) (*QuestionReport, error) {
 	return &r, nil
 }
 
+// ListReportsByReporter mirrors the SQLite query; see that implementation for why status is not
+// part of the filter.
+func (s *PostgresStore) ListReportsByReporter(reporterID string, limit int) ([]QuestionReport, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 20
+	}
+	rows, err := s.db.Query(
+		reportSelectColumns+` WHERE reporter_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2`,
+		reporterID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list reports by reporter: %w", err)
+	}
+	defer rows.Close()
+	var out []QuestionReport
+	for rows.Next() {
+		r, err := scanReportRow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan report: %w", err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// CountReportsByReporter mirrors the SQLite count.
+func (s *PostgresStore) CountReportsByReporter(reporterID string) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM question_reports WHERE reporter_id = $1`, reporterID).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count reports by reporter: %w", err)
+	}
+	return n, nil
+}
+
 // GetReportByOrigin mirrors the SQLite lookup; see that implementation for why the origin id
 // is not the row id.
 func (s *PostgresStore) GetReportByOrigin(originID string) (*QuestionReport, error) {
