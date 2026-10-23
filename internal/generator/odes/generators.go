@@ -709,41 +709,77 @@ func (g *fourierGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 type bifurcationGen struct{}
 
 func (g *bifurcationGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Real equilibria count for pitchfork bifurcation x' = mu*x - x^3
+		mus := []int{-4, -3, -2, -1, 1, 2, 3, 5}
+		mu := mus[rand.Intn(len(mus))]
+		count := 1
+		reason := fmt.Sprintf("Because \\(\\mu = %d < 0\\), the equation \\(x(\\mu - x^2) = 0\\) has only the origin \\(x = 0\\) as a real solution (1 real equilibrium).", mu)
+		if mu > 0 {
+			count = 3
+			reason = fmt.Sprintf("Because \\(\\mu = %d > 0\\), the equation \\(x(\\mu - x^2) = 0\\) yields three real equilibria at \\(x = 0\\) and \\(x = \\pm\\sqrt{%d}\\).", mu, mu)
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("For the pitchfork bifurcation system \\(x' = %dx - x^3\\), how many real equilibrium points exist?", mu),
+			Answer:   fmt.Sprintf("%d", count),
+			Explanation: fmt.Sprintf(
+				"Setting \\(x' = x(%d - x^2) = 0\\) gives equilibria. %s",
+				mu, reason,
+			),
+		}
+
+	case 1:
+		// Non-zero equilibrium point in transcritical bifurcation x' = ax - x^2
+		a := smallInt(2, 6+int(ctx.Difficulty*4))
+		return generator.Problem{
+			Question: fmt.Sprintf("In the transcritical bifurcation system \\(x' = %dx - x^2\\), find the value of the non-zero equilibrium point \\(x^*\\).", a),
+			Answer:   fmt.Sprintf("%d", a),
+			Explanation: fmt.Sprintf(
+				"Factoring \\(x' = x(%d - x) = 0\\) gives the trivial equilibrium \\(x = 0\\) and the non-zero branch \\(x^* = %d\\).",
+				a, a,
+			),
+		}
+
+	case 2:
+		// Linearized derivative at the non-zero equilibrium of transcritical flow
+		a := smallInt(2, 6+int(ctx.Difficulty*4))
+		return generator.Problem{
+			Question: fmt.Sprintf("For the transcritical flow \\(x' = %dx - x^2\\), evaluate the linearized derivative \\(f'(x^*)\\) at the non-zero equilibrium \\(x^* = %d\\).", a, a),
+			Answer:   fmt.Sprintf("%d", -a),
+			Explanation: fmt.Sprintf(
+				"The flow function \\(f(x) = %dx - x^2\\) has derivative \\(f'(x) = %d - 2x\\). At \\(x^* = %d\\), \\(f'(%d) = %d - 2(%d) = %d\\). The negative derivative indicates exchange of stability.",
+				a, a, a, a, a, a, -a,
+			),
+		}
+
+	case 3:
+		// Critical saddle-node parameter r_c for x' = r + 2kx - x^2
+		k := smallInt(1, 5)
+		twoK := 2 * k
+		rc := -(k * k)
+		return generator.Problem{
+			Question: fmt.Sprintf("At what critical parameter value \\(r_c\\) does a saddle-node bifurcation occur for \\(x' = r + %dx - x^2\\)?", twoK),
+			Answer:   fmt.Sprintf("%d", rc),
+			Explanation: fmt.Sprintf(
+				"Rewriting \\(f(x) = r + %dx - x^2 = r + %d - (x - %d)^2\\), equilibria satisfy \\((x - %d)^2 = r + %d\\). Real solutions appear when the discriminant \\(r + %d = 0\\), yielding critical parameter \\(r_c = %d\\).",
+				twoK, k*k, k, k, k*k, k*k, rc,
+			),
+		}
+
+	default:
+		// Squared amplitude of non-trivial equilibria in pitchfork bifurcation
+		k := smallInt(2, 9)
+		return generator.Problem{
+			Question: fmt.Sprintf("In the supercritical pitchfork bifurcation \\(x' = %dx - x^3\\), what is the squared magnitude \\((x^*)^2\\) of the non-trivial equilibrium points?", k),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf(
+				"Setting \\(x' = x(%d - x^2) = 0\\) for non-zero equilibria gives \\(x^2 = %d\\). Therefore \\((x^*)^2 = %d\\).",
+				k, k, k,
+			),
+		}
 	}
-	easy := []entry{
-		{"Is bifurcation a qualitative change in phase portrait as parameter crosses threshold? (yes/no)", "yes", "Definition of bifurcation."},
-		{"Does saddle-node bifurcation create/destroy equilibria as parameter varies? (yes/no)", "yes", "x'= μ - x^2 has 0,1,2 equilibria depending on μ."},
-	}
-	// Parameterized production: equilibria count of x' = mu - x^2.
-	mus := []int{-3, -1, 0, 1, 4}
-	mu := mus[rand.Intn(len(mus))]
-	count, reason := "2", "mu > 0 gives two equilibria at ±sqrt(mu)."
-	if mu < 0 {
-		count, reason = "0", "mu < 0 gives no (real) equilibria."
-	} else if mu == 0 {
-		count, reason = "1", "mu = 0 gives one (double) equilibrium at 0."
-	}
-	easy = append(easy, entry{
-		q: fmt.Sprintf("For x' = %d - x^2, how many equilibria are there? (enter a number)", mu),
-		a: count,
-		e: reason,
-	})
-	hard := []entry{
-		{"For x'= μx - x^2, is it transcritical? (yes/no)", "yes", "Two equilibria exchange stability at μ=0."},
-		{"Does Hopf bifurcation create a limit cycle? (yes/no)", "yes", "Pair of complex eigenvalues cross imaginary axis, periodic orbit appears."},
-		{"Is pitchfork normal form x'= μx - x^3 supercritical when cubic term negative? (yes/no)", "yes", "Stable branches emerge for μ>0."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type waveGen struct{}
