@@ -137,6 +137,7 @@ func TestCreditParity(t *testing.T) {
 
 func TestCreditParity_ConcurrentDuplicatesInsertOnce(t *testing.T) {
 	for tag, repo := range creditStores(t) {
+		tag := tag
 		repo := repo
 		t.Run(tag, func(t *testing.T) {
 			credit := repo.(CreditStore)
