@@ -160,6 +160,7 @@ CREATE TABLE IF NOT EXISTS active_sessions (
     session_review  INTEGER NOT NULL DEFAULT 0,
     session_new     INTEGER NOT NULL DEFAULT 0,
     difficulty      REAL,
+    kp_ordinal      INTEGER NOT NULL DEFAULT 0,
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

@@ -917,6 +917,36 @@ func TestActiveSession_DifficultySurvivesTheRoundTrip(t *testing.T) {
 	}
 }
 
+func TestActiveSession_KPOrdinalSurvivesRoundTrip(t *testing.T) {
+	store := newTestStore(t)
+	stu, _ := store.CreateStudent("kp-session-student")
+	sess, _ := store.CreateSession(stu.ID)
+
+	if err := store.UpsertActiveSession(&ActiveSession{
+		SessionID:      sess.ID,
+		StudentID:      stu.ID,
+		ConceptID:      "c1",
+		ConceptName:    "C1",
+		ExpectedAnswer: "42",
+		AttemptID:      "a1",
+		Question:       "q1",
+		KPOrdinal:      2,
+	}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	got, err := store.GetActiveSession(sess.ID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected active session")
+	}
+	if got.KPOrdinal != 2 {
+		t.Errorf("expected KPOrdinal 2, got %d", got.KPOrdinal)
+	}
+}
+
 func TestGetSession_Lifecycle(t *testing.T) {
 	store := newTestStore(t)
 	st, err := store.CreateStudent("session-student")

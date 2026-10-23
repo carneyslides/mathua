@@ -171,6 +171,8 @@ CREATE TABLE IF NOT EXISTS active_sessions (
     last_concept_id TEXT NOT NULL DEFAULT '',
     session_review  INTEGER NOT NULL DEFAULT 0,
     session_new     INTEGER NOT NULL DEFAULT 0,
+    difficulty      DOUBLE PRECISION,
+    kp_ordinal      INTEGER NOT NULL DEFAULT 0,
     updated_at      TEXT NOT NULL DEFAULT (now()::text)
 );
 
@@ -440,6 +442,7 @@ func pgAuthMigrate(db *sql.DB) error {
 		// plausible-looking number would be fabricating evidence.
 		"ALTER TABLE attempts ADD COLUMN IF NOT EXISTS difficulty DOUBLE PRECISION",
 		"ALTER TABLE active_sessions ADD COLUMN IF NOT EXISTS difficulty DOUBLE PRECISION",
+		"ALTER TABLE active_sessions ADD COLUMN IF NOT EXISTS kp_ordinal INTEGER NOT NULL DEFAULT 0",
 		// The administrative role. NOT NULL DEFAULT 'student' migrates every existing account
 		// to a learner, which is the only safe direction: nothing in a pre-role database
 		// carries evidence about who was administering anything, because it could not.
@@ -1447,7 +1450,7 @@ func (s *PostgresStore) GetActiveSession(sessionID string) (*ActiveSession, erro
 	row := s.db.QueryRow(`
 		SELECT session_id, student_id, concept_id, concept_name, expected_answer,
 		       attempt_id, question, explanation, diagram, is_review, answered,
-		       last_concept_id, session_review, session_new, difficulty, updated_at
+		       last_concept_id, session_review, session_new, difficulty, kp_ordinal, updated_at
 		FROM active_sessions WHERE session_id = $1
 	`, sessionID)
 	var a ActiveSession
@@ -1455,7 +1458,7 @@ func (s *PostgresStore) GetActiveSession(sessionID string) (*ActiveSession, erro
 	var updatedAt string
 	if err := row.Scan(&a.SessionID, &a.StudentID, &a.ConceptID, &a.ConceptName, &a.ExpectedAnswer,
 		&a.AttemptID, &a.Question, &a.Explanation, &a.Diagram, &isReview, &answered,
-		&a.LastConceptID, &a.SessionReview, &a.SessionNew, &a.Difficulty, &updatedAt); err != nil {
+		&a.LastConceptID, &a.SessionReview, &a.SessionNew, &a.Difficulty, &a.KPOrdinal, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -1477,8 +1480,8 @@ func (s *PostgresStore) UpsertActiveSession(a *ActiveSession) error {
 		INSERT INTO active_sessions
 			(session_id, student_id, concept_id, concept_name, expected_answer,
 			 attempt_id, question, explanation, diagram, is_review, answered,
-			 last_concept_id, session_review, session_new, difficulty, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			 last_concept_id, session_review, session_new, difficulty, kp_ordinal, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		ON CONFLICT(session_id) DO UPDATE SET
 			student_id      = EXCLUDED.student_id,
 			concept_id      = EXCLUDED.concept_id,
@@ -1494,10 +1497,11 @@ func (s *PostgresStore) UpsertActiveSession(a *ActiveSession) error {
 			session_review  = EXCLUDED.session_review,
 			session_new     = EXCLUDED.session_new,
 			difficulty      = EXCLUDED.difficulty,
+			kp_ordinal      = EXCLUDED.kp_ordinal,
 			updated_at      = EXCLUDED.updated_at
 	`, a.SessionID, a.StudentID, a.ConceptID, a.ConceptName, a.ExpectedAnswer,
 		a.AttemptID, a.Question, a.Explanation, a.Diagram, boolToInt(a.IsReview), boolToInt(a.Answered),
-		a.LastConceptID, a.SessionReview, a.SessionNew, a.Difficulty, now)
+		a.LastConceptID, a.SessionReview, a.SessionNew, a.Difficulty, a.KPOrdinal, now)
 	if err != nil {
 		return fmt.Errorf("upsert active session: %w", err)
 	}

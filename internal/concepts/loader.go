@@ -57,14 +57,15 @@ func LoadDir(dir string) (*DAG, error) {
 
 // enrichmentEntry mirrors the loose schema in data/concepts/enrichment.json.
 type enrichmentEntry struct {
-	ID                string    `json:"id"`
-	Heuristic         string    `json:"heuristic"`
-	Note              string    `json:"note"`
-	Encompasses       []string  `json:"encompasses"`
-	KeyPrerequisites  []string  `json:"key_prerequisites"`
-	InterferenceGroup string    `json:"interference_group"`
-	Members           []string  `json:"members"`
-	Variants          []Variant `json:"variants"`
+	ID                string           `json:"id"`
+	Heuristic         string           `json:"heuristic"`
+	Note              string           `json:"note"`
+	Encompasses       []string         `json:"encompasses"`
+	KeyPrerequisites  []string         `json:"key_prerequisites"`
+	InterferenceGroup string           `json:"interference_group"`
+	Members           []string         `json:"members"`
+	Variants          []Variant        `json:"variants"`
+	KnowledgePoints   []KnowledgePoint `json:"knowledge_points"`
 }
 
 func mergeEnrichment(dir string, raw []Concept) error {
@@ -105,6 +106,9 @@ func mergeEnrichment(dir string, raw []Concept) error {
 			}
 			if len(e.Variants) > 0 {
 				c.Variants = append(c.Variants, e.Variants...)
+			}
+			if len(e.KnowledgePoints) > 0 {
+				c.KnowledgePoints = append(c.KnowledgePoints, e.KnowledgePoints...)
 			}
 		} else if e.InterferenceGroup != "" && len(e.Members) > 0 {
 			for _, mid := range e.Members {
@@ -292,6 +296,17 @@ func validate(raw []Concept) error {
 			}
 			if v.Label == "" {
 				return fmt.Errorf("concept %q variant missing label", c.ID)
+			}
+		}
+		for i, kp := range c.KnowledgePoints {
+			expectedOrdinal := i + 1
+			if kp.Ordinal != expectedOrdinal {
+				return fmt.Errorf("concept %q knowledge point %d has invalid ordinal %d (must be %d)", c.ID, i, kp.Ordinal, expectedOrdinal)
+			}
+			for _, kpid := range kp.KeyPrerequisites {
+				if !ids[kpid] {
+					return fmt.Errorf("concept %q knowledge point %d key_prerequisite %q does not exist", c.ID, kp.Ordinal, kpid)
+				}
 			}
 		}
 		// Grading type enum check (allow empty for test fixtures)

@@ -341,3 +341,90 @@ func TestVariants_InvalidDifficulty(t *testing.T) {
 		t.Fatal("expected error for invalid variant difficulty")
 	}
 }
+
+func TestKnowledgePoints_Valid(t *testing.T) {
+	raw := []Concept{
+		{ID: "base", Label: "Base", Domain: "d", Prerequisites: []string{}, MasteryThreshold: MasteryThreshold{Streak: 1, AvgTimeSeconds: 1}},
+		{
+			ID: "a", Label: "A", Domain: "d", Prerequisites: []string{"base"},
+			MasteryThreshold: MasteryThreshold{Streak: 1, AvgTimeSeconds: 1},
+			KnowledgePoints: []KnowledgePoint{
+				{Ordinal: 1, Title: "Step 1", WorkedExample: "Ex 1", KeyPrerequisites: []string{"base"}},
+				{Ordinal: 2, Title: "Step 2", WorkedExample: "Ex 2", VariantKey: "v2"},
+			},
+		},
+	}
+	if err := validate(raw); err != nil {
+		t.Fatalf("expected valid knowledge points, got %v", err)
+	}
+}
+
+func TestKnowledgePoints_InvalidOrdinalZero(t *testing.T) {
+	raw := []Concept{
+		{
+			ID: "a", Label: "A", Domain: "d", Prerequisites: []string{},
+			MasteryThreshold: MasteryThreshold{Streak: 1, AvgTimeSeconds: 1},
+			KnowledgePoints: []KnowledgePoint{
+				{Ordinal: 0, Title: "Zero", WorkedExample: "Ex 0"},
+			},
+		},
+	}
+	if err := validate(raw); err == nil {
+		t.Fatal("expected error for 0-indexed knowledge point ordinal")
+	}
+}
+
+func TestKnowledgePoints_InvalidOrdinalGap(t *testing.T) {
+	raw := []Concept{
+		{
+			ID: "a", Label: "A", Domain: "d", Prerequisites: []string{},
+			MasteryThreshold: MasteryThreshold{Streak: 1, AvgTimeSeconds: 1},
+			KnowledgePoints: []KnowledgePoint{
+				{Ordinal: 1, Title: "Step 1", WorkedExample: "Ex 1"},
+				{Ordinal: 3, Title: "Step 3", WorkedExample: "Ex 3"},
+			},
+		},
+	}
+	if err := validate(raw); err == nil {
+		t.Fatal("expected error for non-sequential ordinal gap")
+	}
+}
+
+func TestKnowledgePoints_DanglingKeyPrerequisite(t *testing.T) {
+	raw := []Concept{
+		{
+			ID: "a", Label: "A", Domain: "d", Prerequisites: []string{},
+			MasteryThreshold: MasteryThreshold{Streak: 1, AvgTimeSeconds: 1},
+			KnowledgePoints: []KnowledgePoint{
+				{Ordinal: 1, Title: "Step 1", WorkedExample: "Ex 1", KeyPrerequisites: []string{"missing_concept"}},
+			},
+		},
+	}
+	if err := validate(raw); err == nil {
+		t.Fatal("expected error for dangling key prerequisite in knowledge point")
+	}
+}
+
+func TestConcept_KnowledgePointByOrdinal(t *testing.T) {
+	c := &Concept{
+		ID: "a",
+		KnowledgePoints: []KnowledgePoint{
+			{Ordinal: 1, Title: "One"},
+			{Ordinal: 2, Title: "Two"},
+		},
+	}
+	if c.KnowledgePointByOrdinal(0) != nil {
+		t.Errorf("expected nil for ordinal 0")
+	}
+	if c.KnowledgePointByOrdinal(3) != nil {
+		t.Errorf("expected nil for ordinal 3")
+	}
+	kp1 := c.KnowledgePointByOrdinal(1)
+	if kp1 == nil || kp1.Title != "One" {
+		t.Errorf("expected Title One, got %v", kp1)
+	}
+	kp2 := c.KnowledgePointByOrdinal(2)
+	if kp2 == nil || kp2.Title != "Two" {
+		t.Errorf("expected Title Two, got %v", kp2)
+	}
+}

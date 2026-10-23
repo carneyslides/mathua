@@ -18,6 +18,8 @@ type TransitionCtx struct {
 	RequiredStreak    int
 	AvgResponseTime   float64
 	ResponseThreshold float64
+	// KPState tracks the Knowledge Point state machine if defined for the concept.
+	KPState *KPStateMachine
 }
 
 // Machine steps from one mastery status to the next based on evidence.
@@ -42,6 +44,21 @@ type Machine struct{}
 
 // Next computes the next status.
 func (m *Machine) Next(current Status, ctx TransitionCtx) Status {
+	if ctx.KPState != nil && ctx.KPState.TotalKPs > 0 {
+		if ctx.KPState.Completed {
+			return StatusMastered
+		}
+		if current == StatusUnseen {
+			if ctx.KPState.CurrentStreak > 0 || ctx.KPState.CurrentOrdinal > 1 {
+				return StatusLearning
+			}
+			return StatusUnseen
+		}
+		if ctx.KPState.CurrentOrdinal > 1 && current == StatusLearning {
+			return StatusPracticing
+		}
+		return current
+	}
 	switch current {
 	case StatusUnseen, StatusLearning, StatusPracticing:
 		if HighestRung(ctx.Evidence) >= requiredRung(current) {

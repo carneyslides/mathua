@@ -132,6 +132,7 @@ func authMigrate(db *sql.DB) error {
 		// plausible-looking number would be fabricating evidence.
 		"ALTER TABLE attempts ADD COLUMN difficulty REAL",
 		"ALTER TABLE active_sessions ADD COLUMN difficulty REAL",
+		"ALTER TABLE active_sessions ADD COLUMN kp_ordinal INTEGER NOT NULL DEFAULT 0",
 		// The administrative role. NOT NULL DEFAULT 'student' means every existing account is
 		// migrated to a learner, which is the only direction that can be migrated safely: there
 		// is no evidence in a pre-role database about who was administering anything, because
@@ -1185,7 +1186,7 @@ func (s *SQLiteStore) GetActiveSession(sessionID string) (*ActiveSession, error)
 	row := s.db.QueryRow(`
 		SELECT session_id, student_id, concept_id, concept_name, expected_answer,
 		       attempt_id, question, explanation, diagram, is_review, answered,
-		       last_concept_id, session_review, session_new, difficulty, updated_at
+		       last_concept_id, session_review, session_new, difficulty, kp_ordinal, updated_at
 		FROM active_sessions WHERE session_id = ?
 	`, sessionID)
 	var a ActiveSession
@@ -1193,7 +1194,7 @@ func (s *SQLiteStore) GetActiveSession(sessionID string) (*ActiveSession, error)
 	var updatedAt string
 	if err := row.Scan(&a.SessionID, &a.StudentID, &a.ConceptID, &a.ConceptName, &a.ExpectedAnswer,
 		&a.AttemptID, &a.Question, &a.Explanation, &a.Diagram, &isReview, &answered,
-		&a.LastConceptID, &a.SessionReview, &a.SessionNew, &a.Difficulty, &updatedAt); err != nil {
+		&a.LastConceptID, &a.SessionReview, &a.SessionNew, &a.Difficulty, &a.KPOrdinal, &updatedAt); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -1215,8 +1216,8 @@ func (s *SQLiteStore) UpsertActiveSession(a *ActiveSession) error {
 		INSERT INTO active_sessions
 			(session_id, student_id, concept_id, concept_name, expected_answer,
 			 attempt_id, question, explanation, diagram, is_review, answered,
-			 last_concept_id, session_review, session_new, difficulty, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 last_concept_id, session_review, session_new, difficulty, kp_ordinal, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			student_id      = excluded.student_id,
 			concept_id      = excluded.concept_id,
@@ -1232,10 +1233,11 @@ func (s *SQLiteStore) UpsertActiveSession(a *ActiveSession) error {
 			session_review  = excluded.session_review,
 			session_new     = excluded.session_new,
 			difficulty      = excluded.difficulty,
+			kp_ordinal      = excluded.kp_ordinal,
 			updated_at      = excluded.updated_at
 	`, a.SessionID, a.StudentID, a.ConceptID, a.ConceptName, a.ExpectedAnswer,
 		a.AttemptID, a.Question, a.Explanation, a.Diagram, boolToInt(a.IsReview), boolToInt(a.Answered),
-		a.LastConceptID, a.SessionReview, a.SessionNew, a.Difficulty, now)
+		a.LastConceptID, a.SessionReview, a.SessionNew, a.Difficulty, a.KPOrdinal, now)
 	if err != nil {
 		return fmt.Errorf("upsert active session: %w", err)
 	}
