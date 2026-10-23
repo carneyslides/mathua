@@ -26,6 +26,16 @@ func TestHomogeneousGen(t *testing.T)    { fuzzGen(t, &homogeneousGen{}) }
 func TestNonhomogeneousGen(t *testing.T) { fuzzGen(t, &nonhomogeneousGen{}) }
 func TestLaplaceGen(t *testing.T)        { fuzzGen(t, &laplaceGen{}) }
 func TestSystemsGen(t *testing.T)        { fuzzGen(t, &systemsGen{}) }
+func TestRK4Gen(t *testing.T) {
+	gen := &rk4Gen{}
+	for i := 0; i < 200; i++ {
+		d := rand.Float64()
+		p := gen.Generate(generator.GeneratorContext{Difficulty: d})
+		if p.Question == "" || p.Answer == "" || p.Explanation == "" {
+			t.Fatalf("empty field at difficulty=%.2f: q=%q a=%q e=%q", d, p.Question, p.Answer, p.Explanation)
+		}
+	}
+}
 
 func TestFuzz(t *testing.T) {
 	reg := generator.NewRegistry()
