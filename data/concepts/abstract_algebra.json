@@ -63,7 +63,7 @@
     "label": "Subgroups and cosets",
     "domain": "abstract_algebra",
     "subdomain": "abstract_algebra.groups",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "abstract.group.examples"
     ],
@@ -163,7 +163,7 @@
     "label": "Ideals in rings",
     "domain": "abstract_algebra",
     "subdomain": "abstract_algebra.rings",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "abstract.rings.def"
     ],
@@ -177,7 +177,7 @@
     "label": "Quotient rings",
     "domain": "abstract_algebra",
     "subdomain": "abstract_algebra.rings",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "abstract.rings.ideal",
       "abstract.group.homomorphism"
@@ -192,7 +192,7 @@
     "label": "Normal subgroups and conjugacy",
     "domain": "abstract_algebra",
     "subdomain": "abstract_algebra.groups",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "abstract.group.subgroup"
     ],
@@ -221,7 +221,7 @@
     "label": "Quotient groups and isomorphism theorems",
     "domain": "abstract_algebra",
     "subdomain": "abstract_algebra.groups",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "abstract.group.normal",
       "abstract.group.homomorphism",
@@ -452,7 +452,7 @@
     "label": "Commutator subgroup and abelianization",
     "domain": "abstract_algebra",
     "subdomain": "abstract_algebra.groups",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "abstract.group.free"
     ],
