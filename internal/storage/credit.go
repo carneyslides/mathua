@@ -81,8 +81,17 @@ func (a CreditAccount) Balance() int64 {
 	return a.RetainedUnits - int64(a.Banked)*repetition.Micro
 }
 
+// Pending returns the number of unprojected banked ordinals waiting to satisfy reviews.
+func (a CreditAccount) Pending() int {
+	p := a.Banked - a.Projected - a.Stale
+	if p < 0 {
+		return 0
+	}
+	return p
+}
+
 // CreditStore is the slice of the repository this stage needs. Declared
-// separately so both backends implement exactly these five operations and no
+// separately so both backends implement exactly these operations and no
 // caller can reach a production scheduling column through this door.
 type CreditStore interface {
 	// AllocateCredit applies the per-attempt cap, admits what capacity allows,
@@ -101,4 +110,6 @@ type CreditStore interface {
 	ResetCreditEpoch(studentID, conceptID string) (int64, error)
 	// VoidCreditEvent removes one event's credit without deleting the row.
 	VoidCreditEvent(studentID, attemptID, conceptID, reason string) error
+	// GetBankedOrdinals returns the count of unprojected banked ordinals per concept for a student.
+	GetBankedOrdinals(studentID string) (map[string]int, error)
 }

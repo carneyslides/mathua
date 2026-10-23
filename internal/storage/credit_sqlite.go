@@ -125,10 +125,14 @@ func (s *SQLiteStore) AllocateCredit(studentID, attemptID string, epoch int64, c
 			if err != nil {
 				return err
 			}
-			if targetEpoch != epoch {
+			if epoch > 0 && targetEpoch != epoch {
 				return fmt.Errorf("%w: target %s is at epoch %d, not %d", ErrCreditClosedEpoch, a.ConceptID, targetEpoch, epoch)
 			}
-			acc, err := s.accountTx(ctx, conn, studentID, a.ConceptID, epoch)
+			useEpoch := targetEpoch
+			if epoch > 0 {
+				useEpoch = epoch
+			}
+			acc, err := s.accountTx(ctx, conn, studentID, a.ConceptID, useEpoch)
 			if err != nil {
 				return err
 			}
@@ -149,7 +153,7 @@ func (s *SQLiteStore) AllocateCredit(studentID, attemptID string, epoch int64, c
 				banked = want - int64(acc.Banked)
 			}
 			ev := CreditEvent{
-				AttemptID: attemptID, ConceptID: a.ConceptID, Epoch: epoch,
+				AttemptID: attemptID, ConceptID: a.ConceptID, Epoch: useEpoch,
 				ScaledUnits: a.Units, RetainedUnits: retained, DiscardedUnits: discarded,
 				DiscardReason: reason, Banked: int(banked),
 			}
@@ -159,7 +163,7 @@ func (s *SQLiteStore) AllocateCredit(studentID, attemptID string, epoch int64, c
 					 scaled_units, retained_units, discarded_units, discard_reason, created_at)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(student_id, source_attempt_id, target_concept_id) DO NOTHING
-			`, studentID, attemptID, a.ConceptID, epoch, a.Units, retained, discarded, reason, time.Now().UTC().UnixNano()); err != nil {
+			`, studentID, attemptID, a.ConceptID, useEpoch, a.Units, retained, discarded, reason, time.Now().UTC().UnixNano()); err != nil {
 				return fmt.Errorf("credit: insert event: %w", err)
 			}
 			for i := int64(0); i < banked; i++ {
@@ -167,7 +171,7 @@ func (s *SQLiteStore) AllocateCredit(studentID, attemptID string, epoch int64, c
 					INSERT INTO implicit_credit_ordinals
 						(student_id, target_concept_id, credit_epoch, ordinal, state, banked_at, attempts)
 					VALUES (?, ?, ?, ?, 'banked', ?, 0)
-				`, studentID, a.ConceptID, epoch, int64(acc.Banked)+i+1, time.Now().UTC().UnixNano()); err != nil {
+				`, studentID, a.ConceptID, useEpoch, int64(acc.Banked)+i+1, time.Now().UTC().UnixNano()); err != nil {
 					return fmt.Errorf("credit: insert ordinal: %w", err)
 				}
 			}
@@ -236,6 +240,13 @@ func (s *SQLiteStore) AccountOf(studentID, conceptID string, epoch int64) (Credi
 		return CreditAccount{}, err
 	}
 	defer conn.Close()
+	if epoch <= 0 {
+		var err error
+		epoch, err = s.targetEpoch(conn, ctx, studentID, conceptID)
+		if err != nil {
+			return CreditAccount{}, err
+		}
+	}
 	return s.accountTx(ctx, conn, studentID, conceptID, epoch)
 }
 
@@ -246,6 +257,13 @@ func (s *SQLiteStore) ProjectCredit(studentID, conceptID string, epoch int64, st
 	var out []CreditOrdinal
 	err := s.runImmediate(context.Background(), func(conn *sql.Conn) error {
 		ctx := context.Background()
+		if epoch <= 0 {
+			var err error
+			epoch, err = s.targetEpoch(conn, ctx, studentID, conceptID)
+			if err != nil {
+				return err
+			}
+		}
 		var due sql.NullString
 		if err := conn.QueryRowContext(ctx, `
 			SELECT next_review_due FROM concept_progress WHERE student_id = ? AND concept_id = ?
@@ -430,4 +448,33 @@ func (s *SQLiteStore) VoidCreditEvent(studentID, attemptID, conceptID, reason st
 		}
 		return nil
 	})
+}
+
+func (s *SQLiteStore) GetBankedOrdinals(studentID string) (map[string]int, error) {
+	ctx := context.Background()
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	rows, err := conn.QueryContext(ctx, `
+		SELECT target_concept_id, COUNT(*)
+		FROM implicit_credit_ordinals
+		WHERE student_id = ? AND state = 'banked'
+		GROUP BY target_concept_id
+	`, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("credit: get banked ordinals: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]int)
+	for rows.Next() {
+		var cid string
+		var count int
+		if err := rows.Scan(&cid, &count); err != nil {
+			return nil, err
+		}
+		out[cid] = count
+	}
+	return out, rows.Err()
 }

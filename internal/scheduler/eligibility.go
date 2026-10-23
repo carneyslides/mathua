@@ -71,7 +71,11 @@ func EligibilityOf(snapshots map[string]*ConceptSnapshot, now time.Time, c *conc
 	case snap != nil && snap.Status == mastery.StatusMastered:
 		// Decay is a review question, not a teaching one (ADR-037).
 		if _, isReview := effectiveState(snap, now); isReview {
-			state = StateDueForReview
+			if snap.BankedOrdinals > 0 && snap.Encompassed {
+				state = StateMastered
+			} else {
+				state = StateDueForReview
+			}
 		} else {
 			state = StateMastered
 		}

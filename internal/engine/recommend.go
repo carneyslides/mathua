@@ -2,12 +2,98 @@ package engine
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/chuma-beep/mathua/internal/mastery"
+	"github.com/chuma-beep/mathua/internal/repetition"
 	"github.com/chuma-beep/mathua/internal/scheduler"
 	"github.com/chuma-beep/mathua/internal/storage"
 )
+
+// SatisfyImplicitReviews inspects banked implicit repetition credit for concepts that appear
+// due for explicit spaced review. If an encompassed concept has banked sufficient implicit credit,
+// it projects the credit, advances the review interval and updates storage.
+func (e *Engine) SatisfyImplicitReviews(studentID string) error {
+	if studentID == "" {
+		return nil
+	}
+	cs, ok := e.repo.(storage.CreditStore)
+	if !ok {
+		return nil
+	}
+	banked, err := cs.GetBankedOrdinals(studentID)
+	if err != nil || len(banked) == 0 {
+		return err
+	}
+	progress, err := e.repo.GetAllProgress(studentID)
+	if err != nil {
+		return fmt.Errorf("load progress: %w", err)
+	}
+	now := time.Now().UTC()
+	for cid, count := range banked {
+		if count <= 0 {
+			continue
+		}
+		if e.dag == nil || len(e.dag.EncompassedBy(cid)) == 0 {
+			continue
+		}
+		p := progress[cid]
+		if p == nil {
+			continue
+		}
+		isDue := false
+		if p.NextReviewDue != nil && !p.NextReviewDue.After(now) {
+			isDue = true
+		}
+		if p.LastReviewed != nil && daysSinceReview(p.LastReviewed) >= mastery.DecayDays {
+			isDue = true
+		}
+		if !isDue {
+			continue
+		}
+
+		speed := 1.0
+		if ts, err := e.repo.GetTopicSpeed(studentID, cid); err == nil && ts != nil {
+			speed = ts.LearningSpeed
+		}
+		prevSM2 := scheduler.SM2{
+			Interval:    p.SM2Interval,
+			EFactor:     p.SM2EFactor,
+			Repetitions: p.SM2Repetitions,
+		}
+		stepDays, err := repetition.StepDays(prevSM2, speed)
+		if err != nil || stepDays < 1 {
+			stepDays = 1
+		}
+		ords, err := cs.ProjectCredit(studentID, cid, 0, stepDays, now)
+		if err != nil {
+			log.Printf("warning: project credit %s/%s: %v", studentID, cid, err)
+			continue
+		}
+		if len(ords) == 0 {
+			continue
+		}
+		lastDueStr := ords[len(ords)-1].CounterfactualDue
+		newDue, err := time.Parse(time.RFC3339, lastDueStr)
+		if err != nil {
+			newDue, err = time.Parse("2006-01-02 15:04:05", lastDueStr)
+		}
+		if err != nil {
+			newDue = now.AddDate(0, 0, stepDays)
+		}
+		p.NextReviewDue = &newDue
+		p.LastReviewed = &now
+		p.SM2Interval = stepDays
+		if p.Status == "DECAYING" {
+			p.Status = string(mastery.StatusMastered)
+		}
+		if err := e.repo.UpsertProgress(p); err != nil {
+			log.Printf("warning: upsert progress after credit projection %s/%s: %v", studentID, cid, err)
+		}
+	}
+	return nil
+}
 
 // conceptSnapshots assembles the scheduler's view of a learner.
 //
@@ -18,6 +104,19 @@ import (
 // One definition, so "what should this learner do next" cannot answer differently depending on
 // which caller asked.
 func (e *Engine) conceptSnapshotsFrom(studentID string, progress map[string]*storage.ConceptProgress) map[string]*scheduler.ConceptSnapshot {
+	var banked map[string]int
+	if cs, ok := e.repo.(storage.CreditStore); ok && studentID != "" {
+		if b, err := cs.GetBankedOrdinals(studentID); err == nil {
+			banked = b
+		}
+	}
+	var speeds map[string]*storage.TopicSpeed
+	if studentID != "" {
+		if sp, err := e.repo.GetAllTopicSpeeds(studentID); err == nil {
+			speeds = sp
+		}
+	}
+
 	snapshots := make(map[string]*scheduler.ConceptSnapshot, len(progress))
 	for cid, p := range progress {
 		reqStreak := 0
@@ -25,6 +124,18 @@ func (e *Engine) conceptSnapshotsFrom(studentID string, progress map[string]*sto
 		if c := e.dag.Concept(cid); c != nil {
 			reqStreak = c.MasteryThreshold.Streak
 			timeThresh = c.MasteryThreshold.AvgTimeSeconds
+		}
+		ordinals := 0
+		if banked != nil {
+			ordinals = banked[cid]
+		}
+		speed := 1.0
+		if speeds != nil && speeds[cid] != nil {
+			speed = speeds[cid].LearningSpeed
+		}
+		isEncompassed := false
+		if e.dag != nil && len(e.dag.EncompassedBy(cid)) > 0 {
+			isEncompassed = true
 		}
 		snapshots[cid] = &scheduler.ConceptSnapshot{
 			Status:         mastery.Status(p.Status),
@@ -36,6 +147,12 @@ func (e *Engine) conceptSnapshotsFrom(studentID string, progress map[string]*sto
 			TimeThreshold:  timeThresh,
 			WeaknessScore:  p.WeaknessScore,
 			Placement:      p.PlacementSeeded,
+			BankedOrdinals: ordinals,
+			Repetitions:    p.SM2Repetitions,
+			Interval:       p.SM2Interval,
+			EFactor:        p.SM2EFactor,
+			LearningSpeed:  speed,
+			Encompassed:    isEncompassed,
 		}
 	}
 	// Concepts never attempted still need a snapshot: prereqsMet returns false for a missing
@@ -46,6 +163,7 @@ func (e *Engine) conceptSnapshotsFrom(studentID string, progress map[string]*sto
 				Status:         mastery.StatusUnseen,
 				RequiredStreak: c.MasteryThreshold.Streak,
 				TimeThreshold:  c.MasteryThreshold.AvgTimeSeconds,
+				Encompassed:    len(e.dag.EncompassedBy(c.ID)) > 0,
 			}
 		}
 	}
@@ -54,6 +172,9 @@ func (e *Engine) conceptSnapshotsFrom(studentID string, progress map[string]*sto
 
 // conceptSnapshots is the loading wrapper, for the question-serving paths.
 func (e *Engine) conceptSnapshots(studentID string) (map[string]*scheduler.ConceptSnapshot, error) {
+	if studentID != "" {
+		_ = e.SatisfyImplicitReviews(studentID)
+	}
 	progress, err := e.repo.GetAllProgress(studentID)
 	if err != nil {
 		return nil, fmt.Errorf("load progress: %w", err)
@@ -64,6 +185,9 @@ func (e *Engine) conceptSnapshots(studentID string) (map[string]*scheduler.Conce
 // ReviewsDue counts concepts whose SM-2 interval has elapsed. Moved here from the server,
 // which computed it inline and which the recommender needs it from.
 func (e *Engine) ReviewsDue(studentID string) (int, error) {
+	if studentID != "" {
+		_ = e.SatisfyImplicitReviews(studentID)
+	}
 	progress, err := e.repo.GetAllProgress(studentID)
 	if err != nil {
 		return 0, fmt.Errorf("load progress: %w", err)

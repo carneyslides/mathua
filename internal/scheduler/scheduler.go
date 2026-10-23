@@ -46,6 +46,20 @@ type ConceptSnapshot struct {
 	// It is not mastery and is never used to decide mastery, XP, the quiz gate or
 	// review (ADR-008, ADR-050).
 	Placement bool
+
+	// FIRe: Fractional Implicit Repetition fields.
+	// BankedOrdinals is the count of whole implicit repetitions banked from downstream practice.
+	BankedOrdinals int
+	// Repetitions is the current count of successful reviews under SM-2.
+	Repetitions int
+	// Interval is the current SM-2 interval in days.
+	Interval int
+	// EFactor is the current SM-2 easiness factor.
+	EFactor float64
+	// LearningSpeed scales review interval calculations.
+	LearningSpeed float64
+	// Encompassed marks whether this concept is encompassed by other concepts in the curriculum.
+	Encompassed bool
 }
 
 // Next picks the next concept for a student to work on.
@@ -173,6 +187,55 @@ func layeringBonus(c *concepts.Concept, weakness map[string]float64) float64 {
 	return 0
 }
 
+// AdvanceSnapshotInterval advances the review interval and moves NextReviewDue forward
+// when banked implicit credit satisfies an explicit review. It consumes one banked ordinal.
+func AdvanceSnapshotInterval(snap *ConceptSnapshot, now time.Time) int {
+	if snap == nil {
+		return 0
+	}
+	interval := snap.Interval
+	if interval < 1 {
+		interval = 1
+	}
+	efactor := snap.EFactor
+	if efactor < 1.3 {
+		efactor = 2.5
+	}
+	speed := snap.LearningSpeed
+	if speed <= 0 {
+		speed = 1.0
+	}
+	reps := snap.Repetitions
+	if reps <= 0 {
+		if interval >= 6 {
+			reps = 2
+		} else if interval >= 1 {
+			reps = 1
+		}
+	}
+	nextSM2 := ComputeSM2WithSpeed(SM2{Repetitions: reps, Interval: interval, EFactor: efactor}, 4, speed)
+	stepDays := nextSM2.Interval
+	if stepDays < 1 {
+		stepDays = 1
+	}
+	baseline := now
+	if snap.NextReviewDue != nil && !snap.NextReviewDue.IsZero() {
+		baseline = *snap.NextReviewDue
+	}
+	nextDue := baseline.AddDate(0, 0, stepDays)
+	floor := now.AddDate(0, 0, 1)
+	if nextDue.Before(floor) {
+		nextDue = floor
+	}
+	snap.NextReviewDue = &nextDue
+	snap.LastReviewed = now
+	snap.Interval = stepDays
+	if snap.BankedOrdinals > 0 {
+		snap.BankedOrdinals--
+	}
+	return stepDays
+}
+
 func buildCandidates(dag *concepts.DAG, snapshots map[string]*ConceptSnapshot, now time.Time, skipID string) []Candidate {
 	var out []Candidate
 	for _, c := range dag.Order() {
@@ -181,7 +244,15 @@ func buildCandidates(dag *concepts.DAG, snapshots map[string]*ConceptSnapshot, n
 		}
 		snap := snapshots[c.ID]
 		effStatus, isReview := effectiveState(snap, now)
-		if effStatus == mastery.StatusMastered {
+		isEncompassed := (snap != nil && snap.Encompassed) || (dag != nil && len(dag.EncompassedBy(c.ID)) > 0)
+		if isReview && snap != nil && snap.BankedOrdinals > 0 && isEncompassed {
+			isReview = false
+			if effStatus == "DECAYING" {
+				effStatus = mastery.StatusMastered
+			}
+			AdvanceSnapshotInterval(snap, now)
+		}
+		if effStatus == mastery.StatusMastered && !isReview {
 			if snap == nil || snap.WeaknessScore < weaknessPracticeFloor {
 				continue
 			}
@@ -244,7 +315,9 @@ func computePriority(snap *ConceptSnapshot, now time.Time, isDecaying bool) floa
 	}
 	priority := 0.5*daysSinceLastSeen + 0.2*(1.0-masteryScore) + 0.3*weakness
 	if isDecaying {
-		priority += 5.0
+		if snap == nil || snap.BankedOrdinals == 0 || !snap.Encompassed {
+			priority += 5.0
+		}
 	}
 	if snap != nil && snap.Status == mastery.StatusMastered && weakness >= weaknessPracticeFloor {
 		priority += 4.0

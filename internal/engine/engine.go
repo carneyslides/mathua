@@ -20,6 +20,7 @@ import (
 	"github.com/chuma-beep/mathua/internal/lessons"
 	"github.com/chuma-beep/mathua/internal/mastery"
 	"github.com/chuma-beep/mathua/internal/planning"
+	"github.com/chuma-beep/mathua/internal/repetition"
 	"github.com/chuma-beep/mathua/internal/scheduler"
 	"github.com/chuma-beep/mathua/internal/scoring"
 	"github.com/chuma-beep/mathua/internal/storage"
@@ -537,6 +538,9 @@ func (e *Engine) accommodatedThreshold(studentID string, base float64) float64 {
 }
 
 func (e *Engine) NextQuestion(sessionID, studentID string) (*Question, error) {
+	if studentID != "" {
+		_ = e.SatisfyImplicitReviews(studentID)
+	}
 	progress, err := e.repo.GetAllProgress(studentID)
 	if err != nil {
 		return nil, fmt.Errorf("load progress: %w", err)
@@ -684,6 +688,9 @@ func (e *Engine) NextQuestion(sessionID, studentID string) (*Question, error) {
 
 // NextReviewQuestion only serves concepts due for spaced-repetition review.
 func (e *Engine) NextReviewQuestion(sessionID, studentID string) (*Question, error) {
+	if studentID != "" {
+		_ = e.SatisfyImplicitReviews(studentID)
+	}
 	progress, err := e.repo.GetAllProgress(studentID)
 	if err != nil {
 		return nil, fmt.Errorf("load progress: %w", err)
@@ -1166,6 +1173,7 @@ func (e *Engine) SubmitAnswer(sessionID, studentID, attemptID, answer string, el
 	}
 
 	newStatus, evidence, err := e.applyGradedAttempt(progress, gradedAttempt{
+		attemptID:      attemptID,
 		studentID:      studentID,
 		conceptID:      sessionFields.conceptID,
 		requiredStreak: sessionFields.requiredStreak,
@@ -1431,6 +1439,7 @@ func (e *Engine) submitAnswerWithTask(studentID, conceptID, answer, expected str
 		}
 	}
 	newStatus, evidence, err := e.applyGradedAttempt(progress, gradedAttempt{
+		attemptID:      fmt.Sprintf("task:%s:%s:%d", studentID, conceptID, nowUTC().UnixNano()),
 		studentID:      studentID,
 		conceptID:      conceptID,
 		requiredStreak: requiredStreak,
@@ -2361,6 +2370,7 @@ func (e *Engine) buildEvidenceWindow(studentID, conceptID string, current master
 
 // gradedAttempt is what one graded answer contributes to a concept's progress.
 type gradedAttempt struct {
+	attemptID      string
 	studentID      string
 	conceptID      string
 	requiredStreak int
@@ -2520,6 +2530,29 @@ func (e *Engine) applyGradedAttempt(progress *storage.ConceptProgress, o gradedA
 		return mastery.Status(progress.Status), evidence, err
 	}
 	e.PropagateWeakness(o.studentID)
+
+	// Allocate implicit repetition credit for encompassed prerequisites
+	if o.correct {
+		if c := e.dag.Concept(o.conceptID); c != nil && len(c.Encompasses) > 0 {
+			if cs, ok := e.repo.(storage.CreditStore); ok {
+				cands := make([]storage.CreditCandidate, 0, len(c.Encompasses))
+				for _, eid := range c.Encompasses {
+					cands = append(cands, storage.CreditCandidate{
+						ConceptID: eid,
+						RawUnits:  repetition.Micro,
+					})
+				}
+				attemptKey := o.attemptID
+				if attemptKey == "" {
+					attemptKey = fmt.Sprintf("attempt:%s:%s:%d", o.studentID, o.conceptID, nowUTC().UnixNano())
+				}
+				if _, _, err := cs.AllocateCredit(o.studentID, attemptKey, 0, cands); err != nil {
+					log.Printf("warning: allocate implicit credit %s/%s: %v", o.studentID, o.conceptID, err)
+				}
+			}
+		}
+	}
+
 	return newStatus, evidence, nil
 }
 

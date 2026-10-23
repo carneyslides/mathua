@@ -115,10 +115,14 @@ func (s *PostgresStore) AllocateCredit(studentID, attemptID string, epoch int64,
 		if err != nil {
 			return CreditAllocation{}, false, err
 		}
-		if targetEpoch != epoch {
+		if epoch > 0 && targetEpoch != epoch {
 			return CreditAllocation{}, false, fmt.Errorf("%w: target %s is at epoch %d, not %d", ErrCreditClosedEpoch, a.ConceptID, targetEpoch, epoch)
 		}
-		acc, err := s.pgAccount(ctx, tx, studentID, a.ConceptID, epoch)
+		useEpoch := targetEpoch
+		if epoch > 0 {
+			useEpoch = epoch
+		}
+		acc, err := s.pgAccount(ctx, tx, studentID, a.ConceptID, useEpoch)
 		if err != nil {
 			return CreditAllocation{}, false, err
 		}
@@ -144,7 +148,7 @@ func (s *PostgresStore) AllocateCredit(studentID, attemptID string, epoch int64,
 				 scaled_units, retained_units, discarded_units, discard_reason, created_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			ON CONFLICT (student_id, source_attempt_id, target_concept_id) DO NOTHING
-		`, studentID, attemptID, a.ConceptID, epoch, a.Units, retained, discarded, reason, time.Now().UTC().UnixNano()); err != nil {
+		`, studentID, attemptID, a.ConceptID, useEpoch, a.Units, retained, discarded, reason, time.Now().UTC().UnixNano()); err != nil {
 			return CreditAllocation{}, false, fmt.Errorf("credit: insert event: %w", err)
 		}
 		for i := int64(0); i < banked; i++ {
@@ -152,12 +156,12 @@ func (s *PostgresStore) AllocateCredit(studentID, attemptID string, epoch int64,
 				INSERT INTO implicit_credit_ordinals
 					(student_id, target_concept_id, credit_epoch, ordinal, state, banked_at, attempts)
 				VALUES ($1, $2, $3, $4, 'banked', $5, 0)
-			`, studentID, a.ConceptID, epoch, int64(acc.Banked)+i+1, time.Now().UTC().UnixNano()); err != nil {
+			`, studentID, a.ConceptID, useEpoch, int64(acc.Banked)+i+1, time.Now().UTC().UnixNano()); err != nil {
 				return CreditAllocation{}, false, fmt.Errorf("credit: insert ordinal: %w", err)
 			}
 		}
 		out.Events = append(out.Events, CreditEvent{
-			AttemptID: attemptID, ConceptID: a.ConceptID, Epoch: epoch,
+			AttemptID: attemptID, ConceptID: a.ConceptID, Epoch: useEpoch,
 			ScaledUnits: a.Units, RetainedUnits: retained, DiscardedUnits: discarded,
 			DiscardReason: reason, Banked: int(banked),
 		})
@@ -201,7 +205,22 @@ func (s *PostgresStore) pgReplayAllocation(ctx context.Context, tx *sql.Tx, stud
 }
 
 func (s *PostgresStore) AccountOf(studentID, conceptID string, epoch int64) (CreditAccount, error) {
-	return s.pgAccount(context.Background(), s.db, studentID, conceptID, epoch)
+	ctx := context.Background()
+	if epoch <= 0 {
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return CreditAccount{}, err
+		}
+		defer tx.Rollback()
+		epoch, err = s.pgTargetEpoch(ctx, tx, studentID, conceptID)
+		if err != nil {
+			return CreditAccount{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return CreditAccount{}, err
+		}
+	}
+	return s.pgAccount(ctx, s.db, studentID, conceptID, epoch)
 }
 
 func (s *PostgresStore) ProjectCredit(studentID, conceptID string, epoch int64, stepDays int, now time.Time) ([]CreditOrdinal, error) {
@@ -214,6 +233,14 @@ func (s *PostgresStore) ProjectCredit(studentID, conceptID string, epoch int64, 
 		return nil, err
 	}
 	defer tx.Rollback()
+
+	if epoch <= 0 {
+		var err error
+		epoch, err = s.pgTargetEpoch(ctx, tx, studentID, conceptID)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	var due sql.NullString
 	if err := tx.QueryRowContext(ctx, `
@@ -404,4 +431,28 @@ func (s *PostgresStore) VoidCreditEvent(studentID, attemptID, conceptID, reason 
 		return fmt.Errorf("credit: void event: %w", err)
 	}
 	return tx.Commit()
+}
+
+func (s *PostgresStore) GetBankedOrdinals(studentID string) (map[string]int, error) {
+	ctx := context.Background()
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT target_concept_id, COUNT(*)
+		FROM implicit_credit_ordinals
+		WHERE student_id = $1 AND state = 'banked'
+		GROUP BY target_concept_id
+	`, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("credit: get banked ordinals: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]int)
+	for rows.Next() {
+		var cid string
+		var count int
+		if err := rows.Scan(&cid, &count); err != nil {
+			return nil, err
+		}
+		out[cid] = count
+	}
+	return out, rows.Err()
 }
