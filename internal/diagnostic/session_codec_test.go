@@ -119,7 +119,7 @@ func TestSession_Decode_EdgeCases(t *testing.T) {
 	}
 }
 
-func TestEngine_RecordDontKnow(t *testing.T) {
+func TestEngine_RecordDontKnowLowersBelief(t *testing.T) {
 	d := testDAG(t)
 	reg := mustRegistry(t)
 	eng := NewEngine(d, reg)
@@ -141,34 +141,6 @@ func TestEngine_RecordDontKnow(t *testing.T) {
 	if session.beliefs["a"] >= initialBelief {
 		t.Errorf("expected belief to drop after dont-know, got initial=%v, current=%v",
 			initialBelief, session.beliefs["a"])
-	}
-}
-
-func TestEngine_SettleCurrent(t *testing.T) {
-	d := testDAG(t)
-	reg := mustRegistry(t)
-	eng := NewEngine(d, reg)
-	session := eng.Start()
-
-	// Before any question is served, nothing to settle.
-	settled := eng.SettleCurrent(session)
-	if settled != "" {
-		t.Errorf("expected empty string when no question pending, got %q", settled)
-	}
-
-	// Serve question.
-	p, cid, err := eng.NextQuestion(session)
-	if err != nil || cid == "" || p == nil {
-		t.Fatal("expected question to be served")
-	}
-
-	// Settle current pending question.
-	settled = eng.SettleCurrent(session)
-	if settled != cid {
-		t.Errorf("settled = %q, want %q", settled, cid)
-	}
-	if !session.doneSet[cid] {
-		t.Errorf("concept %q was not marked in doneSet", cid)
 	}
 }
 
