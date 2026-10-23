@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -866,5 +867,367 @@ func TestActiveSession_DifficultySurvivesTheRoundTrip(t *testing.T) {
 	got, _ = store.GetActiveSession(sess.ID)
 	if got.Difficulty != nil {
 		t.Errorf("unknown session difficulty = %v, want nil", *got.Difficulty)
+	}
+}
+
+func TestGetSession_Lifecycle(t *testing.T) {
+	store := newTestStore(t)
+	st, err := store.CreateStudent("session-student")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+
+	missing, err := store.GetSession("nonexistent-session-id")
+	if err != nil {
+		t.Fatalf("get missing session: %v", err)
+	}
+	if missing != nil {
+		t.Errorf("expected nil for missing session, got %+v", missing)
+	}
+
+	sess, err := store.CreateSession(st.ID)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	got, err := store.GetSession(sess.ID)
+	if err != nil {
+		t.Fatalf("get session: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected session row, got nil")
+	}
+	if got.ID != sess.ID || got.StudentID != st.ID {
+		t.Errorf("got session %+v, want ID=%s StudentID=%s", got, sess.ID, st.ID)
+	}
+	if got.StartedAt.IsZero() {
+		t.Error("expected non-zero StartedAt")
+	}
+}
+
+func TestDeleteActiveSession_Lifecycle(t *testing.T) {
+	store := newTestStore(t)
+	st, _ := store.CreateStudent("del-active-student")
+	sess, _ := store.CreateSession(st.ID)
+
+	diff := 0.75
+	act := &ActiveSession{
+		SessionID:      sess.ID,
+		StudentID:      st.ID,
+		ConceptID:      "linalg.det.2x2",
+		ConceptName:    "Determinant 2x2",
+		ExpectedAnswer: "42",
+		AttemptID:      "attempt-123",
+		Question:       "Compute det?",
+		Difficulty:     &diff,
+	}
+	if err := store.UpsertActiveSession(act); err != nil {
+		t.Fatalf("upsert active session: %v", err)
+	}
+	got, err := store.GetActiveSession(sess.ID)
+	if err != nil || got == nil {
+		t.Fatalf("expected active session, got %+v err=%v", got, err)
+	}
+
+	if err := store.DeleteActiveSession(sess.ID); err != nil {
+		t.Fatalf("delete active session: %v", err)
+	}
+	after, err := store.GetActiveSession(sess.ID)
+	if err != nil {
+		t.Fatalf("get active session after delete: %v", err)
+	}
+	if after != nil {
+		t.Errorf("expected nil after delete, got %+v", after)
+	}
+}
+
+func TestRecentAttemptsForConcept_OrderingAndLimit(t *testing.T) {
+	store := newTestStore(t)
+	st, _ := store.CreateStudent("recent-attempts-student")
+	sess, _ := store.CreateSession(st.ID)
+
+	base := time.Now().UTC().Add(-time.Hour)
+	for i := 1; i <= 5; i++ {
+		_, err := store.RecordAttempt(AttemptEntry{
+			SessionID:      sess.ID,
+			StudentID:      st.ID,
+			ConceptID:      "calc.deriv.power",
+			Answer:         fmt.Sprintf("%d", i),
+			Expected:       fmt.Sprintf("%d", i),
+			Correct:        i%2 == 0,
+			ElapsedSeconds: float64(i + 2),
+			Timestamp:      base.Add(time.Duration(i) * time.Minute),
+			Question:       fmt.Sprintf("derivative power %d", i),
+		})
+		if err != nil {
+			t.Fatalf("record attempt %d: %v", i, err)
+		}
+	}
+
+	if _, err := store.RecordAttempt(AttemptEntry{
+		SessionID:      sess.ID,
+		StudentID:      st.ID,
+		ConceptID:      "other.concept",
+		Answer:         "99",
+		Expected:       "99",
+		Correct:        true,
+		ElapsedSeconds: 5,
+		Timestamp:      base.Add(10 * time.Minute),
+	}); err != nil {
+		t.Fatalf("record other concept attempt: %v", err)
+	}
+
+	recent, err := store.GetRecentAttemptsForConcept(st.ID, "calc.deriv.power", 3)
+	if err != nil {
+		t.Fatalf("get recent attempts: %v", err)
+	}
+	if len(recent) != 3 {
+		t.Fatalf("expected 3 recent attempts, got %d", len(recent))
+	}
+	if recent[0].Answer != "3" || recent[1].Answer != "4" || recent[2].Answer != "5" {
+		t.Errorf("expected attempts 3, 4 and 5 in chronological order, got %s, %s and %s",
+			recent[0].Answer, recent[1].Answer, recent[2].Answer)
+	}
+
+	allRecent, err := store.GetRecentAttemptsForConcept(st.ID, "calc.deriv.power", 0)
+	if err != nil {
+		t.Fatalf("get recent attempts with default limit: %v", err)
+	}
+	if len(allRecent) != 5 {
+		t.Fatalf("expected 5 recent attempts with default limit, got %d", len(allRecent))
+	}
+}
+
+func TestUpdateAttemptCorrect_Lifecycle(t *testing.T) {
+	store := newTestStore(t)
+	st, _ := store.CreateStudent("update-attempt-student")
+	sess, _ := store.CreateSession(st.ID)
+
+	id, err := store.RecordAttempt(AttemptEntry{
+		SessionID:      sess.ID,
+		StudentID:      st.ID,
+		ConceptID:      "arith.add.single",
+		Answer:         "4",
+		Expected:       "5",
+		Correct:        false,
+		ElapsedSeconds: 3,
+		Timestamp:      time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("record attempt: %v", err)
+	}
+
+	if err := store.UpdateAttemptCorrect(id, true); err != nil {
+		t.Fatalf("update attempt correct: %v", err)
+	}
+
+	attempts, err := store.GetAttemptsForStudent(st.ID)
+	if err != nil {
+		t.Fatalf("get attempts: %v", err)
+	}
+	if len(attempts) != 1 {
+		t.Fatalf("expected 1 attempt, got %d", len(attempts))
+	}
+	if !attempts[0].Correct {
+		t.Error("expected attempt correct to be updated to true")
+	}
+}
+
+func TestGetAllAttempts_Ordering(t *testing.T) {
+	store := newTestStore(t)
+	st1, _ := store.CreateStudent("all-attempts-s1")
+	st2, _ := store.CreateStudent("all-attempts-s2")
+	sess1, _ := store.CreateSession(st1.ID)
+	sess2, _ := store.CreateSession(st2.ID)
+
+	base := time.Now().UTC().Add(-time.Hour)
+	_, _ = store.RecordAttempt(AttemptEntry{SessionID: sess2.ID, StudentID: st2.ID, ConceptID: "b", Answer: "2", Expected: "2", Correct: true, Timestamp: base.Add(2 * time.Minute)})
+	_, _ = store.RecordAttempt(AttemptEntry{SessionID: sess1.ID, StudentID: st1.ID, ConceptID: "b", Answer: "1b", Expected: "1b", Correct: true, Timestamp: base.Add(3 * time.Minute)})
+	_, _ = store.RecordAttempt(AttemptEntry{SessionID: sess1.ID, StudentID: st1.ID, ConceptID: "a", Answer: "1a", Expected: "1a", Correct: true, Timestamp: base.Add(1 * time.Minute)})
+
+	all, err := store.GetAllAttempts()
+	if err != nil {
+		t.Fatalf("get all attempts: %v", err)
+	}
+	if len(all) != 3 {
+		t.Fatalf("expected 3 attempts, got %d", len(all))
+	}
+}
+
+func TestQuestions_ImportGetCountAndPurge(t *testing.T) {
+	store := newTestStore(t)
+
+	c, err := store.GetQuestionCount("test.concept.purge")
+	if err != nil {
+		t.Fatalf("get initial count: %v", err)
+	}
+	if c != 0 {
+		t.Errorf("expected 0 initial questions, got %d", c)
+	}
+
+	qs := []Question{
+		{ConceptID: "test.concept.purge", Question: "What is 1+1?", Answer: "2", Explanation: "1+1=2", Source: "generated", Difficulty: 0.1},
+		{ConceptID: "test.concept.purge", Question: "What is 2+2?", Answer: "4", Explanation: "2+2=4", Source: "generated", Difficulty: 0.2},
+		{ConceptID: "test.concept.other", Question: "What is 3+3?", Answer: "6", Explanation: "3+3=6", Source: "generated", Difficulty: 0.3},
+	}
+	if err := store.ImportQuestions(qs); err != nil {
+		t.Fatalf("import questions: %v", err)
+	}
+
+	count, err := store.GetQuestionCount("test.concept.purge")
+	if err != nil {
+		t.Fatalf("get count: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 questions, got %d", count)
+	}
+
+	fetched, err := store.GetQuestions("test.concept.purge", 5)
+	if err != nil {
+		t.Fatalf("get questions: %v", err)
+	}
+	if len(fetched) != 2 {
+		t.Errorf("expected 2 fetched questions, got %d", len(fetched))
+	}
+
+	purged, err := store.PurgeGeneratedQuestions(map[string]bool{"test.concept.purge": true})
+	if err != nil {
+		t.Fatalf("purge questions: %v", err)
+	}
+	if purged != 2 {
+		t.Errorf("expected 2 purged questions, got %d", purged)
+	}
+
+	afterCount, err := store.GetQuestionCount("test.concept.purge")
+	if err != nil {
+		t.Fatalf("get count after purge: %v", err)
+	}
+	if afterCount != 0 {
+		t.Errorf("expected 0 questions after purge, got %d", afterCount)
+	}
+
+	otherCount, err := store.GetQuestionCount("test.concept.other")
+	if err != nil {
+		t.Fatalf("get other count: %v", err)
+	}
+	if otherCount != 1 {
+		t.Errorf("expected 1 question remaining in other concept, got %d", otherCount)
+	}
+
+	zeroPurged, err := store.PurgeGeneratedQuestions(map[string]bool{})
+	if err != nil || zeroPurged != 0 {
+		t.Errorf("expected 0 purged for empty map, got %d err=%v", zeroPurged, err)
+	}
+}
+
+func TestDailyActivity_AggregatesAttempts(t *testing.T) {
+	store := newTestStore(t)
+	st, _ := store.CreateStudent("daily-activity-student")
+	sess, _ := store.CreateSession(st.ID)
+
+	now := time.Now().UTC()
+	today := now.Format("2006-01-02")
+	_, err := store.RecordAttempt(AttemptEntry{
+		SessionID:      sess.ID,
+		StudentID:      st.ID,
+		ConceptID:      "concept.one",
+		Answer:         "1",
+		Expected:       "1",
+		Correct:        true,
+		ElapsedSeconds: 4,
+		Timestamp:      now,
+	})
+	if err != nil {
+		t.Fatalf("record attempt 1: %v", err)
+	}
+	_, err = store.RecordAttempt(AttemptEntry{
+		SessionID:      sess.ID,
+		StudentID:      st.ID,
+		ConceptID:      "concept.two",
+		Answer:         "2",
+		Expected:       "3",
+		Correct:        false,
+		ElapsedSeconds: 6,
+		Timestamp:      now,
+	})
+	if err != nil {
+		t.Fatalf("record attempt 2: %v", err)
+	}
+
+	activities, err := store.GetDailyActivity(st.ID, 7)
+	if err != nil {
+		t.Fatalf("get daily activity: %v", err)
+	}
+	if len(activities) != 1 {
+		t.Fatalf("expected 1 daily activity row, got %d", len(activities))
+	}
+	act := activities[0]
+	if act.Date != today {
+		t.Errorf("expected date %s, got %s", today, act.Date)
+	}
+	if act.Questions != 2 {
+		t.Errorf("expected 2 questions, got %d", act.Questions)
+	}
+	if act.Correct != 1 {
+		t.Errorf("expected 1 correct, got %d", act.Correct)
+	}
+	if len(act.Concepts) != 2 {
+		t.Errorf("expected 2 distinct concepts, got %v", act.Concepts)
+	}
+}
+
+func TestUpdateReportStatus_Lifecycle(t *testing.T) {
+	store := newTestStore(t)
+	st, _ := store.CreateStudent("report-student")
+
+	rep := QuestionReport{
+		ReporterID:  st.ID,
+		ConceptID:   "arith.add.single",
+		Kind:        "question",
+		Question:    "1+1=?",
+		Expected:    "2",
+		Explanation: "1+1=2",
+		Status:      "open",
+	}
+	id, err := store.CreateReport(rep)
+	if err != nil {
+		t.Fatalf("create report: %v", err)
+	}
+
+	if err := store.UpdateReportStatus(id, "resolved"); err != nil {
+		t.Fatalf("update report status: %v", err)
+	}
+
+	if err := store.UpdateReportStatus(9999999, "resolved"); err == nil {
+		t.Error("expected error updating nonexistent report")
+	}
+}
+
+func TestGetAdminUser_Lookup(t *testing.T) {
+	store := newTestStore(t)
+	st, err := store.CreateStudent("admin-lookup-user")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+
+	user, err := store.GetAdminUser(st.ID)
+	if err != nil {
+		t.Fatalf("get admin user: %v", err)
+	}
+	if user == nil {
+		t.Fatal("expected admin user projection, got nil")
+	}
+	if user.ID != st.ID || user.Name != "admin-lookup-user" {
+		t.Errorf("got user %+v, want ID=%s Name=admin-lookup-user", user, st.ID)
+	}
+	if user.Role != RoleStudent {
+		t.Errorf("expected default role student, got %s", user.Role)
+	}
+
+	missing, err := store.GetAdminUser("missing-student-id")
+	if err != nil {
+		t.Fatalf("get missing admin user: %v", err)
+	}
+	if missing != nil {
+		t.Errorf("expected nil for missing admin user, got %+v", missing)
 	}
 }
