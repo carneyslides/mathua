@@ -175,7 +175,7 @@
     "label": "Argument of a complex number",
     "domain": "complex_numbers",
     "subdomain": "complex_numbers.basics",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "complex.ops.modulus",
       "trig.basics.unit_circle"
