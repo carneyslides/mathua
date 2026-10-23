@@ -1,28 +1,12 @@
 package geometry
 
-// Similarity, polygon angles, transformations, and the circle theorems a school geometry course is
-// built on.
-//
-// The domain had the basics, circles, coordinates, quadrilaterals, two solids and five triangle
-// concepts -- but nothing on similar figures at all, nothing on the angle sums of polygons, no
-// transformation, and only two of the circle theorems. Those are the four blocks here.
-//
-// Every answer is an integer by construction: the similarity and dilation factors are whole, the
-// polygon angles come from exact divisions, the chord uses a Pythagorean triple as offsets from the
-// centre, and the special right triangle is the one whose hypotenuse doubles the short leg.
 import (
 	"fmt"
 	"math/rand"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
-
-func smallInt(lo, hi int) int {
-	if hi < lo {
-		hi = lo
-	}
-	return lo + rand.Intn(hi-lo+1)
-}
 
 func registerSimilarity(reg *generator.Registry) {
 	reg.Register("geo.similar.ratio", &similarRatioGen{})
@@ -35,18 +19,22 @@ func registerSimilarity(reg *generator.Registry) {
 	reg.Register("geo.triangle.special_right", &specialRightGen{})
 }
 
-// similarRatioGen asks for a side of the larger of two similar figures, given the scale factor.
+// similarRatioGen asks for a side of the larger of two similar figures given the scale factor.
 type similarRatioGen struct{}
 
 func (g *similarRatioGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	k := 2 + rand.Intn(2+int(ctx.Difficulty*3))
-	a := 2 + rand.Intn(4+int(ctx.Difficulty*6))
+	k := 2 + rand.Intn(4+int(ctx.Difficulty*6))
+	a := 3 + rand.Intn(5+int(ctx.Difficulty*15))
+	ans := k * a
 	return generator.Problem{
-		Question: fmt.Sprintf("Two triangles are similar, and the ratio of a side of the larger to the corresponding side of the smaller is %d. If that side of the smaller triangle is %d, how long is the corresponding side of the larger?", k, a),
-		Answer:   fmt.Sprintf("%d", k*a),
-		Explanation: fmt.Sprintf("Similar figures have every pair of corresponding sides in the same ratio, so the side is %d times %d = %d. The angles are unchanged, which is what makes the figures the same shape rather than the same size.",
-			k, a, k*a),
-		Facts: map[string]string{"side": fmt.Sprintf("%d", k*a), "factor": fmt.Sprintf("%d", k)},
+		Question: fmt.Sprintf("Two triangles are similar: the ratio of a side of the larger to the corresponding side of the smaller is %d. If that side of the smaller triangle is %d, how long is the corresponding side of the larger?", k, a),
+		Answer:   fmt.Sprintf("%d", ans),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. In similar figures with scale ratio k : 1, corresponding sides satisfy s_large = k * s_small. Subgoal 2: Substitute parameters. Substitute scale ratio k = %d and smaller side s_small = %d: s_large = %d * %d. Subgoal 3: Evaluate and simplify. Multiply to find s_large = %d.",
+			k, a, k, a, ans),
+		Facts: map[string]string{
+			"side":   fmt.Sprintf("%d", ans),
+			"factor": fmt.Sprintf("%d", k),
+		},
 	}
 }
 
@@ -54,16 +42,26 @@ func (g *similarRatioGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type similarMissingSideGen struct{}
 
 func (g *similarMissingSideGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	k := 2 + rand.Intn(2+int(ctx.Difficulty*3))
-	a := 2 + rand.Intn(4+int(ctx.Difficulty*5))
-	b := 2 + rand.Intn(4+int(ctx.Difficulty*5))
+	k := 2 + rand.Intn(4+int(ctx.Difficulty*6))
+	a := 3 + rand.Intn(5+int(ctx.Difficulty*15))
+	b := 4 + rand.Intn(6+int(ctx.Difficulty*15))
+	if b == a {
+		b = a + 3
+	}
+	if b == k*a {
+		b = k*a + 2
+	}
+	ans := k * a
 	return generator.Problem{
 		Question: fmt.Sprintf("Two similar triangles have corresponding sides in the ratio %d to 1. In the smaller triangle, one side is %d and another is %d. What is the length, in the larger triangle, of the side corresponding to the %d?", k, a, b, a),
-		Answer:   fmt.Sprintf("%d", k*a),
-		Explanation: fmt.Sprintf("Corresponding sides are proportional, so the larger side is %d times the smaller: %d * %d = %d. The other side given, %d, corresponds to %d in the larger triangle and is not needed.",
-			k, k, a, k*a, b, k*b),
-		Facts: map[string]string{"side": fmt.Sprintf("%d", k*a), "factor": fmt.Sprintf("%d", k),
-			"given": fmt.Sprintf("%d", a)},
+		Answer:   fmt.Sprintf("%d", ans),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. Corresponding sides of similar triangles are proportional: s_large = k * s_small. Subgoal 2: Substitute parameters. Substitute ratio k = %d and corresponding side s_small = %d (with non-corresponding side %d): s_large = %d * %d. Subgoal 3: Evaluate and simplify. Multiply to find s_large = %d.",
+			k, a, b, k, a, ans),
+		Facts: map[string]string{
+			"side":   fmt.Sprintf("%d", ans),
+			"factor": fmt.Sprintf("%d", k),
+			"given":  fmt.Sprintf("%d", a),
+		},
 	}
 }
 
@@ -71,24 +69,39 @@ func (g *similarMissingSideGen) Generate(ctx generator.GeneratorContext) generat
 type dilationGen struct{}
 
 func (g *dilationGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	k := 2 + rand.Intn(3+int(ctx.Difficulty*4))
-	l := 2 + rand.Intn(5+int(ctx.Difficulty*6))
-	shrink := rand.Intn(3) == 0
-	if shrink {
+	k := 2 + rand.Intn(4+int(ctx.Difficulty*6))
+	l := 3 + rand.Intn(5+int(ctx.Difficulty*15))
+	if l == k {
+		l = k + 1
+	}
+
+	if rand.Intn(2) == 0 {
+		// Shrink by 1/k
+		orig := k * l
+		ans := l
 		return generator.Problem{
-			Question: fmt.Sprintf("A segment of length %d is dilated by a factor of 1/%d about a point. How long is its image?", k*l, k),
-			Answer:   fmt.Sprintf("%d", l),
-			Explanation: fmt.Sprintf("A dilation multiplies every length by the factor, here 1/%d: %d / %d = %d. A factor below 1 shrinks the figure but leaves its shape and its angles alone.",
-				k, k*l, k, l),
-			Facts: map[string]string{"length": fmt.Sprintf("%d", l), "factor": fmt.Sprintf("1/%d", k)},
+			Question: fmt.Sprintf("A segment of length %d is dilated by a factor of 1/%d about a point. How long is its image?", orig, k),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula. A dilation with scale factor r transforms segment length L into image length L' = r * L. Subgoal 2: Substitute parameters. Substitute original length L = %d and scale factor r = 1/%d: L' = (1/%d) * %d = %d / %d. Subgoal 3: Evaluate and simplify. Divide to find image length L' = %d.",
+				orig, k, k, orig, orig, k, ans),
+			Facts: map[string]string{
+				"length": fmt.Sprintf("%d", ans),
+				"factor": fmt.Sprintf("1/%d", k),
+			},
 		}
 	}
+
+	// Enlarge by k
+	ans := k * l
 	return generator.Problem{
 		Question: fmt.Sprintf("A segment of length %d is dilated by a factor of %d about a point. How long is its image?", l, k),
-		Answer:   fmt.Sprintf("%d", k*l),
-		Explanation: fmt.Sprintf("A dilation multiplies every length by the factor, so the image is %d times %d = %d. The image is similar to the original, and its orientation is unchanged.",
-			k, l, k*l),
-		Facts: map[string]string{"length": fmt.Sprintf("%d", k*l), "factor": fmt.Sprintf("%d", k)},
+		Answer:   fmt.Sprintf("%d", ans),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. A dilation with scale factor k transforms segment length L into image length L' = k * L. Subgoal 2: Substitute parameters. Substitute original length L = %d and scale factor k = %d: L' = %d * %d. Subgoal 3: Evaluate and simplify. Multiply to find image length L' = %d.",
+			l, k, k, l, ans),
+		Facts: map[string]string{
+			"length": fmt.Sprintf("%d", ans),
+			"factor": fmt.Sprintf("%d", k),
+		},
 	}
 }
 
@@ -96,84 +109,126 @@ func (g *dilationGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type interiorAnglesGen struct{}
 
 func (g *interiorAnglesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	n := 3 + rand.Intn(3+int(ctx.Difficulty*5))
+	n := 3 + rand.Intn(6+int(ctx.Difficulty*20))
+	sum := 180 * (n - 2)
 	return generator.Problem{
 		Question: fmt.Sprintf("What is the sum of the interior angles of a polygon with %d sides, in degrees?", n),
-		Answer:   fmt.Sprintf("%d", 180*(n-2)),
-		Explanation: fmt.Sprintf("Triangulating the polygon from one vertex gives %d - 2 = %d triangles, and each contributes 180 degrees, so the sum is 180 * %d = %d.",
-			n, n-2, n-2, 180*(n-2)),
-		Facts: map[string]string{"sum": fmt.Sprintf("%d", 180*(n-2)), "sides": fmt.Sprintf("%d", n)},
+		Answer:   fmt.Sprintf("%d", sum),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. The sum of interior angles of an n-sided polygon is S = (n - 2) * 180 degrees. Subgoal 2: Substitute parameters. Substitute side count n = %d: S = (%d - 2) * 180 = %d * 180. Subgoal 3: Evaluate and simplify. Multiply to find S = %d degrees.",
+			n, n, n-2, sum),
+		Facts: map[string]string{
+			"sum":   fmt.Sprintf("%d", sum),
+			"sides": fmt.Sprintf("%d", n),
+		},
 	}
 }
 
-// exteriorAngleGen asks for one exterior angle of a regular polygon, which is a whole number of
-// degrees only when the side count divides 360.
+// exteriorAngleGen asks for one exterior angle of a regular polygon with whole-number degrees.
 type exteriorAngleGen struct{}
 
 func (g *exteriorAngleGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	divisors := []int{3, 4, 5, 6, 8, 9, 10, 12}
-	n := divisors[rand.Intn(len(divisors))]
+	divisors := [][]int{
+		{3, 4, 5, 6, 8, 9, 10, 12},
+		{6, 8, 9, 10, 12, 15, 18, 20},
+		{12, 15, 18, 20, 24, 30, 36, 40},
+	}
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	pool := divisors[tier]
+	n := pool[rand.Intn(len(pool))]
+	ans := 360 / n
 	return generator.Problem{
 		Question: fmt.Sprintf("What is the measure, in degrees, of one exterior angle of a regular polygon with %d sides?", n),
-		Answer:   fmt.Sprintf("%d", 360/n),
-		Explanation: fmt.Sprintf("The exterior angles of any polygon add to 360 degrees, and a regular polygon has all of them equal, so each is 360 / %d = %d.",
-			n, 360/n),
-		Facts: map[string]string{"angle": fmt.Sprintf("%d", 360/n), "sides": fmt.Sprintf("%d", n)},
+		Answer:   fmt.Sprintf("%d", ans),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. The exterior angles of any regular polygon with n sides sum to 360 degrees, so each exterior angle is theta = 360 / n degrees. Subgoal 2: Substitute parameters. Substitute number of sides n = %d: theta = 360 / %d. Subgoal 3: Evaluate and simplify. Divide to find theta = %d degrees.",
+			n, n, ans),
+		Facts: map[string]string{
+			"angle": fmt.Sprintf("%d", ans),
+			"sides": fmt.Sprintf("%d", n),
+		},
 	}
 }
 
-// inscribedAngleGen uses the inscribed-angle theorem, with an even central angle so the answer is
-// whole.
+// inscribedAngleGen uses the inscribed-angle theorem with even central angles.
 type inscribedAngleGen struct{}
 
 func (g *inscribedAngleGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	central := 2 * (2 + rand.Intn(4+int(ctx.Difficulty*5)))
+	half := 10 + rand.Intn(15+int(ctx.Difficulty*55))
+	central := 2 * half
+	ans := half
 	return generator.Problem{
 		Question: fmt.Sprintf("An inscribed angle in a circle subtends an arc whose central angle is %d degrees. What is the measure of the inscribed angle, in degrees?", central),
-		Answer:   fmt.Sprintf("%d", central/2),
-		Explanation: fmt.Sprintf("An inscribed angle is half the central angle that subtends the same arc, so it is %d / 2 = %d degrees. That is also why an angle inscribed in a semicircle is a right angle: the central angle there is 180 degrees.",
-			central, central/2),
-		Facts: map[string]string{"angle": fmt.Sprintf("%d", central/2), "central": fmt.Sprintf("%d", central)},
+		Answer:   fmt.Sprintf("%d", ans),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. By the inscribed angle theorem, an inscribed angle measures half its intercepted central angle: theta_inscribed = (1/2) * theta_central. Subgoal 2: Substitute parameters. Substitute central angle theta_central = %d degrees: theta_inscribed = %d / 2. Subgoal 3: Evaluate and simplify. Divide by 2 to find theta_inscribed = %d degrees.",
+			central, central, ans),
+		Facts: map[string]string{
+			"angle":   fmt.Sprintf("%d", ans),
+			"central": fmt.Sprintf("%d", central),
+		},
 	}
 }
 
-// chordGen uses a Pythagorean distance from the centre, so half the chord is whole.
+// chordGen uses a Pythagorean distance from the centre so half the chord is whole.
 type chordGen struct{}
 
 func (g *chordGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	triples := [][3]int{{3, 4, 5}, {6, 8, 10}, {5, 12, 13}, {8, 15, 17}}
-	tr := triples[rand.Intn(len(triples))]
-	// distance from the centre is tr[0], half the chord is tr[1], radius is tr[2]
+	l1, l2, hyp := pythagoreanTriple(ctx.Difficulty)
+	distance, halfChord := l1, l2
+	if rand.Intn(2) == 0 {
+		distance, halfChord = l2, l1
+	}
+	radius := hyp
+	chord := 2 * halfChord
 	return generator.Problem{
-		Question: fmt.Sprintf("A chord of a circle lies %d units from the centre, and the circle's radius is %d. How long is the chord?", tr[0], tr[2]),
-		Answer:   fmt.Sprintf("%d", 2*tr[1]),
-		Explanation: fmt.Sprintf("The perpendicular from the centre bisects the chord, so half the chord, the distance %d and the radius %d form a right triangle: sqrt(%d - %d) = %d, and the chord is twice that, %d.",
-			tr[0], tr[2], tr[2]*tr[2], tr[0]*tr[0], tr[1], 2*tr[1]),
-		Facts: map[string]string{"chord": fmt.Sprintf("%d", 2*tr[1]), "radius": fmt.Sprintf("%d", tr[2]),
-			"distance": fmt.Sprintf("%d", tr[0])},
+		Question: fmt.Sprintf("A chord of a circle lies %d units from the centre with a circle radius of %d. How long is the chord?", distance, radius),
+		Answer:   fmt.Sprintf("%d", chord),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. The perpendicular from circle center to a chord bisects the chord, forming a right triangle with radius r as hypotenuse, distance d as one leg and half-chord h as the other leg: d^2 + h^2 = r^2, so h = sqrt(r^2 - d^2) and chord length is c = 2h. Subgoal 2: Substitute parameters. Substitute distance d = %d and radius r = %d: h = sqrt(%d^2 - %d^2) = sqrt(%d - %d) = sqrt(%d). Subgoal 3: Evaluate and simplify. Calculate half-chord h = %d, then double it to find chord length c = 2 * %d = %d.",
+			distance, radius, radius, distance, radius*radius, distance*distance, radius*radius-distance*distance, halfChord, halfChord, chord),
+		Facts: map[string]string{
+			"chord":    fmt.Sprintf("%d", chord),
+			"radius":   fmt.Sprintf("%d", radius),
+			"distance": fmt.Sprintf("%d", distance),
+		},
 	}
 }
 
-// specialRightGen uses the 30-60-90 triangle, whose hypotenuse is twice the short leg.
+// specialRightGen uses the 30-60-90 triangle with hypotenuse twice the short leg.
 type specialRightGen struct{}
 
 func (g *specialRightGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := 2 + rand.Intn(5+int(ctx.Difficulty*6))
 	if rand.Intn(2) == 0 {
+		// Short leg given, find hypotenuse
+		a := 3 + rand.Intn(10+int(ctx.Difficulty*20))
+		if a == 15 || a == 30 || a == 45 || a == 60 || a == 90 {
+			a += 2
+		}
+		c := 2 * a
 		return generator.Problem{
 			Question: fmt.Sprintf("A 30-60-90 triangle has its shortest leg %d units long. How long is the hypotenuse?", a),
-			Answer:   fmt.Sprintf("%d", 2*a),
-			Explanation: fmt.Sprintf("In a 30-60-90 triangle the hypotenuse is twice the shortest leg, because the short leg is opposite the 30 degree angle: 2 * %d = %d. The other leg would be %d times the square root of 3.",
-				a, 2*a, a),
-			Facts: map[string]string{"hypotenuse": fmt.Sprintf("%d", 2*a), "short_leg": fmt.Sprintf("%d", a)},
+			Answer:   fmt.Sprintf("%d", c),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula. In a 30-60-90 special right triangle, side ratios are 1 : sqrt(3) : 2, so the hypotenuse is twice the shortest leg: c = 2a. Subgoal 2: Substitute parameters. Substitute shortest leg a = %d: c = 2 * %d. Subgoal 3: Evaluate and simplify. Multiply to find hypotenuse c = %d.",
+				a, a, c),
+			Facts: map[string]string{
+				"hypotenuse": fmt.Sprintf("%d", c),
+				"short_leg":  fmt.Sprintf("%d", a),
+			},
 		}
 	}
-	b := 2 * (1 + rand.Intn(4+int(ctx.Difficulty*5)))
+
+	// Hypotenuse given, find short leg
+	half := 3 + rand.Intn(10+int(ctx.Difficulty*20))
+	if half == 15 || half == 30 || half == 45 || half == 60 || half == 90 {
+		half += 2
+	}
+	c := 2 * half
+	a := half
 	return generator.Problem{
-		Question: fmt.Sprintf("A 30-60-90 triangle has a hypotenuse %d units long. How long is its shortest leg?", b),
-		Answer:   fmt.Sprintf("%d", b/2),
-		Explanation: fmt.Sprintf("The shortest leg is opposite the 30 degree angle and is half the hypotenuse: %d / 2 = %d.",
-			b, b/2),
-		Facts: map[string]string{"hypotenuse": fmt.Sprintf("%d", b), "short_leg": fmt.Sprintf("%d", b/2)},
+		Question: fmt.Sprintf("A 30-60-90 triangle has a hypotenuse %d units long. How long is its shortest leg?", c),
+		Answer:   fmt.Sprintf("%d", a),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. In a 30-60-90 special right triangle, the shortest leg opposite the 30 degree angle is half the hypotenuse: a = c / 2. Subgoal 2: Substitute parameters. Substitute hypotenuse c = %d: a = %d / 2. Subgoal 3: Evaluate and simplify. Divide to find shortest leg a = %d.",
+			c, c, a),
+		Facts: map[string]string{
+			"hypotenuse": fmt.Sprintf("%d", c),
+			"short_leg":  fmt.Sprintf("%d", a),
+		},
 	}
 }

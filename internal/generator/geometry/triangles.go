@@ -1,19 +1,11 @@
 package geometry
 
-// Triangle facts and the solid volumes.
-//
-// The triangle inequality is what decides whether three lengths can close, the midsegment and the
-// area ratio are the two consequences of similarity a school course uses most, the tangent length is
-// the circle fact that turns into a right triangle, and the pyramid is the solid whose volume
-// carries the one-third that a prism's does not.
-//
-// Every answer is an integer by construction, and each concept ships an authored solution schema
-// because geometry is one of the six learner domains.
 import (
 	"fmt"
 	"math/rand"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func registerTriangles(reg *generator.Registry) {
@@ -23,85 +15,147 @@ func registerTriangles(reg *generator.Registry) {
 	reg.Register("geo.solid.pyramid_volume", &pyramidVolumeGen{})
 }
 
-// triangleInequalityGen asks for the longest or shortest whole third side of a triangle given two
-// sides, which is the inequality read as a bound.
+// pythagoreanTriple returns (leg1, leg2, hypotenuse) dynamically scaled with difficulty.
+func pythagoreanTriple(difficulty float64) (int, int, int) {
+	bases := [][2]int{
+		{2, 1}, // 3, 4, 5
+		{3, 2}, // 5, 12, 13
+		{4, 1}, // 15, 8, 17
+		{4, 3}, // 7, 24, 25
+		{5, 2}, // 21, 20, 29
+		{5, 4}, // 9, 40, 41
+		{6, 1}, // 35, 12, 37
+		{6, 5}, // 11, 60, 61
+		{7, 2}, // 45, 28, 53
+		{7, 4}, // 33, 56, 65
+		{7, 6}, // 13, 84, 85
+		{8, 1}, // 63, 16, 65
+		{8, 3}, // 55, 48, 73
+		{8, 5}, // 39, 80, 89
+	}
+	tier := mathutil.DifficultyTier(difficulty)
+	maxBase := 4 + tier*4
+	if maxBase > len(bases) {
+		maxBase = len(bases)
+	}
+	base := bases[rand.Intn(maxBase)]
+	m, n := base[0], base[1]
+	l1 := m*m - n*n
+	l2 := 2 * m * n
+	hyp := m*m + n*n
+	scale := 1 + rand.Intn(1+int(difficulty*5))
+	return l1 * scale, l2 * scale, hyp * scale
+}
+
+// triangleInequalityGen asks for the largest or smallest whole third side of a triangle given two sides.
 type triangleInequalityGen struct{}
 
 func (g *triangleInequalityGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := 2 + rand.Intn(5+int(ctx.Difficulty*6))
-	b := 2 + rand.Intn(5+int(ctx.Difficulty*6))
-	if a > b {
-		a, b = b, a
+	a := 3 + rand.Intn(5+int(ctx.Difficulty*15))
+	diff := 2 + rand.Intn(4+int(ctx.Difficulty*12))
+	if diff == a-1 {
+		diff++
 	}
+	b := a + diff
+	bound := a + b
+	difference := b - a
+
 	if rand.Intn(2) == 0 {
-		// the largest whole side, which must be strictly less than the other two added
+		// Largest whole third side
+		ans := bound - 1
 		return generator.Problem{
 			Question: fmt.Sprintf("Two sides of a triangle are %d and %d. What is the largest whole number the third side can be?", a, b),
-			Answer:   fmt.Sprintf("%d", a+b-1),
-			Explanation: fmt.Sprintf("The triangle inequality requires each side to be less than the sum of the other two, so the third side must be below %d + %d = %d. The largest whole number below that is %d.",
-				a, b, a+b, a+b-1),
-			Facts: map[string]string{"side": fmt.Sprintf("%d", a+b-1), "given_a": fmt.Sprintf("%d", a),
-				"given_b": fmt.Sprintf("%d", b), "bound": fmt.Sprintf("%d", a+b),
-				"difference": fmt.Sprintf("%d", b-a)},
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula. By the triangle inequality, third side c must satisfy |a - b| < c < a + b. Subgoal 2: Substitute parameters. Substitute a = %d and b = %d: |%d - %d| = %d < c < %d + %d = %d. Subgoal 3: Evaluate and simplify. The third side must be strictly less than %d, so the largest whole number is %d - 1 = %d.",
+				a, b, a, b, difference, a, b, bound, bound, bound, ans),
+			Facts: map[string]string{
+				"side":       fmt.Sprintf("%d", ans),
+				"given_a":    fmt.Sprintf("%d", a),
+				"given_b":    fmt.Sprintf("%d", b),
+				"bound":      fmt.Sprintf("%d", bound),
+				"difference": fmt.Sprintf("%d", difference),
+			},
 		}
 	}
-	// the smallest whole side, which must exceed the difference
+
+	// Smallest whole third side
+	ans := difference + 1
 	return generator.Problem{
 		Question: fmt.Sprintf("Two sides of a triangle are %d and %d. What is the smallest whole number the third side can be?", a, b),
-		Answer:   fmt.Sprintf("%d", b-a+1),
-		Explanation: fmt.Sprintf("The third side must be longer than the difference of the other two, which is %d - %d = %d, so the smallest whole number above that is %d.",
-			b, a, b-a, b-a+1),
-		Facts: map[string]string{"side": fmt.Sprintf("%d", b-a+1), "given_a": fmt.Sprintf("%d", a),
-			"given_b": fmt.Sprintf("%d", b), "difference": fmt.Sprintf("%d", b-a),
-			"bound": fmt.Sprintf("%d", a+b)},
+		Answer:   fmt.Sprintf("%d", ans),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. By the triangle inequality, third side c must satisfy |a - b| < c < a + b. Subgoal 2: Substitute parameters. Substitute a = %d and b = %d: |%d - %d| = %d < c < %d + %d = %d. Subgoal 3: Evaluate and simplify. The third side must be strictly greater than %d, so the smallest whole number is %d + 1 = %d.",
+			a, b, a, b, difference, a, b, bound, difference, difference, ans),
+		Facts: map[string]string{
+			"side":       fmt.Sprintf("%d", ans),
+			"given_a":    fmt.Sprintf("%d", a),
+			"given_b":    fmt.Sprintf("%d", b),
+			"difference": fmt.Sprintf("%d", difference),
+			"bound":      fmt.Sprintf("%d", bound),
+		},
 	}
 }
 
-// areaRatioGen asks for the area ratio of similar figures, which is the square of the length ratio.
+// areaRatioGen computes the area scaling ratio from linear similarity factor.
 type areaRatioGen struct{}
 
 func (g *areaRatioGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	k := 2 + rand.Intn(3+int(ctx.Difficulty*4))
+	k := 2 + rand.Intn(6+int(ctx.Difficulty*16))
+	areaRatio := k * k
 	return generator.Problem{
-		Question: fmt.Sprintf("Two figures are similar, and a side of the larger is %d times the corresponding side of the smaller. How many times larger is the larger figure's area?", k),
-		Answer:   fmt.Sprintf("%d", k*k),
-		Explanation: fmt.Sprintf("Areas scale by the square of the length ratio, because a figure has two dimensions: %d^2 = %d. A ratio of volumes would scale by the cube for the same reason.",
-			k, k*k),
-		Facts: map[string]string{"factor": fmt.Sprintf("%d", k), "area_ratio": fmt.Sprintf("%d", k*k)},
+		Question: fmt.Sprintf("Two figures are similar with a side of the larger %d times the corresponding side of the smaller. How many times larger is the larger figure's area?", k),
+		Answer:   fmt.Sprintf("%d", areaRatio),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. Areas of similar figures scale quadratically with linear factor k: A_ratio = k^2. Subgoal 2: Substitute parameters. Substitute linear scale factor k = %d: A_ratio = %d^2. Subgoal 3: Evaluate and simplify. Compute %d^2 = %d.",
+			k, k, k, areaRatio),
+		Facts: map[string]string{
+			"factor":     fmt.Sprintf("%d", k),
+			"area_ratio": fmt.Sprintf("%d", areaRatio),
+		},
 	}
 }
 
-// tangentLengthGen uses the right angle between a tangent and its radius, with a Pythagorean
-// distance from the external point.
+// tangentLengthGen computes tangent segment length to circle from external point.
 type tangentLengthGen struct{}
 
 func (g *tangentLengthGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	triples := [][3]int{{3, 4, 5}, {6, 8, 10}, {5, 12, 13}, {8, 15, 17}}
-	tr := triples[rand.Intn(len(triples))]
-	// radius tr[0], tangent length tr[1], distance from the point to the centre tr[2]
+	l1, l2, hyp := pythagoreanTriple(ctx.Difficulty)
+	radius, tangent := l1, l2
+	if rand.Intn(2) == 0 {
+		radius, tangent = l2, l1
+	}
+	distance := hyp
 	return generator.Problem{
-		Question: fmt.Sprintf("A point lies %d units from the centre of a circle of radius %d. A tangent is drawn from the point, touching the circle. How long is the tangent segment?", tr[2], tr[0]),
-		Answer:   fmt.Sprintf("%d", tr[1]),
-		Explanation: fmt.Sprintf("A tangent meets the radius at a right angle, so the radius %d, the tangent and the distance %d form a right triangle: sqrt(%d - %d) = %d.",
-			tr[0], tr[2], tr[2]*tr[2], tr[0]*tr[0], tr[1]),
-		Facts: map[string]string{"tangent": fmt.Sprintf("%d", tr[1]), "radius": fmt.Sprintf("%d", tr[0]),
-			"distance": fmt.Sprintf("%d", tr[2])},
+		Question: fmt.Sprintf("A point lies %d units from the centre of a circle of radius %d. A tangent is drawn from the point, touching the circle. How long is the tangent segment?", distance, radius),
+		Answer:   fmt.Sprintf("%d", tangent),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. A tangent segment meets the radius at a right angle, forming a right triangle where center distance d is hypotenuse, radius r is one leg and tangent segment t is the other leg: r^2 + t^2 = d^2, so t = sqrt(d^2 - r^2). Subgoal 2: Substitute parameters. Substitute radius r = %d and distance d = %d: t = sqrt(%d^2 - %d^2) = sqrt(%d - %d). Subgoal 3: Evaluate and simplify. Subtract under radical: t = sqrt(%d) = %d.",
+			radius, distance, distance, radius, distance*distance, radius*radius, distance*distance-radius*radius, tangent),
+		Facts: map[string]string{
+			"tangent":  fmt.Sprintf("%d", tangent),
+			"radius":   fmt.Sprintf("%d", radius),
+			"distance": fmt.Sprintf("%d", distance),
+		},
 	}
 }
 
-// pyramidVolumeGen uses the one-third in the pyramid volume, with a base area divisible by three.
+// pyramidVolumeGen computes volume of pyramid with one-third multiplier.
 type pyramidVolumeGen struct{}
 
 func (g *pyramidVolumeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	h := 1 + rand.Intn(4+int(ctx.Difficulty*4))
-	// base area is 3h' so the third is exact
-	base := 3 * (1 + rand.Intn(4+int(ctx.Difficulty*4)))
+	h := 2 + rand.Intn(5+int(ctx.Difficulty*15))
+	if h == 3 {
+		h = 4
+	}
+	baseFactor := 2 + rand.Intn(5+int(ctx.Difficulty*18))
+	base := 3 * baseFactor
+	vol := base * h / 3
 	return generator.Problem{
 		Question: fmt.Sprintf("A pyramid has a base of area %d square units and a height of %d units. What is its volume, in cubic units?", base, h),
-		Answer:   fmt.Sprintf("%d", base*h/3),
-		Explanation: fmt.Sprintf("A pyramid's volume is one third of the prism with the same base and height: %d * %d / 3 = %d. The third is the whole difference from a prism, and it holds for any pyramid, not just the square-based ones.",
-			base, h, base*h/3),
-		Facts: map[string]string{"volume": fmt.Sprintf("%d", base*h/3), "base": fmt.Sprintf("%d", base),
-			"height": fmt.Sprintf("%d", h)},
+		Answer:   fmt.Sprintf("%d", vol),
+		Explanation: fmt.Sprintf("Subgoal 1: State governing formula. The volume of a pyramid is one third the product of its base area and height: V = (1/3) * B * h. Subgoal 2: Substitute parameters. Substitute base area B = %d and height h = %d: V = (1/3) * %d * %d = (%d * %d) / 3. Subgoal 3: Evaluate and simplify. Multiply and divide by 3: %d / 3 = %d.",
+			base, h, base, h, base, h, base*h, vol),
+		Facts: map[string]string{
+			"volume": fmt.Sprintf("%d", vol),
+			"base":   fmt.Sprintf("%d", base),
+			"height": fmt.Sprintf("%d", h),
+		},
 	}
 }
