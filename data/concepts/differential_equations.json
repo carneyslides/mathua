@@ -152,7 +152,7 @@
     "label": "Linear systems and phase portraits",
     "domain": "differential_equations",
     "subdomain": "differential_equations.systems",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "ode.adv.systems"
     ],

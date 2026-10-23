@@ -477,19 +477,70 @@ func (g *convolutionGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type linearPhaseGen struct{}
 
 func (g *linearPhaseGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type qa struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		a := smallInt(-5, 5)
+		d := smallInt(-5, 5)
+		b := smallInt(-4, 4)
+		c := smallInt(-4, 4)
+		ans := a*d - b*c
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the planar linear autonomous system \\(x' = Ax\\) with \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\), compute the determinant \\(\\det(A)\\).", a, b, c, d),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The determinant of matrix \\(A\\) is \\(\\det(A) = (%d)(%d) - (%d)(%d) = %d\\).", a, d, b, c, ans),
+		}
+	case 1:
+		a := smallInt(-6, 6)
+		d := smallInt(-6, 6)
+		ans := a + d
+		b := smallInt(-4, 4)
+		c := smallInt(-4, 4)
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the planar linear system \\(x' = Ax\\) with \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\), compute the trace \\(\\operatorname{tr}(A)\\).", a, b, c, d),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The trace is the sum of diagonal elements: \\(\\operatorname{tr}(A) = %d + (%d) = %d\\).", a, d, ans),
+		}
+	case 2:
+		a := smallInt(-4, 4)
+		d := smallInt(-4, 4)
+		b := smallInt(-3, 3)
+		c := smallInt(-3, 3)
+		tau := a + d
+		delta := a*d - b*c
+		ans := tau*tau - 4*delta
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the planar linear autonomous system \\(x' = Ax\\) with \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\), compute the characteristic discriminant \\(\\mathcal{D} = \\tau^2 - 4\\Delta\\), where \\(\\tau = \\operatorname{tr}(A)\\) and \\(\\Delta = \\det(A)\\).", a, b, c, d),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The trace is \\(\\tau = %d\\) and the determinant is \\(\\Delta = %d\\). The discriminant is \\(\\tau^2 - 4\\Delta = (%d)^2 - 4(%d) = %d\\).", tau, delta, tau, delta, ans),
+		}
+	case 3:
+		l1 := smallInt(-6, 6)
+		l2 := smallInt(-6, 6)
+		for l2 == l1 {
+			l2 = smallInt(-6, 6)
+		}
+		b := smallInt(1, 5)
+		ans := max(l1, l2)
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the planar system \\(x' = \\begin{pmatrix} %d & %d \\\\ 0 & %d \\end{pmatrix} x\\), what is the larger eigenvalue \\(\\lambda_{\\max}\\)?", l1, b, l2),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("For an upper triangular matrix, the eigenvalues are the diagonal entries %d and %d. The larger eigenvalue is %d.", l1, l2, ans),
+		}
+	default:
+		d := smallInt(-6, 6)
+		for d == 0 {
+			d = smallInt(-6, 6)
+		}
+		b := smallInt(-4, 4)
+		c := smallInt(-4, 4)
+		ans := -d
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the planar system \\(x' = \\begin{pmatrix} k & %d \\\\ %d & %d \\end{pmatrix} x\\), find the parameter value \\(k\\) that yields zero trace \\(\\operatorname{tr}(A) = 0\\).", b, c, d),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The trace is \\(\\operatorname{tr}(A) = k + (%d) = 0\\), which yields \\(k = %d\\).", d, ans),
+		}
 	}
-	templates := []qa{
-		{q: "For \\(x' = Ax\\) with \\(A=[[2,0],[0,-3]]\\), the eigenvalues are 2 and -3. What type is the origin? (saddle/node/spiral)", a: "saddle", e: "One positive, one negative eigenvalue gives a saddle."},
-		{q: "For \\(x' = Ax\\) with eigenvalues \\(-1, -2\\), what type is the origin? (saddle/node/spiral)", a: "node", e: "Both eigenvalues negative and real gives a stable node."},
-		{q: "If eigenvalues are \\(0.5 \\pm 2i\\), what type is the origin? (saddle/node/spiral)", a: "spiral", e: "Complex pair with positive real part gives an unstable spiral."},
-		{q: "Does the phase portrait of a linear system depend on eigenvalues of \\(A\\)? (yes/no)", a: "yes", e: "The eigenvalues classify the equilibrium: node, saddle, spiral, or centre."},
-	}
-	t := templates[rand.Intn(len(templates))]
-	return generator.Problem{Question: t.q, Answer: t.a, Explanation: t.e}
 }
 
 type eulerGen struct{}
