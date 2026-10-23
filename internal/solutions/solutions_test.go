@@ -215,3 +215,60 @@ func TestRender_LeavesMatrixNotationAlone(t *testing.T) {
 		t.Errorf("a capitalised name should be left literal, got %q", got)
 	}
 }
+
+func TestUnresolved(t *testing.T) {
+	// Case 1: Placeholders extracted cleanly
+	text := "Compute [[first_var]] plus [[second_var]] to get result."
+	unresolved := Unresolved(text)
+	if len(unresolved) != 2 || unresolved[0] != "first_var" || unresolved[1] != "second_var" {
+		t.Errorf("expected [first_var second_var], got %v", unresolved)
+	}
+
+	// Case 2: Matrix notation and unclosed brackets ignored
+	matrixText := "Matrix [[1,2],[3,4]] alongside unclosed [[trailing"
+	if got := Unresolved(matrixText); len(got) != 0 {
+		t.Errorf("expected no placeholders in matrix text, got %v", got)
+	}
+
+	// Case 3: Plain text without brackets
+	if got := Unresolved("plain text with no brackets"); len(got) != 0 {
+		t.Errorf("expected empty slice for plain text, got %v", got)
+	}
+}
+
+func TestLoader_NilAccessors(t *testing.T) {
+	var l *Loader
+	if c := l.Concepts(); c != nil {
+		t.Errorf("expected nil concepts from nil loader, got %v", c)
+	}
+	if s, ok := l.Schema("any"); ok || s != nil {
+		t.Errorf("expected nil schema from nil loader, got %v, %v", s, ok)
+	}
+}
+
+func TestLoad_DuplicateAndInferredID(t *testing.T) {
+	dir := t.TempDir()
+
+	// Inferred concept ID from filename when concept field is omitted
+	inferredSchema := `{"setup":"hello","answer":"world"}`
+	write(t, dir, "inferred.concept.json", inferredSchema)
+
+	// Duplicate concept schema
+	dup1 := `{"concept":"shared.id","answer":"first"}`
+	dup2 := `{"concept":"shared.id","answer":"second"}`
+	write(t, dir, "dup1.json", dup1)
+	write(t, dir, "dup2.json", dup2)
+
+	l, err := Load(dir)
+	if err == nil {
+		t.Fatal("expected error on duplicate schema, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate schema for \"shared.id\"") {
+		t.Errorf("expected duplicate error message, got %v", err)
+	}
+
+	// Inferred concept is still loaded in loader
+	if s, ok := l.Schema("inferred.concept"); !ok || s == nil || s.Answer != "world" {
+		t.Errorf("expected inferred.concept loaded, got %+v (ok=%v)", s, ok)
+	}
+}
