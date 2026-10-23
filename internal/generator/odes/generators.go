@@ -393,48 +393,90 @@ func (g *laplaceGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 type systemsGen struct{}
 
 func (g *systemsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type qa struct {
-		q string
-		a string
-		e string
-	}
-	templates := []qa{
-		{
-			q: "A system of 2 first-order ODEs represents how many unknown functions? (enter a number)",
-			a: "2",
-			e: "Each first-order ODE typically describes the derivative of one unknown function, so 2 equations means 2 unknown functions.",
-		},
-		{
-			q: "A system of 3 first-order ODEs represents how many unknown functions? (enter a number)",
-			a: "3",
-			e: "Each first-order ODE typically describes the derivative of one unknown function, so 3 equations means 3 unknown functions.",
-		},
-		{
-			q: "\\(dx/dt = 2x\\), \\(dy/dt = 3y\\). Are \\(x\\) and \\(y\\) independent? (yes/no)",
-			a: "yes",
-			e: "The equations are uncoupled: \\(dx/dt\\) depends only on \\(x\\), and \\(dy/dt\\) depends only on \\(y\\). Each can be solved independently.",
-		},
-		{
-			q: "\\(dx/dt = x + y\\), \\(dy/dt = x - y\\). Is this a coupled system? (yes/no)",
-			a: "yes",
-			e: "Yes, because \\(dx/dt\\) depends on \\(y\\) and \\(dy/dt\\) depends on \\(x\\). The equations must be solved together.",
-		},
-		{
-			q: "Can a system of two first-order ODEs be converted into a single second-order ODE? (yes/no)",
-			a: "yes",
-			e: "Yes, by differentiating one equation and substituting the other, you can eliminate one variable to obtain a single higher-order ODE.",
-		},
-		{
-			q: "Does \\(dx/dt = 2x\\) represent a system of differential equations? (yes/no)",
-			a: "no",
-			e: "This is a single differential equation, not a system. A system requires at least two equations.",
-		},
-	}
-	t := templates[rand.Intn(len(templates))]
-	return generator.Problem{
-		Question:    t.q,
-		Answer:      t.a,
-		Explanation: t.e,
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Trace of coefficient matrix A: tr(A) = a + d
+		a := smallInt(1, 6)
+		b := smallInt(1, 6)
+		c := smallInt(1, 6)
+		d := smallInt(1, 6)
+		tr := a + d
+		return generator.Problem{
+			Question: fmt.Sprintf("For the linear system of differential equations \\(x' = %d x + %d y\\) and \\(y' = %d x + %d y\\), what is the trace \\(\\operatorname{tr}(A)\\) of the coefficient matrix \\(A\\)?", a, b, c, d),
+			Answer:   fmt.Sprintf("%d", tr),
+			Explanation: fmt.Sprintf(
+				"The coefficient matrix is \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\). The trace is the sum of the diagonal entries: \\(\\operatorname{tr}(A) = %d + %d = %d\\).",
+				a, b, c, d, a, d, tr,
+			),
+		}
+
+	case 1:
+		// Determinant of coefficient matrix A: det(A) = a*d - b*c
+		a := smallInt(1, 5)
+		b := smallInt(1, 5)
+		c := smallInt(1, 5)
+		d := smallInt(1, 5)
+		detA := a*d - b*c
+		return generator.Problem{
+			Question: fmt.Sprintf("For the linear system \\(x' = %d x + %d y\\) and \\(y' = %d x + %d y\\), what is the determinant \\(\\det(A)\\) of the coefficient matrix \\(A\\)?", a, b, c, d),
+			Answer:   fmt.Sprintf("%d", detA),
+			Explanation: fmt.Sprintf(
+				"The coefficient matrix is \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\). Its determinant is \\(\\det(A) = (%d)(%d) - (%d)(%d) = %d - %d = %d\\).",
+				a, b, c, d, a, d, b, c, a*d, b*c, detA,
+			),
+		}
+
+	case 2:
+		// Triangular matrix eigenvalues: max(lambda1, lambda2)
+		l1 := smallInt(1, 5)
+		l2 := l1 + smallInt(1, 4)
+		b := smallInt(1, 6)
+		maxL := l2
+		return generator.Problem{
+			Question: fmt.Sprintf("For the coupled system \\(x' = %d x + %d y\\) and \\(y' = %d y\\), what is the largest eigenvalue \\(\\lambda_{\\max}\\) of the system matrix?", l1, b, l2),
+			Answer:   fmt.Sprintf("%d", maxL),
+			Explanation: fmt.Sprintf(
+				"The coefficient matrix \\(A = \\begin{pmatrix} %d & %d \\\\ 0 & %d \\end{pmatrix}\\) is upper triangular, so its eigenvalues are the diagonal entries %d and %d. The largest eigenvalue is %d.",
+				l1, b, l2, l1, l2, maxL,
+			),
+		}
+
+	case 3:
+		// Uncoupled system initial velocity squared: [x'(0)]^2 + [y'(0)]^2
+		a := smallInt(1, 4)
+		b := smallInt(1, 4)
+		x0 := smallInt(1, 3)
+		y0 := smallInt(1, 3)
+		vx := a * x0
+		vy := b * y0
+		vSq := vx*vx + vy*vy
+		return generator.Problem{
+			Question: fmt.Sprintf("For the system \\(x' = %d x\\) and \\(y' = %d y\\) with initial conditions \\(x(0) = %d\\) and \\(y(0) = %d\\), what is the squared initial speed \\([x'(0)]^2 + [y'(0)]^2\\)?", a, b, x0, y0),
+			Answer:   fmt.Sprintf("%d", vSq),
+			Explanation: fmt.Sprintf(
+				"At \\(t = 0\\), the velocity components are \\(x'(0) = %d(%d) = %d\\) and \\(y'(0) = %d(%d) = %d\\). The squared initial speed is \\((%d)^2 + (%d)^2 = %d + %d = %d\\).",
+				a, x0, vx, b, y0, vy, vx, vy, vx*vx, vy*vy, vSq,
+			),
+		}
+
+	default:
+		// Phase portrait discriminant D = tau^2 - 4*Delta
+		a := smallInt(1, 4)
+		b := smallInt(1, 3)
+		c := smallInt(1, 3)
+		d := smallInt(1, 4)
+		tau := a + d
+		detA := a*d - b*c
+		disc := tau*tau - 4*detA
+		return generator.Problem{
+			Question: fmt.Sprintf("For the planar linear system with coefficient matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\), what is the discriminant \\(D = \\tau^2 - 4\\Delta\\) that classifies the phase portrait?", a, b, c, d),
+			Answer:   fmt.Sprintf("%d", disc),
+			Explanation: fmt.Sprintf(
+				"The trace is \\(\\tau = %d + %d = %d\\) and determinant is \\(\\Delta = (%d)(%d) - (%d)(%d) = %d - %d = %d\\). The discriminant is \\(D = \\tau^2 - 4\\Delta = (%d)^2 - 4(%d) = %d - %d = %d\\).",
+				a, d, tau, a, d, b, c, a*d, b*c, detA, tau, detA, tau*tau, 4*detA, disc,
+			),
+		}
 	}
 }
 
