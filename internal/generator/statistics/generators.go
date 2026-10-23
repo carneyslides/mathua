@@ -757,24 +757,120 @@ func (g *geometricDistGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type hypergeometricGen struct{}
 
 func (g *hypergeometricGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"How does Hypergeometric differ from Binomial?", "sampling without replacement", "Hypergeometric: sampling without replacement; Binomial: with replacement."},
-		{"How many parameters define the Hypergeometric distribution? (enter a number)", "3", "Hypergeometric(N, K, n): population size N, K successes, n draws: three parameters."},
-		{"Hypergeometric(N=10,K=4,n=5): what is the expected value? (enter a number)", "2", "E[X] = nK/N = 5·4/10 = 2 (n × proportion of successes)."},
-		{"In Hypergeometric, draws are ____.", "dependent (without replacement)", "Each draw changes the composition of the remaining population."},
-		{"Is the support of Hypergeometric finite? (yes/no)", "yes", "The number of successes drawn cannot exceed K or n: finitely many values."},
-		{"As N → ∞ with K/N fixed, Hypergeometric approaches which distribution?", "Binomial", "When N is large, sampling without replacement approximates Binomial."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type expItem struct {
+			nTotal int
+			k      int
+			n      int
+		}
+		items := []expItem{
+			{20, 8, 5},
+			{30, 12, 10},
+			{40, 16, 15},
+			{50, 20, 25},
+			{24, 6, 12},
+			{36, 9, 16},
+			{50, 15, 20},
+			{60, 24, 15},
+		}
+		it := items[rand.Intn(len(items))]
+		mean := it.n * it.k / it.nTotal
+		return generator.Problem{
+			Question: fmt.Sprintf("An urn contains %d total items including %d marked items. If a random sample of %d items is drawn without replacement, find the expected number of marked items \\(E[X]\\).", it.nTotal, it.k, it.n),
+			Answer:   fmt.Sprintf("%d", mean),
+			Explanation: fmt.Sprintf("The expected number of marked items in hypergeometric sampling without replacement is \\(E[X] = n \\frac{K}{N} = %d \\times \\frac{%d}{%d} = %d\\).",
+				it.n, it.k, it.nTotal, mean),
+		}
+	case 1:
+		type failItem struct {
+			nTotal int
+			k      int
+			n      int
+		}
+		items := []failItem{
+			{20, 8, 5},
+			{30, 12, 10},
+			{40, 16, 15},
+			{50, 20, 25},
+			{60, 24, 15},
+		}
+		it := items[rand.Intn(len(items))]
+		nonDef := it.nTotal - it.k
+		expNonDef := it.n * nonDef / it.nTotal
+		return generator.Problem{
+			Question: fmt.Sprintf("A batch of %d items contains %d defective items and %d non-defective items. If %d items are sampled without replacement, what is the expected number of non-defective items in the sample?", it.nTotal, it.k, nonDef, it.n),
+			Answer:   fmt.Sprintf("%d", expNonDef),
+			Explanation: fmt.Sprintf("The expected number of non-defective items is \\(E[X_{\\text{non-def}}] = n \\frac{N - K}{N} = %d \\times \\frac{%d}{%d} = %d\\).",
+				it.n, nonDef, it.nTotal, expNonDef),
+		}
+	case 2:
+		type maxItem struct {
+			nTotal int
+			k      int
+			n      int
+			max    int
+		}
+		items := []maxItem{
+			{25, 4, 8, 4},
+			{30, 5, 9, 5},
+			{20, 9, 6, 6},
+			{40, 6, 12, 6},
+			{35, 14, 8, 8},
+			{50, 7, 15, 7},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("From a population of \\(N = %d\\) containing \\(K = %d\\) target items, a random sample of \\(n = %d\\) is selected without replacement. What is the theoretical maximum number of target items that can appear in the sample?", it.nTotal, it.k, it.n),
+			Answer:   fmt.Sprintf("%d", it.max),
+			Explanation: fmt.Sprintf("The number of observed target items cannot exceed the total target items in the population \\(K = %d\\) or the sample size \\(n = %d\\): \\(\\max(X) = \\min(n, K) = \\min(%d, %d) = %d\\).",
+				it.k, it.n, it.n, it.k, it.max),
+		}
+	case 3:
+		type minItem struct {
+			nTotal int
+			k      int
+			n      int
+			min    int
+		}
+		items := []minItem{
+			{20, 15, 8, 3},
+			{25, 20, 9, 4},
+			{30, 24, 10, 4},
+			{35, 28, 12, 5},
+			{40, 32, 14, 6},
+		}
+		it := items[rand.Intn(len(items))]
+		nonTarget := it.nTotal - it.k
+		return generator.Problem{
+			Question: fmt.Sprintf("A committee of %d members contains %d seniors and %d juniors. If a subcommittee of %d members is chosen at random without replacement, what is the minimum number of seniors that must be on the subcommittee?", it.nTotal, it.k, nonTarget, it.n),
+			Answer:   fmt.Sprintf("%d", it.min),
+			Explanation: fmt.Sprintf("Even if all %d juniors were selected, the remaining seats must be filled by seniors: \\(\\min(X) = \\max(0, n - (N - K)) = %d - (%d - %d) = %d - %d = %d\\).",
+				nonTarget, it.n, it.nTotal, it.k, it.n, nonTarget, it.min),
+		}
+	default:
+		type combItem struct {
+			nTotal int
+			n      int
+			comb   int
+		}
+		items := []combItem{
+			{6, 2, 15},
+			{7, 2, 21},
+			{7, 3, 35},
+			{8, 2, 28},
+			{8, 3, 56},
+			{9, 2, 36},
+			{10, 2, 45},
+			{10, 3, 120},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("In a hypergeometric experiment with total population size \\(N = %d\\), how many distinct unordered samples of size \\(n = %d\\) can be drawn without replacement?", it.nTotal, it.n),
+			Answer:   fmt.Sprintf("%d", it.comb),
+			Explanation: fmt.Sprintf("The total number of possible samples is given by the combination formula \\(\\binom{N}{n} = \\binom{%d}{%d} = \\frac{%d!}{%d!(%d - %d)!} = %d\\).",
+				it.nTotal, it.n, it.nTotal, it.n, it.nTotal, it.n, it.comb),
+		}
 	}
 }
 
