@@ -2,8 +2,15 @@
   "concept": "alg.rational.complex_fraction",
   "setup": "You are simplifying the complex fraction $[[expr]]$.",
   "steps": [
-    {"fact": "num_eval", "say": "Simplify the numerator $[[top]]$ to get $[[num_eval]]$."},
-    {"fact": "reciprocal", "say": "Multiply the numerator by the reciprocal of the denominator: $[[num_part]] \\times [[reciprocal]]$."}
+    {
+      "fact": "num_eval",
+      "say": "Simplify the numerator $[[top]]$ to get $[[num_eval]]$.",
+      "optional": true
+    },
+    {
+      "fact": "reciprocal",
+      "say": "Multiply the numerator by the reciprocal of the denominator: $[[num_part]] \\times [[reciprocal]]$."
+    }
   ],
-  "answer": "Simplifying gives $[[answer]]$."
+  "answer": "Simplifying gives [[answer]]."
 }
