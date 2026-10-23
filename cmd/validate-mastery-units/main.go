@@ -15,6 +15,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/chuma-beep/mathua/internal/concepts"
@@ -25,15 +26,20 @@ func main() {
 	path := flag.String("path", concepts.MasteryUnitsPath, "mastery unit partition to validate")
 	flag.Parse()
 
-	dag, err := concepts.LoadDir("data/concepts")
-	if err != nil {
+	if err := run(*strict, *path, "data/concepts", os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "FAIL: %v\n", err)
 		os.Exit(1)
 	}
-	mu, err := concepts.LoadMasteryUnits(*path)
+}
+
+func run(strict bool, path, conceptsDir string, stdout, stderr io.Writer) error {
+	dag, err := concepts.LoadDir(conceptsDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "FAIL: %v\n", err)
-		os.Exit(1)
+		return err
+	}
+	mu, err := concepts.LoadMasteryUnits(path)
+	if err != nil {
+		return err
 	}
 
 	findings := concepts.ValidateMasteryUnits(dag, mu)
@@ -41,28 +47,27 @@ func main() {
 	anoms := concepts.Anomalies(findings)
 
 	back := concepts.BackwardBandEdges(mu, dag)
-	fmt.Printf("OK: %d concepts partitioned into %d units at band width %d\n",
+	fmt.Fprintf(stdout, "OK: %d concepts partitioned into %d units at band width %d\n",
 		mu.ConceptCount, mu.UnitCount, mu.BandWidth)
 	for _, f := range anoms {
-		fmt.Printf("  anomaly: %s: %s\n", f.Kind, f.Detail)
+		fmt.Fprintf(stdout, "  anomaly: %s: %s\n", f.Kind, f.Detail)
 	}
 	for _, e := range back {
-		fmt.Printf("  backward: %s needs %s (band %d needs band %d)\n",
+		fmt.Fprintf(stdout, "  backward: %s needs %s (band %d needs band %d)\n",
 			e.ConceptID, e.PrereqID, e.Band, e.PrereqBand)
 	}
 
 	if len(errs) > 0 {
 		for _, f := range errs {
-			fmt.Fprintf(os.Stderr, "  error: %s: %s\n", f.Kind, f.Detail)
+			fmt.Fprintf(stderr, "  error: %s: %s\n", f.Kind, f.Detail)
 		}
-		fmt.Fprintf(os.Stderr, "FAIL: %d partition error(s)\n", len(errs))
-		os.Exit(1)
+		return fmt.Errorf("%d partition error(s)", len(errs))
 	}
-	if *strict && len(anoms) > 0 {
-		fmt.Fprintf(os.Stderr, "FAIL: --strict and %d anomaly/anomalies\n", len(anoms))
-		os.Exit(1)
+	if strict && len(anoms) > 0 {
+		return fmt.Errorf("--strict and %d anomaly/anomalies", len(anoms))
 	}
 	if len(anoms) > 0 {
-		fmt.Printf("  (%d anomaly/anomalies reported, not failed; pass --strict to promote)\n", len(anoms))
+		fmt.Fprintf(stdout, "  (%d anomaly/anomalies reported, not failed; pass --strict to promote)\n", len(anoms))
 	}
+	return nil
 }
