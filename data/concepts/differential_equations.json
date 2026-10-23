@@ -279,7 +279,7 @@
     "label": "Green's functions",
     "domain": "differential_equations",
     "subdomain": "differential_equations.transforms",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "ode.transforms.fourier"
     ],

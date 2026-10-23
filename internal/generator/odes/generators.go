@@ -831,41 +831,81 @@ func (g *heatGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type greenFunctionGen struct{}
 
 func (g *greenFunctionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Scaled Green's function L * G(x, xi) = min(x, xi) * (L - max(x, xi))
+		L := smallInt(6, 12)
+		x := smallInt(1, L-1)
+		xi := smallInt(1, L-1)
+		mn := x
+		mx := xi
+		if xi < x {
+			mn = xi
+			mx = x
+		}
+		ans := mn * (L - mx)
+		return generator.Problem{
+			Question: fmt.Sprintf("For the boundary value problem \\(-y'' = f(x)\\) on \\([0, %d]\\) with Dirichlet conditions \\(y(0) = y(%d) = 0\\), the Green's function satisfies \\(L \\cdot G(x, \\xi) = \\min(x, \\xi)(L - \\max(x, \\xi))\\). Evaluate the integer quantity \\(%d \\cdot G(%d, %d)\\).", L, L, L, x, xi),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"For \\(-y'' = f(x)\\) on \\([0, %d]\\), \\(G(x, \\xi) = \\frac{\\min(x, \\xi)(%d - \\max(x, \\xi))}{%d}\\). With \\(x = %d\\) and \\(\\xi = %d\\), the minimum is %d and the maximum is %d. Thus \\(%d \\cdot G(%d, %d) = %d(%d - %d) = %d \\cdot %d = %d\\).",
+				L, L, L, x, xi, mn, mx, L, x, xi, mn, L, mx, mn, L-mx, ans,
+			),
+		}
+
+	case 1:
+		// Derivative jump discontinuity magnitude
+		return generator.Problem{
+			Question: "For the differential operator \\(L[y] = y''\\) governed by \\(y''(x) = \\delta(x - \\xi)\\), what is the jump discontinuity magnitude \\(\\left|\\left.\\frac{dG}{dx}\\right|_{x=\\xi^+} - \\left.\\frac{dG}{dx}\\right|_{x=\\xi^-}\\right|\\) across the point source \\(x = \\xi\\)?",
+			Answer:   "1",
+			Explanation: "Integrating the equation \\(G''(x, \\xi) = \\delta(x - \\xi)\\) over the infinitesimal interval \\((\\xi - \\epsilon, \\xi + \\epsilon)\\) yields \\(G'(\\xi^+) - G'(\\xi^-) = \\int_{\\xi-\\epsilon}^{\\xi+\\epsilon} \\delta(x-\\xi)\\,dx = 1\\). The jump magnitude is exactly 1.",
+		}
+
+	case 2:
+		// Midpoint deflection under constant load: y(m) = c * m^2
+		m := smallInt(1, 4)
+		L := 2 * m
+		c := smallInt(1, 5)
+		k := 2 * c
+		ans := c * m * m
+		return generator.Problem{
+			Question: fmt.Sprintf("A structural rod governed by \\(-y'' = %d\\) on \\([0, %d]\\) with boundary values \\(y(0) = y(%d) = 0\\) has deflection given by \\(y(x) = \\int_0^{%d} G(x, \\xi)(%d)\\,d\\xi\\). Evaluate the midpoint deflection \\(y(%d)\\).", k, L, L, L, k, m),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Integrating \\(-y'' = %d\\) twice with \\(y(0) = y(%d) = 0\\) yields \\(y(x) = \\frac{%d}{2}x(%d - x) = %d x(%d - x)\\). Evaluating at the midpoint \\(x = %d\\) gives \\(y(%d) = %d(%d)(%d - %d) = %d(%d)(%d) = %d\\).",
+				k, L, k, L, c, L, m, m, c, m, L, m, c, m, m, ans,
+			),
+		}
+
+	case 3:
+		// First-order causal impulse jump
+		a := smallInt(1, 5)
+		k := smallInt(2, 9)
+		t0 := smallInt(1, 5)
+		return generator.Problem{
+			Question: fmt.Sprintf("For the relaxation system \\(y' + %dy = %d \\delta(t - %d)\\) with initial rest state \\(y(0) = 0\\), what is the response value \\(y(%d^+)\\) immediately after the impulse?", a, k, t0, t0),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf(
+				"Integrating \\(y' + %dy = %d\\delta(t - %d)\\) across the impulse yields a jump of \\(y(%d^+) - y(%d^-) = %d\\). Because the system is initially at rest with \\(y(%d^-) = 0\\), the post-impulse state is \\(y(%d^+) = %d\\).",
+				a, k, t0, t0, t0, k, t0, t0, k,
+			),
+		}
+
+	default:
+		// Self-adjoint reciprocity relation
+		x1 := smallInt(1, 4)
+		xi1 := smallInt(5, 9)
+		val := smallInt(2, 25)
+		return generator.Problem{
+			Question: fmt.Sprintf("A self-adjoint boundary value problem has symmetric Green's function \\(G(x, \\xi)\\). If \\(G(%d, %d) = %d\\), what is the value of \\(G(%d, %d)\\)?", x1, xi1, val, xi1, x1),
+			Answer:   fmt.Sprintf("%d", val),
+			Explanation: fmt.Sprintf(
+				"By the reciprocity theorem for self-adjoint differential operators, the Green's function is symmetric: \\(G(x, \\xi) = G(\\xi, x)\\). Therefore \\(G(%d, %d) = G(%d, %d) = %d\\).",
+				xi1, x1, x1, xi1, val,
+			),
+		}
 	}
-	easy := []entry{
-		{"Is Green's function the inverse of differential operator? (yes/no)", "yes", "Integral operator inverts L."},
-		{"Is Green's function symmetric for self-adjoint L? (yes/no)", "yes", "Reciprocity G(x,ξ)=G(ξ,x)."},
-	}
-	// Parameterized production: G for y'' = f, y(0) = y(1) = 0 in eighths.
-	pts := [][2]int{{2, 4}, {2, 6}, {4, 6}, {6, 2}}
-	pt := pts[rand.Intn(len(pts))]
-	x8, y8 := pt[0], pt[1]
-	mn, mx := x8, y8
-	if y8 < x8 {
-		mn, mx = y8, x8
-	}
-	num := mn * (8 - mx) // G = min(1-max)/1 in units of 1/64
-	easy = append(easy, entry{
-		q: fmt.Sprintf("For y'' = f with y(0) = y(1) = 0, G(x,ξ) = x(1-ξ) for x<ξ. What is G(%d/8,%d/8)? (type a decimal like 0.125)", x8, y8),
-		a: fmt.Sprintf("%g", float64(num)/64),
-		e: fmt.Sprintf("G = min·(1-max) = %d/8·%d/8 = %d/64 = %g.", mn, 8-mx, num, float64(num)/64),
-	})
-	hard := []entry{
-		{"Does jump condition give G' discontinuity of 1 at x=ξ? (yes/no)", "yes", "Integrating across δ jump."},
-		{"Does eigenfunction expansion give G(x,ξ)=∑ φ_n(x)φ_n(ξ)/λ_n? (yes/no)", "yes", "Spectral representation."},
-		{"Does Green's function for y''=f with y(0)=y(1)=0 equal piecewise linear? (yes/no)", "yes", "G(x,ξ)=x(1-ξ) for x<ξ, ξ(1-x) for x>ξ."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type sturmLiouvilleGen struct{}
