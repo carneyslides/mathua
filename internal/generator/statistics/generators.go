@@ -1006,24 +1006,126 @@ func (g *bayesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type continuousRVGen struct{}
 
 func (g *continuousRVGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"What is the probability of a continuous random variable taking any single value?", "0", "P(X = a) = 0 for continuous random variables."},
-		{"What function gives probabilities for a continuous random variable via areas?", "probability density function (PDF)", "P(a ≤ X ≤ b) = ∫ₐᵇ f(x)dx."},
-		{"Is the CDF equal to P(X <= x), the probability of being less than or equal to x? (yes/no)", "yes", "The CDF gives the probability of being less than or equal to x."},
-		{"Is the CDF the integral of the PDF? (yes/no)", "yes", "CDF(x) is the integral of the PDF up to x, and PDF is the derivative of the CDF."},
-		{"For a valid PDF, what must ∫_{-∞}^{∞} f(x)dx equal?", "1", "Total probability under the PDF must be 1."},
-		{"Is the PDF of a continuous variable always ≤ 1?", "no", "The PDF can be > 1 as long as the total area is 1."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type pointItem struct {
+			c int
+		}
+		items := []pointItem{
+			{3},
+			{7},
+			{12},
+			{25},
+			{40},
+			{65},
+			{80},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X\\) be a continuous random variable with probability density function \\(f(x)\\). What is the exact value of \\(P(X = %d)\\)?", it.c),
+			Answer:   "0",
+			Explanation: fmt.Sprintf("For every continuous random variable, the probability of taking any single exact point is zero: \\(P(X = %d) = \\int_{%d}^{%d} f(x)\\,dx = 0\\).",
+				it.c, it.c, it.c),
+		}
+	case 1:
+		type triItem struct {
+			b   int
+			b2  int
+			x0  int
+			pct int
+		}
+		items := []triItem{
+			{10, 100, 5, 25},
+			{10, 100, 6, 36},
+			{10, 100, 7, 49},
+			{10, 100, 8, 64},
+			{10, 100, 9, 81},
+			{20, 400, 10, 25},
+			{20, 400, 14, 49},
+			{20, 400, 16, 64},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A continuous random variable \\(X\\) has probability density function \\(f(x) = \\frac{2x}{%d}\\) on the interval \\([0, %d]\\). Calculate the cumulative probability \\(P(X \\le %d)\\) as an integer percentage.", it.b2, it.b, it.x0),
+			Answer:   fmt.Sprintf("%d", it.pct),
+			Explanation: fmt.Sprintf("Integrating the density function yields \\(P(X \\le %d) = \\int_{0}^{%d} \\frac{2x}{%d}\\,dx = \\left[ \\frac{x^2}{%d} \\right]_{0}^{%d} = \\frac{%d}{%d} = %d\\%%\\).",
+				it.x0, it.x0, it.b2, it.b2, it.x0, it.x0*it.x0, it.b2, it.pct),
+		}
+	case 2:
+		type cdfDiffItem struct {
+			a  int
+			b  int
+			fa int
+			fb int
+		}
+		items := []cdfDiffItem{
+			{2, 6, 25, 75},
+			{1, 5, 15, 80},
+			{3, 8, 30, 90},
+			{2, 7, 20, 85},
+			{0, 4, 10, 70},
+			{4, 9, 35, 95},
+			{1, 6, 18, 68},
+			{2, 8, 22, 72},
+		}
+		it := items[rand.Intn(len(items))]
+		diff := it.fb - it.fa
+		return generator.Problem{
+			Question: fmt.Sprintf("A continuous random variable \\(X\\) has cumulative distribution function \\(F(x)\\). If \\(F(%d) = %d\\%%\\) and \\(F(%d) = %d\\%%\\), what is \\(P(%d \\le X \\le %d)\\) as an integer percentage?", it.a, it.fa, it.b, it.fb, it.a, it.b),
+			Answer:   fmt.Sprintf("%d", diff),
+			Explanation: fmt.Sprintf("By the fundamental property of cumulative distribution functions, \\(P(%d \\le X \\le %d) = F(%d) - F(%d) = %d\\%% - %d\\%% = %d\\%%\\).",
+				it.a, it.b, it.b, it.a, it.fb, it.fa, diff),
+		}
+	case 3:
+		type tailItem struct {
+			x   int
+			pct int
+		}
+		items := []tailItem{
+			{5, 60},
+			{8, 75},
+			{10, 85},
+			{4, 70},
+			{12, 90},
+			{7, 65},
+			{9, 82},
+			{15, 95},
+		}
+		it := items[rand.Intn(len(items))]
+		comp := 100 - it.pct
+		return generator.Problem{
+			Question: fmt.Sprintf("For a continuous random variable \\(X\\) with CDF \\(F(x)\\), the probability \\(P(X \\le %d) = %d\\%%\\). Find the tail probability \\(P(X > %d)\\) as an integer percentage.", it.x, it.pct, it.x),
+			Answer:   fmt.Sprintf("%d", comp),
+			Explanation: fmt.Sprintf("The complement rule for cumulative distributions gives \\(P(X > %d) = 100\\%% - P(X \\le %d) = 100\\%% - %d\\%% = %d\\%%\\).",
+				it.x, it.x, it.pct, comp),
+		}
+	default:
+		type unifItem struct {
+			a   int
+			b   int
+			c   int
+			d   int
+			pct int
+		}
+		items := []unifItem{
+			{0, 50, 10, 30, 40},
+			{0, 40, 8, 28, 50},
+			{10, 60, 25, 40, 30},
+			{0, 100, 25, 75, 50},
+			{20, 70, 35, 55, 40},
+			{0, 25, 5, 15, 40},
+			{10, 50, 18, 38, 50},
+			{0, 20, 6, 14, 40},
+		}
+		it := items[rand.Intn(len(items))]
+		lenSub := it.d - it.c
+		lenTot := it.b - it.a
+		return generator.Problem{
+			Question: fmt.Sprintf("A continuous variable \\(X\\) is uniformly distributed over \\([%d, %d]\\). What is the probability \\(P(%d \\le X \\le %d)\\) as an integer percentage?", it.a, it.b, it.c, it.d),
+			Answer:   fmt.Sprintf("%d", it.pct),
+			Explanation: fmt.Sprintf("For a continuous uniform distribution, \\(P(%d \\le X \\le %d) = \\frac{%d - %d}{%d - %d} = \\frac{%d}{%d} = %d\\%%\\).",
+				it.c, it.d, it.d, it.c, it.b, it.a, lenSub, lenTot, it.pct),
+		}
 	}
 }
 
