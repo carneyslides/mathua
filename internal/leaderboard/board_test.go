@@ -227,3 +227,72 @@ func TestPublicID_IsStableAndNonReversible(t *testing.T) {
 		t.Errorf("username not preferred: %s", got)
 	}
 }
+
+func TestBoard_ViewAndPageBounds(t *testing.T) {
+	repo := testRepo(t)
+	comp := NewComputer(repo)
+	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+
+	// Unknown view returns error
+	if _, err := comp.Board("", "monthly", 1, 10, now); err == nil {
+		t.Fatal("expected error for unknown view")
+	}
+
+	// Page size <= 0 resets to DefaultPageSize (50)
+	b, err := comp.Board("", ViewAllTime, 0, 0, now)
+	if err != nil {
+		t.Fatalf("Board: %v", err)
+	}
+	if b.PageSize != DefaultPageSize {
+		t.Errorf("PageSize = %d, want %d", b.PageSize, DefaultPageSize)
+	}
+	if b.Page != 1 {
+		t.Errorf("Page = %d, want 1", b.Page)
+	}
+
+	// Page size > MaxPageSize resets to DefaultPageSize
+	b, err = comp.Board("", ViewAllTime, 1, MaxPageSize+100, now)
+	if err != nil {
+		t.Fatalf("Board: %v", err)
+	}
+	if b.PageSize != DefaultPageSize {
+		t.Errorf("PageSize = %d, want %d", b.PageSize, DefaultPageSize)
+	}
+
+	// Anonymous call leaves Me as nil
+	if b.Me != nil {
+		t.Errorf("expected Me to be nil for anonymous call, got %+v", b.Me)
+	}
+}
+
+func TestDisplayNameAndAvatarFor(t *testing.T) {
+	if got := displayName(""); got != "Learner" {
+		t.Errorf("displayName('') = %q, want 'Learner'", got)
+	}
+	if got := displayName("Alice"); got != "Alice" {
+		t.Errorf("displayName('Alice') = %q, want 'Alice'", got)
+	}
+
+	// Custom upload without username falls back to raw AvatarURL
+	av1 := avatarFor(storage.LeaderboardRow{
+		AvatarURL:      "https://example.com/avatar.png",
+		AvatarSettings: `{"custom":true}`,
+	}, "user1")
+	if av1.Kind != "custom" || av1.URL != "https://example.com/avatar.png" {
+		t.Errorf("av1 = %+v", av1)
+	}
+
+	// Generated avatar with custom style
+	av2 := avatarFor(storage.LeaderboardRow{
+		AvatarSettings: `{"avatar_dicebear":{"style":"bottts"}}`,
+	}, "user2")
+	if av2.Kind != "generated" || av2.Style != "bottts" {
+		t.Errorf("av2 = %+v", av2)
+	}
+
+	// Default fallback
+	av3 := avatarFor(storage.LeaderboardRow{}, "user3")
+	if av3.Kind != "generated" || av3.Style != "notionists" {
+		t.Errorf("av3 = %+v", av3)
+	}
+}
