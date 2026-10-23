@@ -455,40 +455,74 @@ func (g *transformationsGen) Generate(ctx generator.GeneratorContext) generator.
 type spanGen struct{}
 
 func (g *spanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
-	if rand.Intn(2) == 0 {
-		v1, v2 := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-		w1, w2 := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-		if v1 == 0 && v2 == 0 {
-			v1, v2 = 1, 0
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Dimension of span of two vectors in R^2
+		dependent := rand.Intn(2) == 0
+		if dependent {
+			v1 := smallInt(1, 4)
+			v2 := smallInt(1, 4)
+			m := smallInt(2, 4)
+			w1 := m * v1
+			w2 := m * v2
+			return generator.Problem{
+				Question:    fmt.Sprintf("What is the dimension of the subspace \\(\\operatorname{span}\\{(%d,%d), (%d,%d)\\}\\) in \\(\\mathbb{R}^2\\)?", v1, v2, w1, w2),
+				Answer:      "1",
+				Explanation: fmt.Sprintf("The second vector is %d times the first vector, so they are linearly dependent. The dimension of their span is 1.", m),
+			}
 		}
-		if w1 == 0 && w2 == 0 {
-			w1, w2 = 0, 1
-		}
-		det := v1*w2 - v2*w1
-		answer := "no"
-		if det != 0 {
-			answer = "yes"
-		}
+		v1 := smallInt(1, 4)
+		v2 := 0
+		w1 := 0
+		w2 := smallInt(1, 4)
 		return generator.Problem{
-			Question:    fmt.Sprintf("Do the vectors \\(v=(%d,%d)\\) and \\(w=(%d,%d)\\) span \\(\\mathbb{R}^{2}\\)?", v1, v2, w1, w2),
-			Answer:      answer,
-			Explanation: fmt.Sprintf("det([[%d,%d],[%d,%d]]) = %d. Since determinant is %s, the vectors %s span R².", v1, v2, w1, w2, det, map[bool]string{true: "nonzero", false: "zero"}[det != 0], answer),
+			Question:    fmt.Sprintf("What is the dimension of the subspace \\(\\operatorname{span}\\{(%d,%d), (%d,%d)\\}\\) in \\(\\mathbb{R}^2\\)?", v1, v2, w1, w2),
+			Answer:      "2",
+			Explanation: "The determinant of the two vectors is nonzero, so they are linearly independent and span a 2-dimensional subspace.",
 		}
-	}
-	k := rand.Intn(max(1, scale)) + 2
-	if rand.Intn(2) == 0 {
-		k = -k
-	}
-	v1, v2 := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-	if v1 == 0 && v2 == 0 {
-		v1, v2 = 1, 2
-	}
-	w1, w2 := k*v1, k*v2
-	return generator.Problem{
-		Question:    fmt.Sprintf("Do the vectors \\(v=(%d,%d)\\) and \\(w=(%d,%d)\\) span \\(\\mathbb{R}^{2}\\)?", v1, v2, w1, w2),
-		Answer:      "no",
-		Explanation: fmt.Sprintf("w = %d*v, so the vectors are linearly dependent. Two dependent vectors cannot span R².", k),
+	case 1:
+		// Linear combination scalar c
+		c := smallInt(2, 6+int(ctx.Difficulty*3))
+		x := smallInt(1, 5)
+		y := smallInt(1, 5)
+		cx := c * x
+		cy := c * y
+		return generator.Problem{
+			Question:    fmt.Sprintf("Find the scalar \\(c\\) such that \\((%d,%d) = c(%d,%d)\\), showing that \\((%d,%d)\\) lies in \\(\\operatorname{span}\\{(%d,%d)\\}\\).", cx, cy, x, y, cx, cy, x, y),
+			Answer:      fmt.Sprintf("%d", c),
+			Explanation: fmt.Sprintf("Equating coordinates gives \\(%d = c(%d)\\), which yields \\(c = %d\\).", cx, x, c),
+		}
+	case 2:
+		// Parameter k making vectors linearly dependent
+		a := smallInt(1, 4)
+		b := smallInt(1, 4)
+		m := smallInt(2, 4)
+		cVal := m * a
+		k := m * b
+		return generator.Problem{
+			Question:    fmt.Sprintf("For what integer value of \\(k\\) do the vectors \\(v = (%d,%d)\\) and \\(w = (%d,k)\\) fail to span \\(\\mathbb{R}^2\\)?", a, b, cVal),
+			Answer:      fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("The vectors fail to span \\(\\mathbb{R}^2\\) when their determinant is zero: \\((%d)(k) - (%d)(%d) = 0\\), which gives \\(k = %d\\).", a, b, cVal, k),
+		}
+	case 3:
+		// Dimension of 3 vectors with 0 in z coordinate
+		x := smallInt(1, 5)
+		y := smallInt(1, 5)
+		return generator.Problem{
+			Question:    fmt.Sprintf("Consider the vectors \\(v_1 = (1,0,0)\\), \\(v_2 = (0,1,0)\\) and \\(v_3 = (%d,%d,0)\\). What is the dimension of \\(\\operatorname{span}\\{v_1, v_2, v_3\\}\\)?", x, y),
+			Answer:      "2",
+			Explanation: "All three vectors lie in the xy-plane because their z-components are zero. The first two vectors form a basis for that plane, so the dimension is 2.",
+		}
+	default:
+		// Span of k standard basis vectors in R^n
+		k := smallInt(2, 4+int(ctx.Difficulty*2))
+		n := k + smallInt(1, 3)
+		return generator.Problem{
+			Question:    fmt.Sprintf("Let \\(S\\) be a subset of %d distinct standard unit basis vectors in \\(\\mathbb{R}^{%d}\\). What is the dimension of \\(\\operatorname{span}(S)\\)?", k, n),
+			Answer:      fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("Distinct standard basis vectors are mutually orthogonal and linearly independent. Therefore %d such vectors span a subspace of dimension %d.", k, k),
+		}
 	}
 }
 

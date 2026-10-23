@@ -207,7 +207,7 @@
     "label": "Span and linear independence",
     "domain": "linear_algebra",
     "subdomain": "linear_algebra.vectors",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "linalg.vector.add",
       "linalg.det.2x2"
