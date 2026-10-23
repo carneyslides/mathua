@@ -59,7 +59,7 @@ func (g *curlGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	var a, b, curlVal int
 	var q, ex string
 	for {
-		maxBound := 2 + tier*3
+		maxBound := 6 + tier*4
 		a = small(1, maxBound)
 		b = small(1, maxBound)
 		if tier > 0 && rand.Intn(2) == 0 {
@@ -139,7 +139,7 @@ func (g *conservativeTestGen) Generate(ctx generator.GeneratorContext) generator
 	var b, c, diffVal int
 	var q, ex string
 	for {
-		maxBound := 3 + tier*3
+		maxBound := 6 + tier*4
 		b = small(1, maxBound)
 		c = small(1, maxBound)
 		if tier > 0 && rand.Intn(2) == 0 {
@@ -214,7 +214,7 @@ func (g *transformJacobianGen) Generate(ctx generator.GeneratorContext) generato
 	var a, b, c, d, det int
 	var q, ex string
 	for {
-		maxBound := 3 + tier*2
+		maxBound := 5 + tier*3
 		a = small(1, maxBound)
 		b = small(1, maxBound)
 		c = small(1, maxBound)
@@ -256,7 +256,7 @@ func (g *doubleIntegralRegionGen) Generate(ctx generator.GeneratorContext) gener
 	var a, areaVal int
 	var q, ex string
 	for {
-		maxBound := 3 + tier*3
+		maxBound := 7 + tier*4
 		k := small(2, maxBound)
 		a = 2 * k
 		areaVal = a * a / 2
@@ -290,7 +290,7 @@ func (g *saddleTestGen) Generate(ctx generator.GeneratorContext) generator.Probl
 	var a, b, discVal int
 	var q, ex string
 	for {
-		maxBound := 3 + tier*2
+		maxBound := 5 + tier*3
 		a = small(1, maxBound)
 		b = small(1, maxBound)
 		if tier > 0 && rand.Intn(2) == 0 {
@@ -327,7 +327,7 @@ func (g *lagrangeGen) Generate(ctx generator.GeneratorContext) generator.Problem
 	var s, halfS, maxVal int
 	var q, ex string
 	for {
-		maxBound := 3 + tier*4
+		maxBound := 8 + tier*5
 		k := small(3, maxBound)
 		s = 2 * k
 		halfS = s / 2

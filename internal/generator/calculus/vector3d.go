@@ -25,7 +25,7 @@ func (g *divergenceTheoremGen) Generate(ctx generator.GeneratorContext) generato
 	var a, b, c, p, q, r, divVal, vol, flux int
 	var qText, ex string
 	for {
-		maxBound := 2 + tier*2
+		maxBound := 4 + tier*3
 		a = small(1, maxBound)
 		b = small(1, maxBound)
 		c = small(1, maxBound)
@@ -70,7 +70,7 @@ func (g *fluxUniformGen) Generate(ctx generator.GeneratorContext) generator.Prob
 	var c, p, q, areaVal, flux int
 	var qText, ex string
 	for {
-		maxBound := 3 + tier*2
+		maxBound := 4 + tier*3
 		c = small(2, maxBound+1)
 		p = small(2, maxBound)
 		q = small(2, maxBound)
@@ -108,7 +108,7 @@ func (g *potentialValueGen) Generate(ctx generator.GeneratorContext) generator.P
 	var a, p, q, val int
 	var qText, ex string
 	for {
-		maxBound := 3 + tier*2
+		maxBound := 4 + tier*3
 		a = small(1, maxBound)
 		p = small(2, maxBound+1)
 		q = small(2, maxBound+1)
@@ -147,8 +147,8 @@ func (g *coordinatesJacobianGen) Generate(ctx generator.GeneratorContext) genera
 		if rand.Intn(2) == 0 {
 			// Scaled cylindrical coordinates: (x, y, z) = (a r cos theta, a r sin theta, z)
 			// Jacobian determinant is a^2 r
-			a = small(2, 2+tier)
-			r = small(2, 3+tier*2)
+			a = small(2, 4+tier*2)
+			r = small(2, 5+tier*2)
 			factor = a * a * r
 			ansStr := strconv.Itoa(factor)
 			qText = fmt.Sprintf("For scaled cylindrical coordinates \\(x = %dr\\cos\\theta,\\ y = %dr\\sin\\theta,\\ z = z\\), evaluate the Jacobian determinant \\(\\frac{\\partial(x,y,z)}{\\partial(r,\\theta,z)}\\) at \\(r = %d\\).", a, a, r)
@@ -171,7 +171,7 @@ func (g *coordinatesJacobianGen) Generate(ctx generator.GeneratorContext) genera
 		}
 
 		// Spherical coordinates: Jacobian determinant is rho^2 sin(phi)
-		rho = small(3, 3+tier*3)
+		rho = small(2, 6+tier*3)
 		phi = "\\pi/2"
 		factor = rho * rho
 		if rand.Intn(2) == 0 && rho%2 == 0 {
