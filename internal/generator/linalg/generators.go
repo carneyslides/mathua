@@ -886,44 +886,75 @@ func (g *qrGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type svdGen struct{}
 
 func (g *svdGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
-	}
-	easy := []entry{
-		{"Does SVD write A=UΣVᵀ with U,V orthogonal and Σ diagonal? (yes/no)", "yes", "SVD exists for any real matrix."},
-		{"Are singular values σ_i ≥0? (yes/no)", "yes", "By definition."},
-		{"Does rank(A) equal number of nonzero singular values? (yes/no)", "yes", "Counting."},
-		{"Is SVD defined only for square matrices? (yes/no)", "no", "SVD exists for any m×n real matrix."},
-	}
-	hard := []entry{
-		{"Is σ_i = sqrt(eig(AᵀA))? (yes/no)", "yes", "Singular values via AᵀA."},
-		{"Does truncated SVD give best low-rank approximation? (yes/no)", "yes", "Eckart-Young theorem."},
-		{"Is U's columns left singular vectors, V's right? (yes/no)", "yes", "By construction."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: singular-value arithmetic (unique answers).
-		type svdEntry struct {
-			question string
-			answer   string
-			reason   string
+	switch rand.Intn(5) {
+	case 0:
+		s1 := 2 + rand.Intn(8)
+		s2 := 1 + rand.Intn(s1 - 1)
+		eig1 := s1 * s1
+		eig2 := s2 * s2
+		return generator.Problem{
+			Question: fmt.Sprintf("The symmetric matrix \\(A^T A\\) has eigenvalues %d, %d and 0. Compute the largest singular value \\(\\sigma_1\\) of \\(A\\).", eig1, eig2),
+			Answer:   fmt.Sprintf("%d", s1),
+			Explanation: fmt.Sprintf("The singular values of \\(A\\) are the non-negative square roots of the eigenvalues of \\(A^T A\\): \\(\\sigma_1 = \\sqrt{%d} = %d\\).",
+				eig1, s1),
 		}
-		svdTable := []svdEntry{
-			{"A has singular values 5, 2, 0. What is rank(A)? (enter a number)", "2", "Two nonzero singular values: rank 2."},
-			{"Best rank-1 approximation keeps how many singular values? (enter a number)", "1", "Truncate to the top one (Eckart-Young)."},
-			{"AᵀA has eigenvalues 9, 4, 0. What is the largest singular value? (enter a number)", "3", "σ = sqrt(eig): sqrt(9) = 3."},
+	case 1:
+		s1 := 4 + rand.Intn(7)
+		s2 := 2 + rand.Intn(s1 - 2)
+		s3 := 1 + rand.Intn(s2 - 1)
+		return generator.Problem{
+			Question: fmt.Sprintf("A matrix \\(A\\) has singular values %d, %d and %d. Find the spectral norm \\(\\|A\\|_2\\) of the matrix.", s1, s2, s3),
+			Answer:   fmt.Sprintf("%d", s1),
+			Explanation: fmt.Sprintf("The matrix 2-norm (spectral norm) equals the largest singular value: \\(\\|A\\|_2 = \\sigma_1 = %d\\).", s1),
 		}
-		v := svdTable[rand.Intn(len(svdTable))]
-		return generator.Problem{Question: v.question, Answer: v.answer, Explanation: v.reason}
+	case 2:
+		s1 := 2 + rand.Intn(5)
+		s2 := 1 + rand.Intn(4)
+		s3 := 1 + rand.Intn(3)
+		frobSq := s1*s1 + s2*s2 + s3*s3
+		return generator.Problem{
+			Question: fmt.Sprintf("A matrix \\(A\\) has singular values %d, %d and %d. Compute the squared Frobenius norm \\(\\|A\\|_F^2\\).", s1, s2, s3),
+			Answer:   fmt.Sprintf("%d", frobSq),
+			Explanation: fmt.Sprintf("The squared Frobenius norm is the sum of the squares of the singular values: \\(\\|A\\|_F^2 = %d^2 + %d^2 + %d^2 = %d + %d + %d = %d\\).",
+				s1, s2, s3, s1*s1, s2*s2, s3*s3, frobSq),
+		}
+	case 3:
+		minSig := 1 + rand.Intn(3)
+		mult := 2 + rand.Intn(5)
+		maxSig := minSig * mult
+		midSig := minSig + 1
+		if midSig >= maxSig {
+			midSig = minSig
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("An invertible real matrix \\(A\\) has singular values %d, %d and %d. Find the 2-norm condition number \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}}\\).", maxSig, midSig, minSig),
+			Answer:   fmt.Sprintf("%d", mult),
+			Explanation: fmt.Sprintf("The 2-norm condition number is the ratio of the largest to the smallest singular value: \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}} = \\frac{%d}{%d} = %d\\).",
+				maxSig, minSig, mult),
+		}
+	default:
+		numNonZero := 2 + rand.Intn(2)
+		numZero := 1 + rand.Intn(2)
+		vals := make([]string, 0, numNonZero+numZero)
+		for i := 0; i < numNonZero; i++ {
+			vals = append(vals, fmt.Sprintf("%d", 2+rand.Intn(7)))
+		}
+		for i := 0; i < numZero; i++ {
+			vals = append(vals, "0")
+		}
+		var listStr string
+		if len(vals) == 3 {
+			listStr = fmt.Sprintf("%s, %s and %s", vals[0], vals[1], vals[2])
+		} else {
+			listStr = fmt.Sprintf("%s, %s, %s and %s", vals[0], vals[1], vals[2], vals[3])
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("A real matrix \\(A\\) has singular values %s. Find the rank of \\(A\\).", listStr),
+			Answer:   fmt.Sprintf("%d", numNonZero),
+			Explanation: fmt.Sprintf("The rank of a matrix equals the number of nonzero singular values in its singular value decomposition. With %d nonzero singular values, \\(\\operatorname{rank}(A) = %d\\).",
+				numNonZero, numNonZero),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 type jordanGen struct{}

@@ -353,7 +353,7 @@
     "label": "Singular value decomposition",
     "domain": "linear_algebra",
     "subdomain": "linear_algebra.decompositions",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "linalg.decomp.qr",
       "linalg.eigen.diagonalization"
