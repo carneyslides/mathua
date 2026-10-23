@@ -10,6 +10,7 @@ import (
 
 	"github.com/chuma-beep/mathua/internal/generator"
 	"github.com/chuma-beep/mathua/internal/grader"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func Register(reg *generator.Registry) {
@@ -802,16 +803,44 @@ func (g *arithSeqGen) Grade(expected, userAnswer string) grader.Result {
 }
 
 func (g *arithSeqGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a1 := rand.Intn(2*(1+int(ctx.Difficulty*5))+1) - (1 + int(ctx.Difficulty*5))
-	d := 0
-	for d == 0 {
-		d = rand.Intn(2*(1+int(ctx.Difficulty*4))+1) - (1 + int(ctx.Difficulty*4))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a1, d, n, an int
+	var q, ex string
+	for {
+		a1Range := 5 + tier*10
+		a1 = rand.Intn(2*a1Range+1) - a1Range
+		dRange := 4 + tier*6
+		d = 0
+		for d == 0 {
+			d = rand.Intn(2*dRange+1) - dRange
+		}
+		nMin := 5 + tier*5
+		nMax := 12 + tier*15
+		n = smallInt(nMin, nMax)
+		if n < 5 {
+			n = 5
+		}
+		an = a1 + (n-1)*d
+		ansStr := strconv.Itoa(an)
+		q = fmt.Sprintf("An arithmetic sequence starts at %d with common difference %+d. Find term \\(a_{%d}\\).", a1, d, n)
+		if an == a1 || an == d || an == -d || an == n || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("The nth term of an arithmetic sequence is given by the formula \\(a_n = a_1 + (n - 1)d\\). Substitute first term \\(a_1 = %d\\), common difference \\(d = %+d\\) and term index \\(n = %d\\) into the formula: \\(a_{%d} = %d + (%d - 1)(%+d)\\). Simplify the product \\((%d)(%+d) = %d\\) and add to obtain \\(a_{%d} = %d + (%d) = %d\\).",
+			a1, d, n, n, a1, n, d, n-1, d, (n-1)*d, n, a1, (n-1)*d, an)
+		break
 	}
-	n := 5 + rand.Intn(10+int(ctx.Difficulty*15))
-	an := a1 + (n-1)*d
-	q := fmt.Sprintf("An arithmetic sequence starts at %d with common difference %+d. Find term \\(a_{%d}\\).", a1, d, n)
-	ex := fmt.Sprintf("\\(a_n=a_1+(n-1)d=%d+%d\\cdot%d=%d\\).", a1, n-1, d, an)
-	return generator.Problem{Question: q, Answer: strconv.Itoa(an), Explanation: ex}
+	return generator.Problem{
+		Question:    q,
+		Answer:      strconv.Itoa(an),
+		Explanation: ex,
+		Facts: map[string]string{
+			"a1":     strconv.Itoa(a1),
+			"d":      strconv.Itoa(d),
+			"n":      strconv.Itoa(n),
+			"answer": strconv.Itoa(an),
+		},
+	}
 }
 
 type geoSeqGen struct{}
@@ -821,17 +850,55 @@ func (g *geoSeqGen) Grade(expected, userAnswer string) grader.Result {
 }
 
 func (g *geoSeqGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	r := []int{2, 3, -2}[rand.Intn(3)]
-	maxN := map[int]int{2: 10, 3: 6, -2: 8}[r]
-	n := 2 + rand.Intn(maxN-1)
-	a1 := 1 + rand.Intn(3+int(ctx.Difficulty*4))
-	an := a1
-	for i := 1; i < n; i++ {
-		an *= r
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	ratioPool := []int{2, 3, -2}
+	if tier == 1 {
+		ratioPool = []int{2, 3, -2, -3, 4}
+	} else if tier == 2 {
+		ratioPool = []int{2, 3, -2, -3, 4, -4, 5}
 	}
-	q := fmt.Sprintf("A geometric sequence starts at %d with common ratio %d. Find term \\(a_{%d}\\).", a1, r, n)
-	ex := fmt.Sprintf("\\(a_n=a_1 r^{n-1}=%d\\cdot(%d)^{%d}=%d\\).", a1, r, n-1, an)
-	return generator.Problem{Question: q, Answer: strconv.Itoa(an), Explanation: ex}
+	var a1, r, n, an, powerVal int
+	var q, ex string
+	for {
+		r = ratioPool[rand.Intn(len(ratioPool))]
+		maxN := 8
+		if abs(r) == 2 {
+			maxN = 6 + tier*2
+		} else if abs(r) == 3 {
+			maxN = 4 + tier*2
+		} else {
+			maxN = 3 + tier
+		}
+		n = 3 + rand.Intn(maxN-2)
+		a1 = 1 + rand.Intn(2+tier*3)
+		if tier > 0 && rand.Intn(2) == 0 {
+			a1 = -a1
+		}
+		powerVal = 1
+		for i := 1; i < n; i++ {
+			powerVal *= r
+		}
+		an = a1 * powerVal
+		ansStr := strconv.Itoa(an)
+		q = fmt.Sprintf("A geometric sequence starts at %d with common ratio %d. Find term \\(a_{%d}\\).", a1, r, n)
+		if an == a1 || an == r || an == -r || an == n || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("The nth term of a geometric sequence is governed by \\(a_n = a_1 r^{n-1}\\). Substitute initial term \\(a_1 = %d\\), common ratio \\(r = %d\\) and index \\(n = %d\\): \\(a_{%d} = %d \\times (%d)^{%d - 1} = %d \\times (%d)^{%d}\\). Evaluate the exponent \\((%d)^{%d} = %d\\) and multiply to yield \\(a_{%d} = %d \\times %d = %d\\).",
+			a1, r, n, n, a1, r, n, a1, r, n-1, r, n-1, powerVal, n, a1, powerVal, an)
+		break
+	}
+	return generator.Problem{
+		Question:    q,
+		Answer:      strconv.Itoa(an),
+		Explanation: ex,
+		Facts: map[string]string{
+			"a1":     strconv.Itoa(a1),
+			"r":      strconv.Itoa(r),
+			"n":      strconv.Itoa(n),
+			"answer": strconv.Itoa(an),
+		},
+	}
 }
 
 type summationGen struct{}
@@ -841,16 +908,41 @@ func (g *summationGen) Grade(expected, userAnswer string) grader.Result {
 }
 
 func (g *summationGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	n := 4 + rand.Intn(3+int(ctx.Difficulty*8))
-	a := 1 + rand.Intn(3)
-	b := rand.Intn(2*3+1) - 3
-	total := 0
-	for i := 1; i <= n; i++ {
-		total += a*i + b
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var n, a, b, total, triVal int
+	var q, ex string
+	for {
+		nMin := 4 + tier*4
+		nMax := 8 + tier*8
+		n = smallInt(nMin, nMax)
+		a = 2 + rand.Intn(2+tier*3)
+		b = 0
+		for b == 0 {
+			bRange := 3 + tier*4
+			b = rand.Intn(2*bRange+1) - bRange
+		}
+		triVal = n * (n + 1) / 2
+		total = a*triVal + b*n
+		ansStr := strconv.Itoa(total)
+		q = fmt.Sprintf("Evaluate \\(\\sum_{i=1}^{%d} (%si %+d)\\).", n, coefStr(a), b)
+		if total == n || total == a || total == b || total == -b || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("By the linearity of summation, \\(\\sum_{i=1}^n (ai + b) = a \\frac{n(n+1)}{2} + bn\\). Substitute \\(n = %d\\), coefficient \\(a = %d\\) and constant \\(b = %d\\): \\(\\sum_{i=1}^{%d} (%si %+d) = %d \\times \\frac{%d(%d)}{2} + (%d)(%d)\\). Compute the triangular number \\(\\frac{%d(%d)}{2} = %d\\) and linear term \\((%d)(%d) = %d\\), giving \\(%d(%d) + (%d) = %d + (%d) = %d\\).",
+			n, a, b, n, coefStr(a), b, a, n, n+1, b, n, n, n+1, triVal, b, n, b*n, a, triVal, b*n, a*triVal, b*n, total)
+		break
 	}
-	q := fmt.Sprintf("Evaluate \\(\\sum_{i=1}^{%d} (%si %+d)\\).", n, coefStr(a), b)
-	ex := fmt.Sprintf("\\(\\sum (ai+b)=a\\cdot\\frac{n(n+1)}{2}+bn=%d\\cdot\\frac{%d\\cdot%d}{2}+(%+d)\\cdot%d=%d\\).", a, n, n+1, b, n, total)
-	return generator.Problem{Question: q, Answer: strconv.Itoa(total), Explanation: ex}
+	return generator.Problem{
+		Question:    q,
+		Answer:      strconv.Itoa(total),
+		Explanation: ex,
+		Facts: map[string]string{
+			"n":      strconv.Itoa(n),
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"answer": strconv.Itoa(total),
+		},
+	}
 }
 
 type arithSeriesGen struct{}
@@ -860,17 +952,43 @@ func (g *arithSeriesGen) Grade(expected, userAnswer string) grader.Result {
 }
 
 func (g *arithSeriesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a1 := rand.Intn(11) - 5
-	d := 0
-	for d == 0 {
-		d = rand.Intn(9) - 4
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var n, a1, d, an, sum, bracketVal int
+	var q, ex string
+	for {
+		nMin := 4 + tier*4
+		nMax := 8 + tier*10
+		n = smallInt(nMin, nMax)
+		a1Range := 6 + tier*8
+		a1 = rand.Intn(2*a1Range+1) - a1Range
+		dRange := 4 + tier*5
+		d = 0
+		for d == 0 {
+			d = rand.Intn(2*dRange+1) - dRange
+		}
+		an = a1 + (n-1)*d
+		sum = n * (a1 + an) / 2
+		bracketVal = 2*a1 + (n-1)*d
+		ansStr := strconv.Itoa(sum)
+		q = fmt.Sprintf("Find the sum of the first %d terms of the arithmetic sequence \\(a_1=%d\\), \\(d=%+d\\).", n, a1, d)
+		if sum == n || sum == a1 || sum == d || sum == -d || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("The sum of the first n terms of an arithmetic series is \\(S_n = \\frac{n}{2}[2a_1 + (n - 1)d]\\). Substitute \\(n = %d\\), \\(a_1 = %d\\) and \\(d = %+d\\): \\(S_{%d} = \\frac{%d}{2}[2(%d) + (%d - 1)(%+d)]\\). Evaluate the bracketed terms \\(2(%d) + (%d)(%+d) = %d + (%d) = %d\\) and multiply by \\(\\frac{%d}{2}\\) to get \\(S_{%d} = %d\\).",
+			n, a1, d, n, n, a1, n, d, a1, n-1, d, 2*a1, (n-1)*d, bracketVal, n, n, sum)
+		break
 	}
-	n := 4 + rand.Intn(8)
-	an := a1 + (n-1)*d
-	sum := n * (a1 + an) / 2
-	q := fmt.Sprintf("Find the sum of the first %d terms of the arithmetic sequence \\(a_1=%d\\), \\(d=%+d\\).", n, a1, d)
-	ex := fmt.Sprintf("\\(S_n=\\frac{n(a_1+a_n)}{2}=\\frac{%d(%d %+d)}{2}=%d\\).", n, a1, (n-1)*d, sum)
-	return generator.Problem{Question: q, Answer: strconv.Itoa(sum), Explanation: ex}
+	return generator.Problem{
+		Question:    q,
+		Answer:      strconv.Itoa(sum),
+		Explanation: ex,
+		Facts: map[string]string{
+			"n":      strconv.Itoa(n),
+			"a1":     strconv.Itoa(a1),
+			"d":      strconv.Itoa(d),
+			"answer": strconv.Itoa(sum),
+		},
+	}
 }
 
 type geoSeriesGen struct{}
@@ -880,18 +998,52 @@ func (g *geoSeriesGen) Grade(expected, userAnswer string) grader.Result {
 }
 
 func (g *geoSeriesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	r := []int{2, 3, -2}[rand.Intn(3)]
-	n := 3 + rand.Intn(5)
-	a1 := 1 + rand.Intn(4)
-	sum := a1
-	term := a1
-	for i := 1; i < n; i++ {
-		term *= r
-		sum += term
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	ratioPool := []int{2, 3, -2}
+	if tier == 1 {
+		ratioPool = []int{2, 3, -2, -3, 4}
+	} else if tier == 2 {
+		ratioPool = []int{2, 3, -2, -3, 4, 5}
 	}
-	q := fmt.Sprintf("Find the sum of the first %d terms of the geometric sequence \\(a_1=%d\\), \\(r=%d\\).", n, a1, r)
-	ex := fmt.Sprintf("\\(S_n=a_1\\frac{r^{n}-1}{r-1}=%d\\cdot\\frac{(%d)^{%d}-1}{%d}=%d\\).", a1, r, n, r-1, sum)
-	return generator.Problem{Question: q, Answer: strconv.Itoa(sum), Explanation: ex}
+	var a1, r, n, sum, rPow int
+	var q, ex string
+	for {
+		r = ratioPool[rand.Intn(len(ratioPool))]
+		maxN := 6
+		if abs(r) == 2 {
+			maxN = 5 + tier*2
+		} else if abs(r) == 3 {
+			maxN = 4 + tier
+		} else {
+			maxN = 3 + tier
+		}
+		n = 3 + rand.Intn(maxN-2)
+		a1 = 1 + rand.Intn(3+tier*2)
+		rPow = 1
+		for i := 0; i < n; i++ {
+			rPow *= r
+		}
+		sum = a1 * (rPow - 1) / (r - 1)
+		ansStr := strconv.Itoa(sum)
+		q = fmt.Sprintf("Find the sum of the first %d terms of the geometric sequence \\(a_1=%d\\), \\(r=%d\\).", n, a1, r)
+		if sum == n || sum == a1 || sum == r || sum == -r || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("The sum of a finite geometric series with common ratio \\(r \\neq 1\\) is \\(S_n = a_1 \\frac{r^n - 1}{r - 1}\\). Substitute \\(a_1 = %d\\), \\(r = %d\\) and \\(n = %d\\): \\(S_{%d} = %d \\times \\frac{(%d)^{%d} - 1}{%d - 1}\\). Evaluate power \\((%d)^{%d} = %d\\), yielding \\(S_{%d} = %d \\times \\frac{%d - 1}{%d} = %d \\times \\frac{%d}{%d} = %d\\).",
+			a1, r, n, n, a1, r, n, r, r, n, rPow, n, a1, rPow, r-1, a1, rPow-1, r-1, sum)
+		break
+	}
+	return generator.Problem{
+		Question:    q,
+		Answer:      strconv.Itoa(sum),
+		Explanation: ex,
+		Facts: map[string]string{
+			"n":      strconv.Itoa(n),
+			"a1":     strconv.Itoa(a1),
+			"r":      strconv.Itoa(r),
+			"answer": strconv.Itoa(sum),
+		},
+	}
 }
 
 type geomInfiniteGen struct{}
@@ -901,15 +1053,41 @@ func (g *geomInfiniteGen) Grade(expected, userAnswer string) grader.Result {
 }
 
 func (g *geomInfiniteGen) Generate(ctx generator.GeneratorContext) generator.Problem {
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
 	type frac struct{ p, q int }
-	options := []frac{{1, 2}, {-1, 2}, {1, 3}, {1, 4}, {-1, 4}, {2, 3}}
-	f := options[rand.Intn(len(options))]
-	gap := f.q - f.p
-	a1 := gap * (1 + rand.Intn(2+int(ctx.Difficulty*4)))
-	sum := a1 * f.q / gap
-	qText := fmt.Sprintf("An infinite geometric series has first term %d and common ratio \\(%s\\). Give its sum.", a1, fracStr(a1, f))
-	ex := fmt.Sprintf("Since \\(|r|<1\\), the series converges: \\(S=\\frac{a_1}{1-r}=\\frac{%d}{1-%s}=%d\\).", a1, fracStr(0, f), sum)
-	return generator.Problem{Question: qText, Answer: strconv.Itoa(sum), Explanation: ex}
+	options := []frac{{1, 2}, {-1, 2}, {1, 3}, {1, 4}}
+	if tier == 1 {
+		options = []frac{{1, 2}, {-1, 2}, {1, 3}, {-1, 3}, {2, 3}, {1, 4}, {-1, 4}, {3, 4}}
+	} else if tier == 2 {
+		options = []frac{{1, 2}, {-1, 2}, {1, 3}, {-1, 3}, {2, 3}, {-2, 3}, {1, 4}, {-1, 4}, {3, 4}, {-3, 4}, {1, 5}, {2, 5}, {3, 5}, {4, 5}}
+	}
+	var a1, sum, gap int
+	var f frac
+	var qText, ex string
+	for {
+		f = options[rand.Intn(len(options))]
+		gap = f.q - f.p
+		k := 1 + rand.Intn(2+tier*3)
+		a1 = gap * k
+		sum = a1 * f.q / gap
+		ansStr := strconv.Itoa(sum)
+		qText = fmt.Sprintf("An infinite geometric series has first term %d and common ratio \\(%s\\). Give its sum.", a1, fracStr(0, f))
+		if sum == a1 || sum == f.p || sum == -f.p || sum == f.q || containsWord(qText, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("An infinite geometric series converges if and only if \\(|r| < 1\\), with sum given by \\(S_\\infty = \\frac{a_1}{1 - r}\\). Verify convergence with \\(|%s| < 1\\) and substitute \\(a_1 = %d\\) and \\(r = %s\\): \\(S_\\infty = \\frac{%d}{1 - (%s)}\\). Simplify the denominator to \\(1 - (%s) = \\frac{%d}{%d}\\) and multiply by reciprocal: \\(%d \\times \\frac{%d}{%d} = %d\\).",
+			fracStr(0, f), a1, fracStr(0, f), a1, fracStr(0, f), fracStr(0, f), gap, f.q, a1, f.q, gap, sum)
+		break
+	}
+	return generator.Problem{
+		Question:    qText,
+		Answer:      strconv.Itoa(sum),
+		Explanation: ex,
+		Facts: map[string]string{
+			"a1":     strconv.Itoa(a1),
+			"answer": strconv.Itoa(sum),
+		},
+	}
 }
 
 func coefStrSigned(n int, denom int) string {

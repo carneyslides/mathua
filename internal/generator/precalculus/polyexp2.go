@@ -14,9 +14,11 @@ package precalculus
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 // smallInt lives in polyexp.go; this file uses it rather than defining a second copy.
@@ -132,18 +134,46 @@ func (g *obliqueAsymptoteGen) Generate(ctx generator.GeneratorContext) generator
 type logEquationGen struct{}
 
 func (g *logEquationGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	base := 2 + rand.Intn(3)
-	k := 1 + rand.Intn(3+int(ctx.Difficulty*4))
-	v := 1
-	for i := 0; i < k; i++ {
-		v *= base
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	basePool := []int{2, 3, 5, 10}
+	if tier == 1 {
+		basePool = []int{2, 3, 4, 5, 6, 10}
+	} else if tier == 2 {
+		basePool = []int{2, 3, 4, 5, 6, 7, 8, 10}
+	}
+	var base, k, v int
+	var q, ex string
+	for {
+		base = basePool[rand.Intn(len(basePool))]
+		kMin := 2
+		kMax := 3 + tier
+		if base >= 8 {
+			kMax = 3
+		}
+		k = smallInt(kMin, kMax)
+		v = 1
+		for i := 0; i < k; i++ {
+			v *= base
+		}
+		ansStr := strconv.Itoa(v)
+		q = fmt.Sprintf("Solve \\(\\log_{%d} x = %d\\) for \\(x\\).", base, k)
+		if v == base || v == k || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("By logarithmic definition, the logarithmic equation \\(\\log_b(x) = k\\) converts directly to exponential form \\(x = b^k\\). Identify base \\(b = %d\\) and exponent \\(k = %d\\), rewriting the equation as \\(x = %d^{%d}\\). Compute the power to find \\(x\\): \\(%d^{%d} = %d\\). Thus \\(x = %d\\).",
+			base, k, base, k, base, k, v, v)
+		break
 	}
 	return generator.Problem{
-		Question: fmt.Sprintf("Solve \\(\\log_{%d} x = %d\\) for \\(x\\).", base, k),
-		Answer:   fmt.Sprintf("%d", v),
-		Explanation: fmt.Sprintf("The equation says %d is the exponent that turns %d into x, so x = %d^%d = %d.",
-			k, base, base, k, v),
-		Facts: map[string]string{"x": fmt.Sprintf("%d", v)},
+		Question:    q,
+		Answer:      strconv.Itoa(v),
+		Explanation: ex,
+		Facts: map[string]string{
+			"base":     strconv.Itoa(base),
+			"exponent": strconv.Itoa(k),
+			"x":        strconv.Itoa(v),
+			"answer":   strconv.Itoa(v),
+		},
 	}
 }
 
