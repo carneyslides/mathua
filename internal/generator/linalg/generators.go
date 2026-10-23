@@ -800,44 +800,75 @@ func (g *innerProductGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type luGen struct{}
 
 func (g *luGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
-	}
-	easy := []entry{
-		{"Does LU decomposition write A=LU with L lower unit and U upper? (yes/no)", "yes", "LU factors invertible; solve via forward/back substitution."},
-		{"Is LU without pivoting possible only if leading principals nonzero? (yes/no)", "yes", "Need nonzero pivots."},
-		{"Does LU solve Ax=b via Ly=b then Ux=y? (yes/no)", "yes", "Two triangular solves."},
-		{"Does every invertible matrix admit LU without row swaps? (yes/no)", "no", "Zero leading pivots need permutation P: PA=LU."},
-	}
-	hard := []entry{
-		{"For A=[[2,1],[4,3]], is L=[[1,0],[2,1]] and U=[[2,1],[0,1]]? (yes/no)", "yes", "Multiply L×U = A."},
-		{"Does PA=LU with permutation P handle zero pivots? (yes/no)", "yes", "Partial pivoting."},
-		{"Is determinant det(A)=det(U) for LU with unit L? (yes/no)", "yes", "det(L)=1, so det(A)=product of U diagonal."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: triangular solves and determinants (unique answers).
-		type luEntry struct {
-			question string
-			answer   string
-			reason   string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// det(A) = det(U)
+		u11 := smallInt(1, 4)
+		u22 := smallInt(1, 4)
+		u33 := smallInt(1, 4)
+		ans := u11 * u22 * u33
+		return generator.Problem{
+			Question:    fmt.Sprintf("An \\(n \\times n\\) matrix \\(A\\) has LU factorization \\(A = LU\\) where \\(L\\) is unit lower triangular and \\(U\\) has diagonal entries %d, %d and %d. Compute \\(\\det(A)\\).", u11, u22, u33),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Since \\(L\\) is unit lower triangular, \\(\\det(L) = 1\\). The determinant of \\(U\\) is the product of its diagonal entries: \\(\\det(U) = (%d)(%d)(%d) = %d\\). Therefore \\(\\det(A) = \\det(L)\\det(U) = %d\\).", u11, u22, u33, ans, ans),
 		}
-		luTable := []luEntry{
-			{"Ly=b with L=[[1,0],[2,1]], b=[1,3]. What is y_2? (enter a number)", "1", "y_1=1, then 2·1+y_2=3 gives y_2=1."},
-			{"LU with unit L and U diagonal (2,3): what is det(A)? (enter a number)", "6", "det(L)=1, so det(A) = 2·3 = 6."},
-			{"How many triangular solves does Ax=b need via LU? (enter a number)", "2", "Forward Ly=b, then back Ux=y."},
+	case 1:
+		// Forward solve Ly = b
+		l21 := smallInt(1, 4)
+		b1 := smallInt(1, 5)
+		y2 := smallInt(1, 5)
+		b2 := l21*b1 + y2
+		return generator.Problem{
+			Question:    fmt.Sprintf("In the first stage of solving \\(Ax = b\\) via \\(A = LU\\), solve \\(Ly = b\\) for \\(y_2\\) where \\(L = \\begin{pmatrix} 1 & 0 \\\\ %d & 1 \\end{pmatrix}\\) and \\(b = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\).", l21, b1, b2),
+			Answer:      fmt.Sprintf("%d", y2),
+			Explanation: fmt.Sprintf("Forward substitution gives \\(y_1 = %d\\). The second equation is \\(%d(y_1) + y_2 = %d\\), so \\(y_2 = %d - %d(%d) = %d\\).", b1, l21, b2, b2, l21, b1, y2),
 		}
-		v := luTable[rand.Intn(len(luTable))]
-		return generator.Problem{Question: v.question, Answer: v.answer, Explanation: v.reason}
+	case 2:
+		// Back substitution Ux = y
+		u11 := smallInt(1, 3)
+		u12 := smallInt(1, 3)
+		u22 := smallInt(1, 3)
+		x2 := smallInt(1, 4)
+		y2 := u22 * x2
+		x1 := smallInt(1, 4)
+		y1 := u11*x1 + u12*x2
+		_ = y1
+		return generator.Problem{
+			Question:    fmt.Sprintf("In the back substitution stage of solving \\(Ax = b\\), solve \\(Ux = y\\) for \\(x_2\\) where \\(U = \\begin{pmatrix} %d & %d \\\\ 0 & %d \\end{pmatrix}\\) and \\(y = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\).", u11, u12, u22, y1, y2),
+			Answer:      fmt.Sprintf("%d", x2),
+			Explanation: fmt.Sprintf("From the second row, \\(%d x_2 = %d\\), which yields \\(x_2 = %d / %d = %d\\).", u22, y2, y2, u22, x2),
+		}
+	case 3:
+		// Multiplier l_{21} in Gaussian elimination
+		a11 := smallInt(1, 4)
+		m := smallInt(2, 4)
+		a21 := m * a11
+		a12 := smallInt(1, 4)
+		a22 := smallInt(1, 5)
+		return generator.Problem{
+			Question:    fmt.Sprintf("In computing the LU factorization \\(A = LU\\) of \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) without pivoting, what is the entry \\(l_{21}\\) of the unit lower triangular factor \\(L\\)?", a11, a12, a21, a22),
+			Answer:      fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf("The multiplier used to eliminate entry \\(a_{21}\\) using row 1 is \\(l_{21} = \\frac{a_{21}}{a_{11}} = \\frac{%d}{%d} = %d\\).", a21, a11, m),
+		}
+	default:
+		// Diagonal entry u_{22} in U
+		l21 := smallInt(1, 3)
+		u11 := smallInt(1, 4)
+		u12 := smallInt(1, 4)
+		u22 := smallInt(1, 5)
+		a11 := u11
+		a12 := u12
+		a21 := l21 * u11
+		a22 := l21*u12 + u22
+		_ = a11
+		_ = a21
+		return generator.Problem{
+			Question:    fmt.Sprintf("In computing the LU factorization \\(A = LU\\) of \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) where \\(L = \\begin{pmatrix} 1 & 0 \\\\ %d & 1 \\end{pmatrix}\\), what is the diagonal entry \\(u_{22}\\)?", a11, a12, a21, a22, l21),
+			Answer:      fmt.Sprintf("%d", u22),
+			Explanation: fmt.Sprintf("Matrix multiplication gives \\(a_{22} = l_{21} u_{12} + u_{22} = %d(%d) + u_{22} = %d\\). Thus \\(u_{22} = %d - %d = %d\\).", l21, u12, a22, a22, l21*u12, u22),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 type qrGen struct{}
