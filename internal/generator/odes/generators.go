@@ -871,35 +871,68 @@ func (g *greenFunctionGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type sturmLiouvilleGen struct{}
 
 func (g *sturmLiouvilleGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct{ q, a, e string }
-	easy := []entry{
-		{"Are SL eigenfunctions orthogonal with weight? (yes/no)", "yes", "Orthogonal under the weight w."},
-		{"Is Legendre equation Sturm-Liouville? (yes/no)", "yes", "With p=1-x^2."},
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Dirichlet eigenvalues lambda_n = n^2 on [0, pi]
+		n := smallInt(1, 5+int(ctx.Difficulty*4))
+		ans := n * n
+		return generator.Problem{
+			Question: fmt.Sprintf("For the regular Sturm-Liouville eigenvalue problem \\(-y'' = \\lambda y\\) on \\([0, \\pi]\\) with Dirichlet boundary conditions \\(y(0) = y(\\pi) = 0\\), what is the eigenvalue \\(\\lambda_%d\\)?", n),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"The eigenfunctions are \\(y_n(x) = \\sin(nx)\\), yielding eigenvalues \\(\\lambda_n = n^2\\). For harmonic mode \\(n = %d\\), \\(\\lambda_%d = %d^2 = %d\\).",
+				n, n, n, ans,
+			),
+		}
+
+	case 1:
+		// Neumann boundary condition principal eigenvalue lambda_0 = 0
+		return generator.Problem{
+			Question: "For the regular Sturm-Liouville problem \\(-y'' = \\lambda y\\) on \\([0, \\pi]\\) with homogeneous Neumann boundary conditions \\(y'(0) = y'(\\pi) = 0\\), what is the principal (smallest) eigenvalue \\(\\lambda_0\\)?",
+			Answer:   "0",
+			Explanation: "With Neumann boundary conditions \\(y'(0) = y'(\\pi) = 0\\), the constant function \\(y_0(x) = 1\\) satisfies \\(-y_0'' = 0 = 0 \\cdot y_0\\), giving the smallest eigenvalue \\(\\lambda_0 = 0\\).",
+		}
+
+	case 2:
+		// Orthogonality integral between distinct eigenfunctions
+		m := smallInt(1, 4)
+		n := m + smallInt(1, 4)
+		return generator.Problem{
+			Question: fmt.Sprintf("Two distinct eigenfunctions \\(y_{%d}(x) = \\sin(%dx)\\) and \\(y_{%d}(x) = \\sin(%dx)\\) solve the Sturm-Liouville problem on \\([0, \\pi]\\) with unit weight. Evaluate the inner product integral \\(\\int_0^\\pi \\sin(%dx)\\sin(%dx)\\,dx\\).", m, m, n, n, m, n),
+			Answer:   "0",
+			Explanation: fmt.Sprintf(
+				"Eigenfunctions corresponding to distinct eigenvalues of a regular self-adjoint Sturm-Liouville problem are strictly orthogonal with respect to the weight function: \\(\\int_0^\\pi \\sin(%dx)\\sin(%dx)\\,dx = 0\\).",
+				m, n,
+			),
+		}
+
+	case 3:
+		// Sturm oscillation theorem: interior zeros count n - 1
+		n := smallInt(2, 9)
+		zeros := n - 1
+		return generator.Problem{
+			Question: fmt.Sprintf("By the Sturm oscillation theorem, how many interior zeros in the open interval \\((0, \\pi)\\) does the \\(n = %d\\)-th eigenfunction of a regular Sturm-Liouville problem possess?", n),
+			Answer:   fmt.Sprintf("%d", zeros),
+			Explanation: fmt.Sprintf(
+				"The Sturm oscillation theorem establishes that the eigenfunction corresponding to the \\(n\\)-th eigenvalue (ordered \\(\\lambda_1 < \\lambda_2 < \\dots\\)) has exactly \\(n - 1\\) zeros in the interior of the domain. For \\(n = %d\\), there are \\(%d - 1 = %d\\) interior zeros.",
+				n, n, zeros,
+			),
+		}
+
+	default:
+		// Scaled interval Dirichlet eigenvalue lambda_1 = k^2
+		k := smallInt(2, 6)
+		ans := k * k
+		return generator.Problem{
+			Question: fmt.Sprintf("For the Dirichlet Sturm-Liouville problem \\(-y'' = \\lambda y\\) on the interval \\([0, \\pi/%d]\\) with \\(y(0) = y(\\pi/%d) = 0\\), what is the first eigenvalue \\(\\lambda_1\\)?", k, k),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"The boundary condition \\(y(\\pi/%d) = \\sin(\\sqrt{\\lambda}\\pi/%d) = 0\\) requires \\(\\sqrt{\\lambda}\\pi/%d = n\\pi\\), giving \\(\\sqrt{\\lambda} = n(%d)\\). For \\(n = 1\\), \\(\\lambda_1 = %d^2 = %d\\).",
+				k, k, k, k, k, ans,
+			),
+		}
 	}
-	// Parameterized production: Dirichlet modes of y'' + λy = 0 on [0,π].
-	ns := []int{1, 2, 3, 4}
-	n := ns[rand.Intn(len(ns))]
-	if rand.Intn(2) == 0 {
-		easy = append(easy, entry{
-			q: fmt.Sprintf("For y'' + λy = 0 with y(0) = y(π) = 0, λ_n = n^2. What is λ_%d? (enter a number)", n),
-			a: fmt.Sprintf("%d", n*n),
-			e: fmt.Sprintf("Eigenfunctions sin(nx) give λ_%d = %d^2 = %d.", n, n, n*n),
-		})
-	} else {
-		easy = append(easy, entry{
-			q: fmt.Sprintf("For y'' + λy = 0 with y(0) = y(π) = 0 and λ_%d = %d, what is the eigenfunction? (type like sin(2x))", n, n*n),
-			a: fmt.Sprintf("sin(%dx)", n),
-			e: fmt.Sprintf("The mode with λ_%d = %d is sin(%dx).", n, n*n, n),
-		})
-	}
-	hard := []entry{{"Does SL on [a,b] with separated BC have discrete spectrum? (yes/no)", "yes", "Eigenvalues infinite discrete."}, {"Is Sturm-Liouville operator self-adjoint? (yes/no)", "yes", "SL is self-adjoint under weight."}, {"Does completeness of eigenfunctions hold? (yes/no)", "yes", "Expand in eigenfunctions."}}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type boundaryValueGen struct{}
