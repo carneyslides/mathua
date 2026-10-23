@@ -47,7 +47,13 @@ func (g *domainConvertedGen) Generate(ctx generator.GeneratorContext) generator.
 type irrationalConvertedGen struct{}
 
 func (g *irrationalConvertedGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	if rand.Intn(2) == 0 {
+	pickSquare := rand.Intn(2) == 0
+	if ctx.KPOrdinal == 1 {
+		pickSquare = true
+	} else if ctx.KPOrdinal >= 2 {
+		pickSquare = false
+	}
+	if pickSquare {
 		n := 4 + rand.Intn(22)
 		return generator.Problem{
 			Question: fmt.Sprintf("What is \\(\\sqrt{%d}\\)?", n*n),

@@ -141,7 +141,15 @@ type slopeInterceptGen struct{}
 
 func (g *slopeInterceptGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	// Higher ctx.Difficulty → fractional slopes and larger intercepts
-	if ctx.Difficulty > 0.6 && rand.Intn(2) == 0 {
+	isFraction := false
+	if ctx.KPOrdinal == 3 {
+		isFraction = true
+	} else if ctx.KPOrdinal == 1 || ctx.KPOrdinal == 2 {
+		isFraction = false
+	} else if ctx.Difficulty > 0.6 && rand.Intn(2) == 0 {
+		isFraction = true
+	}
+	if isFraction {
 		m := rand.Intn(3) + 1
 		n := rand.Intn(3) + 2
 		if rand.Intn(2) == 0 {
@@ -240,7 +248,7 @@ type multiStepEqGen struct{}
 func (g *multiStepEqGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	d := ctx.Difficulty
 	// Staged ladder: plain ax+b=c → larger/subtraction → parentheses probe.
-	if d >= 0.75 {
+	if ctx.KPOrdinal == 3 || (ctx.KPOrdinal == 0 && d >= 0.75) {
 		a := rand.Intn(4) + 2
 		x := rand.Intn(8) + 2
 		b := rand.Intn(8) + 1
@@ -254,6 +262,11 @@ func (g *multiStepEqGen) Generate(ctx generator.GeneratorContext) generator.Prob
 		}
 	}
 	scale := int(1 + d*8)
+	if ctx.KPOrdinal == 1 {
+		scale = 1
+	} else if ctx.KPOrdinal == 2 {
+		scale = 4
+	}
 	x := rand.Intn(scale*2) + 2
 	a := rand.Intn(scale) + 2
 	b := rand.Intn(scale*2) + 2
@@ -271,7 +284,13 @@ type varsBothSidesGen struct{}
 func (g *varsBothSidesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	// Staged ladder: small coefficients → larger spread → bigger solutions.
 	coefMax := 5
-	if ctx.Difficulty >= 0.7 {
+	if ctx.KPOrdinal == 1 {
+		coefMax = 4
+	} else if ctx.KPOrdinal == 2 {
+		coefMax = 7
+	} else if ctx.KPOrdinal == 3 {
+		coefMax = 10
+	} else if ctx.Difficulty >= 0.7 {
 		coefMax = 9
 	} else if ctx.Difficulty >= 0.45 {
 		coefMax = 7
@@ -300,11 +319,19 @@ type varsBothSidesWordGen struct{}
 // learner has to find is an exact integer and the pool discriminates.
 func (g *varsBothSidesWordGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	maxPer, maxUses := 9, 8
-	if ctx.Difficulty >= 0.45 {
+	if ctx.KPOrdinal == 1 {
+		maxPer, maxUses = 6, 5
+	} else if ctx.KPOrdinal == 2 {
 		maxPer, maxUses = 13, 12
-	}
-	if ctx.Difficulty >= 0.7 {
+	} else if ctx.KPOrdinal == 3 {
 		maxPer, maxUses = 18, 20
+	} else {
+		if ctx.Difficulty >= 0.45 {
+			maxPer, maxUses = 13, 12
+		}
+		if ctx.Difficulty >= 0.7 {
+			maxPer, maxUses = 18, 20
+		}
 	}
 	perA := rand.Intn(maxPer) + 6     // 6..maxPer+5
 	perB := perA - (rand.Intn(3) + 1) // 1..3 cheaper per use
@@ -341,11 +368,19 @@ type ineqWordGen struct{}
 
 func (g *ineqWordGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	maxPer, maxCount := 5, 8
-	if ctx.Difficulty >= 0.45 {
+	if ctx.KPOrdinal == 1 {
+		maxPer, maxCount = 4, 6
+	} else if ctx.KPOrdinal == 2 {
 		maxPer, maxCount = 9, 12
-	}
-	if ctx.Difficulty >= 0.7 {
+	} else if ctx.KPOrdinal == 3 {
 		maxPer, maxCount = 15, 20
+	} else {
+		if ctx.Difficulty >= 0.45 {
+			maxPer, maxCount = 9, 12
+		}
+		if ctx.Difficulty >= 0.7 {
+			maxPer, maxCount = 15, 20
+		}
 	}
 	base := rand.Intn(15) + 5        // flat fee 5..19
 	per := rand.Intn(maxPer-1) + 2   // 2..maxPer

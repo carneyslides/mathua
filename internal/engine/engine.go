@@ -73,6 +73,13 @@ type activeSession struct {
 	kpOrdinal          int
 }
 
+func (as *activeSession) currentKPOrdinal() int {
+	if as == nil {
+		return 0
+	}
+	return as.kpOrdinal
+}
+
 // ErrNoActiveQuestion is returned when a session has no unanswered question
 // ready for grading — e.g. a duplicate/stale submission racing the current one.
 var ErrNoActiveQuestion = fmt.Errorf("no active question")
@@ -625,7 +632,11 @@ func (e *Engine) NextQuestion(sessionID, studentID string) (*Question, error) {
 				activeKP = c.KnowledgePointByOrdinal(as.kpOrdinal)
 			}
 		}
-		ctx := generator.GeneratorContext{Difficulty: diff, Seed: hashSeed(studentID + "|" + cid + "|" + as.attemptID)}
+		ctx := generator.GeneratorContext{
+			Difficulty: diff,
+			Seed:       hashSeed(studentID + "|" + cid + "|" + as.attemptID),
+			KPOrdinal:  as.currentKPOrdinal(),
+		}
 		prob, err := e.registry.GenerateContext(cid, ctx)
 		if err != nil {
 			return nil, fmt.Errorf("generate remedial problem: %w", err)
@@ -695,7 +706,7 @@ func (e *Engine) NextQuestion(sessionID, studentID string) (*Question, error) {
 	prevQuestion := as.questionText
 	attemptID := newAttemptID()
 	seedBase := hashSeed(studentID + "|" + next.Concept.ID + "|" + attemptID)
-	ctx := generator.GeneratorContext{Difficulty: difficulty, Seed: seedBase}
+	ctx := generator.GeneratorContext{Difficulty: difficulty, Seed: seedBase, KPOrdinal: as.currentKPOrdinal()}
 	prob, err := e.registry.GenerateContext(next.Concept.ID, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("generate problem: %w", err)
@@ -768,6 +779,7 @@ func (e *Engine) NextReviewQuestion(sessionID, studentID string) (*Question, err
 		return nil, nil
 	}
 	difficulty := difficultyFromWeakness(e.weaknessMapFromProgress(progress), next.Concept.ID)
+	as.kpOrdinal = 0
 	prevQuestion := as.questionText
 	attemptID := newAttemptID()
 	seedBase := hashSeed(studentID + "|" + next.Concept.ID + "|" + attemptID)

@@ -327,9 +327,15 @@ func (g *interpretRemainderGen) Generate(ctx generator.GeneratorContext) generat
 	quotient := total / per
 	remainder := total % per
 	mode := "full"
-	answer := quotient
-	if rand.Intn(2) == 0 {
+	if ctx.KPOrdinal == 1 {
+		mode = "full"
+	} else if ctx.KPOrdinal >= 2 {
 		mode = "needed"
+	} else if rand.Intn(2) == 0 {
+		mode = "needed"
+	}
+	answer := quotient
+	if mode == "needed" {
 		answer = quotient + 1
 	}
 	if mode == "full" {
@@ -401,7 +407,15 @@ func (g *divZeroGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 			reason: "No number multiplied by zero gives 5, so 5 ÷ 0 has no value.",
 		},
 	}
-	c := claims[rand.Intn(len(claims))]
+	idx := rand.Intn(len(claims))
+	if ctx.KPOrdinal == 1 {
+		idx = 0
+	} else if ctx.KPOrdinal == 2 {
+		idx = 1
+	} else if ctx.KPOrdinal == 3 {
+		idx = 2
+	}
+	c := claims[idx]
 	p := generator.MultipleChoice("Which statement is true?", c.correct, c.distractors...)
 	p.Explanation = c.reason
 	p.Facts = map[string]string{"answer": c.correct, "reason": c.reason}
@@ -500,6 +514,11 @@ func (g *negativeBaseGen) Generate(ctx generator.GeneratorContext) generator.Pro
 	base := rand.Intn(4) + 2  // 2..5
 	power := rand.Intn(2) + 2 // 2..3
 	parenthesized := rand.Intn(2) == 0
+	if ctx.KPOrdinal == 1 {
+		parenthesized = false
+	} else if ctx.KPOrdinal >= 2 {
+		parenthesized = true
+	}
 	var value int
 	var question, explanation, rule string
 	if parenthesized {

@@ -115,7 +115,13 @@ type addWordGen struct{}
 func (g *addWordGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	// Staged ladder: small counts → two-digit sums.
 	maxN := 20
-	if ctx.Difficulty >= 0.7 {
+	if ctx.KPOrdinal == 1 {
+		maxN = 10
+	} else if ctx.KPOrdinal == 2 {
+		maxN = 25
+	} else if ctx.KPOrdinal == 3 {
+		maxN = 50
+	} else if ctx.Difficulty >= 0.7 {
 		maxN = 50
 	} else if ctx.Difficulty >= 0.45 {
 		maxN = 35
@@ -375,7 +381,13 @@ type divRemainderGen struct{}
 func (g *divRemainderGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	// Staged ladder: small divisor → larger divisor and quotient.
 	divMax := 5
-	if ctx.Difficulty >= 0.7 {
+	if ctx.KPOrdinal == 1 {
+		divMax = 5
+	} else if ctx.KPOrdinal == 2 {
+		divMax = 8
+	} else if ctx.KPOrdinal == 3 {
+		divMax = 12
+	} else if ctx.Difficulty >= 0.7 {
 		divMax = 12
 	} else if ctx.Difficulty >= 0.45 {
 		divMax = 8
@@ -802,6 +814,13 @@ type negAddSubGen struct{}
 
 func (g *negAddSubGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	scale := int(1 + ctx.Difficulty*5)
+	if ctx.KPOrdinal == 1 {
+		scale = 1
+	} else if ctx.KPOrdinal == 2 {
+		scale = 3
+	} else if ctx.KPOrdinal == 3 {
+		scale = 5
+	}
 	a := rand.Intn(scale*4) - scale*2
 	b := rand.Intn(scale*2) - scale
 	return generator.Problem{
@@ -839,6 +858,13 @@ type orderOpsGen struct {
 
 func (g *orderOpsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	scale := int(1 + ctx.Difficulty*5)
+	if ctx.KPOrdinal == 1 {
+		scale = 1
+	} else if ctx.KPOrdinal == 2 {
+		scale = 3
+	} else if ctx.KPOrdinal == 3 {
+		scale = 5
+	}
 	a := rand.Intn(scale*2) + 1
 	b := rand.Intn(scale*2) + 1
 	c := rand.Intn(max(1, scale)) + 1

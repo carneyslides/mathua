@@ -180,13 +180,22 @@ func (g *limitNumericGen) Generate(ctx generator.GeneratorContext) generator.Pro
 	}
 }
 
+// selectMode selects template mode 0, 1 or 2 when ctx.KPOrdinal is 1, 2 or 3.
+// When ctx.KPOrdinal is 0, it selects randomly from totalModes.
+func selectMode(ctx generator.GeneratorContext, totalModes int) int {
+	if ctx.KPOrdinal >= 1 && ctx.KPOrdinal <= 3 {
+		return ctx.KPOrdinal - 1
+	}
+	return rand.Intn(totalModes)
+}
+
 type limitPropertiesGen struct{}
 
 func (g *limitPropertiesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	scale := int(1 + ctx.Difficulty*5)
 	fLim := rand.Intn(scale*2) + 1
 	gLim := rand.Intn(scale*2) + 1
-	op := rand.Intn(5)
+	op := selectMode(ctx, 5)
 	var ans int
 	var opStr, desc string
 	switch op {
@@ -571,7 +580,7 @@ func (g *integralFTCGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type integralAreaBetweenGen struct{}
 
 func (g *integralAreaBetweenGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// Area between y = mx and y = 0 from x = 0 to x = L with m even
@@ -825,7 +834,7 @@ func formatPoly(terms []term) string {
 type rolleGen struct{}
 
 func (g *rolleGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// Quadratic f(x) = x^2 - (r1+r2)x + r1*r2 on [r1, r2] with r1, r2 same parity
@@ -898,7 +907,7 @@ func (g *rolleGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type mvtGen struct{}
 
 func (g *mvtGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// Quadratic f(x) = x^2 on [a, b] with same parity
@@ -973,7 +982,7 @@ func (g *mvtGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type cauchyMVTGen struct{}
 
 func (g *cauchyMVTGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// f(x) = x^2, g(x) = x on [a, b]
@@ -1042,7 +1051,7 @@ func (g *cauchyMVTGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type fermatGen struct{}
 
 func (g *fermatGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// Parabola vertex local extremum c
@@ -1107,7 +1116,7 @@ func (g *fermatGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type differenceQuotientGen struct{}
 
 func (g *differenceQuotientGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// f(x) = a x^2 + b x
@@ -1181,7 +1190,7 @@ func (g *differenceQuotientGen) Generate(ctx generator.GeneratorContext) generat
 type differentialGen struct{}
 
 func (g *differentialGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// Differential dy = f'(x) dx for y = a x^2
@@ -2410,7 +2419,7 @@ func (g *derivJacobianGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type integralNetChangeGen struct{}
 
 func (g *integralNetChangeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// v(t) = 3 k t^2 from t = 0 to t = T -> displacement = k T^3
@@ -2502,7 +2511,7 @@ func (g *integralVariableLimitsGen) Generate(ctx generator.GeneratorContext) gen
 type integralMVTGen struct{}
 
 func (g *integralMVTGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// Average value of f(x) = 2 k x on [0, b] -> f_avg = k b
@@ -2575,7 +2584,7 @@ func (g *integralMVTGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type integralWorkGen struct{}
 
 func (g *integralWorkGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// Spring force F(x) = 2 k x stretched from 0 to D -> W = k D^2
@@ -2650,7 +2659,7 @@ func (g *integralWorkGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type integralCenterMassGen struct{}
 
 func (g *integralCenterMassGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// Uniform rod on [0, 2k] -> xbar = k
@@ -2733,7 +2742,7 @@ func (g *integralSurfaceAreaGen) Generate(ctx generator.GeneratorContext) genera
 type integralTrapezoidGen struct{}
 
 func (g *integralTrapezoidGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// Trapezoidal approximation for f(x) = x^2 on [0, 2k] with n = 1 -> T_1 = 4 k^3
@@ -2805,7 +2814,7 @@ func (g *integralTrapezoidGen) Generate(ctx generator.GeneratorContext) generato
 type integralSimpsonGen struct{}
 
 func (g *integralSimpsonGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
+	mode := selectMode(ctx, 5)
 	switch mode {
 	case 0:
 		// Simpson's rule for cubic f(x) = x^3 on [0, 2k] with n = 2 -> exact integral (2k)^4 / 4 = 4 k^4

@@ -11,11 +11,13 @@ import (
 )
 
 type varTestGen struct {
-	lastDiff float64
+	lastDiff      float64
+	lastKPOrdinal int
 }
 
 func (g *varTestGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	g.lastDiff = ctx.Difficulty
+	g.lastKPOrdinal = ctx.KPOrdinal
 	return generator.Problem{
 		Question:    "Solve this question",
 		Answer:      "10",
@@ -526,5 +528,142 @@ func TestScaffolding_SessionRehydration(t *testing.T) {
 	}
 	if currentQ.KnowledgePoint == nil || currentQ.KnowledgePoint.Title != "Limit Laws" {
 		t.Fatalf("expected KnowledgePoint Limit Laws on rehydrated question, got %+v", currentQ.KnowledgePoint)
+	}
+}
+
+func TestScaffolding_EngineThreadsKPOrdinalToGenerator(t *testing.T) {
+	d, err := concepts.Build([]concepts.Concept{
+		{
+			ID:          "calc.deriv",
+			Label:       "Derivatives",
+			Domain:      "calculus",
+			GradingType: "numeric",
+			MasteryThreshold: concepts.MasteryThreshold{
+				Streak:         3,
+				AvgTimeSeconds: 60,
+			},
+			KnowledgePoints: []concepts.KnowledgePoint{
+				{
+					Ordinal:       1,
+					Title:         "Power Rule",
+					WorkedExample: "d/dx(x^2) = 2x",
+				},
+				{
+					Ordinal:       2,
+					Title:         "Constant Multiple Rule",
+					WorkedExample: "d/dx(c*f) = c*f'",
+				},
+			},
+		},
+		{
+			ID:          "arith.add",
+			Label:       "Addition",
+			Domain:      "arithmetic",
+			GradingType: "numeric",
+			Prerequisites: []string{
+				"calc.deriv",
+			},
+			MasteryThreshold: concepts.MasteryThreshold{
+				Streak:         2,
+				AvgTimeSeconds: 30,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build DAG: %v", err)
+	}
+
+	store, err := storage.NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	calcGen := &varTestGen{}
+	arithGen := &varTestGen{}
+	reg := generator.NewRegistry()
+	reg.Register("calc.deriv", calcGen)
+	reg.Register("arith.add", arithGen)
+
+	eng := New(store, d, reg, nil, nil)
+	stu, err := eng.CreateStudent("kp_test_student")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+	sess, err := store.CreateSession(stu.ID)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	// 1. First question on calc.deriv: should pass KPOrdinal = 1 to generator
+	q1, err := eng.NextQuestion(sess.ID, stu.ID)
+	if err != nil {
+		t.Fatalf("next question 1: %v", err)
+	}
+	if q1.KPOrdinal != 1 {
+		t.Fatalf("expected q1 KPOrdinal=1, got %d", q1.KPOrdinal)
+	}
+	if calcGen.lastKPOrdinal != 1 {
+		t.Fatalf("expected generator to receive KPOrdinal=1, got %d", calcGen.lastKPOrdinal)
+	}
+
+	// 2. Answer twice correctly to advance to KP 2
+	_, err = eng.SubmitAnswer(sess.ID, stu.ID, q1.AttemptID, "10", 5.0)
+	if err != nil {
+		t.Fatalf("submit 1: %v", err)
+	}
+	q2, err := eng.NextQuestion(sess.ID, stu.ID)
+	if err != nil {
+		t.Fatalf("next question 2: %v", err)
+	}
+	_, err = eng.SubmitAnswer(sess.ID, stu.ID, q2.AttemptID, "10", 5.0)
+	if err != nil {
+		t.Fatalf("submit 2: %v", err)
+	}
+
+	// Next question should now be on KP 2: generator must receive KPOrdinal = 2
+	q3, err := eng.NextQuestion(sess.ID, stu.ID)
+	if err != nil {
+		t.Fatalf("next question 3: %v", err)
+	}
+	if q3.KPOrdinal != 2 {
+		t.Fatalf("expected q3 KPOrdinal=2, got %d", q3.KPOrdinal)
+	}
+	if calcGen.lastKPOrdinal != 2 {
+		t.Fatalf("expected generator to receive KPOrdinal=2, got %d", calcGen.lastKPOrdinal)
+	}
+
+	// 3. For a concept without Knowledge Points, generator must receive KPOrdinal = 0
+	stu2, err := eng.CreateStudent("plain_student")
+	if err != nil {
+		t.Fatalf("create student 2: %v", err)
+	}
+	sess2, err := store.CreateSession(stu2.ID)
+	if err != nil {
+		t.Fatalf("create session 2: %v", err)
+	}
+	// Mark calc.deriv mastered so scheduler serves arith.add
+	now := time.Now().UTC()
+	err = store.UpsertProgress(&storage.ConceptProgress{
+		StudentID:    stu2.ID,
+		ConceptID:    "calc.deriv",
+		Status:       string(mastery.StatusMastered),
+		LastReviewed: &now,
+	})
+	if err != nil {
+		t.Fatalf("upsert progress: %v", err)
+	}
+	qPlain, err := eng.NextQuestion(sess2.ID, stu2.ID)
+	if err != nil {
+		t.Fatalf("next plain question: %v", err)
+	}
+	if qPlain.ConceptID != "arith.add" {
+		t.Fatalf("expected arith.add, got %s", qPlain.ConceptID)
+	}
+	if qPlain.KPOrdinal != 0 {
+		t.Fatalf("expected KPOrdinal=0 for concept without KPs, got %d", qPlain.KPOrdinal)
+	}
+	if arithGen.lastKPOrdinal != 0 {
+		t.Fatalf("expected generator to receive KPOrdinal=0 for concept without KPs, got %d", arithGen.lastKPOrdinal)
 	}
 }

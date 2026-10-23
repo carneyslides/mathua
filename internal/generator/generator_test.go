@@ -129,3 +129,48 @@ func TestProblem_Fields(t *testing.T) {
 		t.Error("problem fields should not be empty")
 	}
 }
+
+type kpContextGen struct {
+	lastOrdinal int
+}
+
+func (g *kpContextGen) Generate(ctx GeneratorContext) Problem {
+	g.lastOrdinal = ctx.KPOrdinal
+	return Problem{Question: "q", Answer: "a", Explanation: "e"}
+}
+
+func TestRegistry_GenerateContext_ThreadsKPOrdinal(t *testing.T) {
+	r := NewRegistry()
+	g := &kpContextGen{}
+	if err := r.Register("test.kp", g); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	for _, want := range []int{1, 2, 3} {
+		_, err := r.GenerateContext("test.kp", GeneratorContext{KPOrdinal: want})
+		if err != nil {
+			t.Fatalf("unexpected generate error for ordinal %d: %v", want, err)
+		}
+		if g.lastOrdinal != want {
+			t.Errorf("expected KPOrdinal %d, got %d", want, g.lastOrdinal)
+		}
+	}
+}
+
+func TestRegistry_BatchGenerateContext_ThreadsKPOrdinal(t *testing.T) {
+	r := NewRegistry()
+	g := &kpContextGen{}
+	if err := r.Register("test.kp.batch", g); err != nil {
+		t.Fatalf("unexpected register error: %v", err)
+	}
+
+	for _, want := range []int{1, 2, 3} {
+		_, err := r.BatchGenerateContext("test.kp.batch", 2, GeneratorContext{KPOrdinal: want})
+		if err != nil {
+			t.Fatalf("unexpected batch generate error for ordinal %d: %v", want, err)
+		}
+		if g.lastOrdinal != want {
+			t.Errorf("expected KPOrdinal %d, got %d", want, g.lastOrdinal)
+		}
+	}
+}

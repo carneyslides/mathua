@@ -5,6 +5,9 @@ import "github.com/chuma-beep/mathua/internal/grader"
 type GeneratorContext struct {
 	Difficulty float64
 	Seed       int64
+	// KPOrdinal is the 1-indexed knowledge point ordinal (1, 2 or 3).
+	// Zero indicates unguided or continuous difficulty scaling.
+	KPOrdinal  int
 }
 
 type Problem struct {
