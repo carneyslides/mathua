@@ -145,3 +145,35 @@ prevent.
 One judgement call it makes: a number next to "concepts" is only checked when the sentence also
 scopes it to the whole corpus. "calculus is 128 concepts" is a legitimate subset claim that no
 checker can verify without knowing which subset is meant.
+
+---
+
+## 8. No Oxford comma in copy we author
+
+**Join the last two items of a list with "and", never ", and".** So: "tokens, passwords and
+sessions", not "tokens, passwords, and sessions". The same applies to "or".
+
+### Why
+
+This is a voice decision, not a grammar one. Both forms are correct English; mixing them is what
+reads as unedited. Mathua's copy is short, mostly one sentence at a time, and a list that ends in
+", and" pulls the eye to the conjunction as though it were a new clause. The owner asked for one
+consistent form, and consistency is the whole benefit — a rule applied to half the sentences
+delivers none of it.
+
+It is deliberately narrow: a comma before "and" that joins two independent clauses is correct and
+stays. "The pool is empty, and the queue says so" is two clauses, not a list. Only the final
+separator of a list of three or more changes.
+
+### How it is checked
+
+`scripts/check_oxford_comma.py` scans authored prose — `AGENTS.md`, `CONTEXT.md`, `CONTRIBUTING.md`,
+`README.md`, `docs/`, `web/next-app/app`, `web/next-app/components` and `web/next-app/lib` — and
+reports a candidate whenever a line contains ", and" or ", or" after an earlier comma.
+
+It reports; it does not block. The heuristic cannot tell a serial comma from a clause comma, so a
+hard failure would either be wrong or force contorted sentences, and a checker that is wrong gets
+disabled rather than obeyed. The rule is enforced in review; the script exists so a reviewer has
+the candidates in front of them instead of relying on noticing. It is wired into the advisory
+`Documentation (advisory)` CI job for the same reason the documentation checks are advisory: a
+prose nit must never hold a release.

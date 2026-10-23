@@ -414,7 +414,7 @@ export default function SettingsPage() {
               <div className="border-t border-mathua-border pt-6 min-w-0">
                 <span className="font-mono text-sm text-mathua-primary">Learning plan</span>
                 <p className="text-mathua-muted text-xs mt-1">
-                  Destination, pace, and rest days. Full workload estimates live in <Link href="/plan" className="text-mathua-blue hover:text-mathua-blue-hover">Plan</Link>.
+                  Destination, pace and rest days. Full workload estimates live in <Link href="/plan" className="text-mathua-blue hover:text-mathua-blue-hover">Plan</Link>.
                 </p>
                 <div className="mt-2">
                   <PlanEditor compact />

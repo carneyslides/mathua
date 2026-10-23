@@ -130,3 +130,27 @@ func TestMyLeague_SecondReadDoesNotReseatAnyone(t *testing.T) {
 		t.Errorf("rank changed between reads: %+v then %+v", first.Me, second.Me)
 	}
 }
+
+func TestMyLeague_EmptyOrGuestStudentID(t *testing.T) {
+	repo := leagueRepo(t)
+	comp := NewComputer(repo)
+	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+
+	// Empty student ID
+	emptyRes, err := comp.MyLeague("", now)
+	if err != nil {
+		t.Fatalf("MyLeague empty student: %v", err)
+	}
+	if len(emptyRes.Members) != 0 || emptyRes.Me != nil {
+		t.Errorf("expected empty members for empty student, got %+v", emptyRes)
+	}
+
+	// Guest student ID
+	guestRes, err := comp.MyLeague("guest-abc-123", now)
+	if err != nil {
+		t.Fatalf("MyLeague guest student: %v", err)
+	}
+	if len(guestRes.Members) != 0 || guestRes.Me != nil {
+		t.Errorf("expected empty members for guest student, got %+v", guestRes)
+	}
+}

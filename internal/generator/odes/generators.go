@@ -513,28 +513,80 @@ func (g *eulerGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type rk4Gen struct{}
 
 func (g *rk4Gen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Stage evaluations across N steps
+		n := smallInt(2, 6+int(ctx.Difficulty*10))
+		ans := 4 * n
+		return generator.Problem{
+			Question: fmt.Sprintf("How many stage function evaluations does the classic 4th-order Runge-Kutta method (RK4) require across %d steps?", n),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Each step of classic RK4 evaluates the slope at 4 stages (k_1, k_2, k_3 and k_4). For %d steps, the total number of evaluations is 4 * %d = %d.",
+				n, n, ans,
+			),
+		}
+
+	case 1:
+		// Global error reduction factor under step size division
+		kChoices := []int{2, 3, 4, 5}
+		k := kChoices[rand.Intn(len(kChoices))]
+		ans := k * k * k * k
+		return generator.Problem{
+			Question: fmt.Sprintf(
+				"If the step size \\(h\\) in the fourth-order Runge-Kutta method (RK4) is reduced by a factor of %d, by what theoretical factor is the global truncation error reduced?",
+				k,
+			),
+			Answer: fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"RK4 has a global truncation error of \\(\\mathcal{O}(h^4)\\). Dividing the step size by %d reduces the global error by a factor of \\(%d^4 = %d\\).",
+				k, k, ans,
+			),
+		}
+
+	case 2:
+		// First stage slope k_1 = f(x_0, y_0)
+		a := smallInt(1, 4)
+		b := smallInt(1, 4)
+		x0 := smallInt(0, 3)
+		y0 := smallInt(1, 4)
+		k1 := a*x0 + b*y0
+		return generator.Problem{
+			Question: fmt.Sprintf(
+				"For the initial value problem \\(y' = %dx + %dy\\) with \\(y(%d) = %d\\), compute the first stage slope \\(k_1\\) in the classic RK4 method.",
+				a, b, x0, y0,
+			),
+			Answer: fmt.Sprintf("%d", k1),
+			Explanation: fmt.Sprintf(
+				"In the classic RK4 method, the first stage slope is evaluated at the initial point: \\(k_1 = f(x_0, y_0) = %d(%d) + %d(%d) = %d\\).",
+				a, x0, b, y0, k1,
+			),
+		}
+
+	case 3:
+		// Truncation error order
+		if rand.Float64() < 0.5 {
+			return generator.Problem{
+				Question: "What is the integer order \\(p\\) of the global truncation error \\(\\mathcal{O}(h^p)\\) for the classic Runge-Kutta method?",
+				Answer:   "4",
+				Explanation: "The classic fourth-order Runge-Kutta method achieves a global truncation error of order \\(\\mathcal{O}(h^4)\\).",
+			}
+		}
+		return generator.Problem{
+			Question: "What is the integer order \\(p\\) of the local truncation error \\(\\mathcal{O}(h^p)\\) for the classic fourth-order Runge-Kutta method?",
+			Answer:   "5",
+			Explanation: "Classic RK4 has local truncation error \\(\\mathcal{O}(h^5)\\), which accumulates over \\(\\mathcal{O}(1/h)\\) steps to produce a global error of \\(\\mathcal{O}(h^4)\\).",
+		}
+
+	default:
+		// Sum of intermediate stage weights in butcher increment
+		return generator.Problem{
+			Question: "In the classic RK4 increment formula \\(\\frac{h}{6}(k_1 + w_2 k_2 + w_3 k_3 + k_4)\\), what is the sum of the inner weights \\(w_2 + w_3\\)?",
+			Answer:   "4",
+			Explanation: "The classic RK4 butcher tableau weights the mid-point slopes at 2 each (\\(w_2 = 2\\) and \\(w_3 = 2\\)), so \\(w_2 + w_3 = 2 + 2 = 4\\).",
+		}
 	}
-	easy := []entry{
-		{"Does RK4 have local truncation error O(h^5) and global O(h^4)? (yes/no)", "yes", "RK4: local O(h^5), global O(h^4), vs Euler local O(h^2) global O(h)."},
-		{"How many function evaluations per step does RK4 need? (4)", "4", "k1,k2,k3,k4 per step."},
-		{"Is RK4 more accurate than Euler with same h? (yes/no)", "yes", "Higher order gives smaller error for same step size."},
-	}
-	hard := []entry{
-		{"With h=0.1, does halving h reduce RK4 global error by ~16×? (yes/no)", "yes", "Error ∝ h^4, so (1/2)^4=1/16."},
-		{"Does RK4's increment use weighted average (k1+2k2+2k3+k4)/6? (yes/no)", "yes", "Classic RK4 formula."},
-		{"Is RK4 explicit (no solve) for y'=f(x,y)? (yes/no)", "yes", "Explicit; all k_i use known values."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type stabilityGen struct{}

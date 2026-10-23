@@ -132,3 +132,48 @@ func TestInvitationTokenIsHashedAndUnique(t *testing.T) {
 		t.Fatal("the hash is not the documented function of the raw token")
 	}
 }
+
+func TestPermissionsList(t *testing.T) {
+	cases := []struct {
+		role      storage.Role
+		wantCount int
+		hasGrant  bool
+	}{
+		{storage.RoleOwner, 10, true},
+		{storage.RoleAdmin, 9, false},
+		{storage.RoleModerator, 4, false},
+		{storage.RoleStudent, 0, false},
+	}
+
+	for _, tc := range cases {
+		perms := Permissions(tc.role)
+		if len(perms) != tc.wantCount {
+			t.Errorf("Permissions(%s) returned %d permissions, want %d", tc.role, len(perms), tc.wantCount)
+		}
+		hasGrantOwner := false
+		for _, p := range perms {
+			if !Permitted(tc.role, p) {
+				t.Errorf("Permissions(%s) included %s which Permitted says is false", tc.role, p)
+			}
+			if p == RolesGrantOwner {
+				hasGrantOwner = true
+			}
+		}
+		if hasGrantOwner != tc.hasGrant {
+			t.Errorf("Permissions(%s) hasGrantOwner = %v, want %v", tc.role, hasGrantOwner, tc.hasGrant)
+		}
+	}
+}
+
+func TestCouldEscalateAllTransitions(t *testing.T) {
+	roles := []storage.Role{storage.RoleStudent, storage.RoleModerator, storage.RoleAdmin, storage.RoleOwner}
+	for i, r1 := range roles {
+		for j, r2 := range roles {
+			want := j > i
+			got := CouldEscalate(r1, r2)
+			if got != want {
+				t.Errorf("CouldEscalate(%s, %s) = %v, want %v", r1, r2, got, want)
+			}
+		}
+	}
+}

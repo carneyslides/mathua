@@ -197,3 +197,29 @@ func TestQuotaRollsOverByDay(t *testing.T) {
 		t.Error("a new UTC day must restore the budget")
 	}
 }
+
+func TestQuotaCapGettersAndUsedEdgeCases(t *testing.T) {
+	q := NewQuota(NewMemUsageStore(), 7, 42)
+	if q.Cap() != 7 {
+		t.Errorf("Cap = %d, want 7", q.Cap())
+	}
+	if q.GlobalCap() != 42 {
+		t.Errorf("GlobalCap = %d, want 42", q.GlobalCap())
+	}
+
+	var nilQ *Quota
+	if nilQ.Cap() != 0 {
+		t.Errorf("nil Cap = %d, want 0", nilQ.Cap())
+	}
+	if nilQ.GlobalCap() != 0 {
+		t.Errorf("nil GlobalCap = %d, want 0", nilQ.GlobalCap())
+	}
+	used, err := nilQ.Used(context.Background(), "user")
+	if err != nil || used != 0 {
+		t.Errorf("nil Used = (%d, %v), want (0, nil)", used, err)
+	}
+	used, err = q.Used(context.Background(), "")
+	if err != nil || used != 0 {
+		t.Errorf("empty key Used = (%d, %v), want (0, nil)", used, err)
+	}
+}

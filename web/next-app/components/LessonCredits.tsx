@@ -29,7 +29,7 @@ export default function LessonCredits({
   if (credit !== 'orcca') return null
   return (
     <p className={`mt-3 font-mono text-[11px] leading-relaxed text-mathua-muted ${className}`}>
-      Original source material, products with readable and accessible math content, and other
+      Original source material, products with readable and accessible math content and other
       information are freely available at{' '}
       <a href="https://pcc.edu/orcca" className="text-mathua-blue hover:underline">
         pcc.edu/orcca

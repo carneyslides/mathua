@@ -154,7 +154,7 @@
     "label": "Amplitude, period, and phase shift",
     "domain": "trigonometry",
     "subdomain": "trigonometry.graphs",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "trig.graph.cos"
     ],

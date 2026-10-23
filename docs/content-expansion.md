@@ -185,17 +185,17 @@ exemptions are gone from `internal/generator/solutions_coverage_test.go`. Learne
 coverage moves from 349 of 402 to 355, and trigonometry's `multiple_choice` count falls from 29 to
 23, which takes it below the four-in-ten criterion and off the table above.
 
-**The algebra batch converted seven and kept eleven exempt.** The seven have an answer a generator
+**The algebra batch converted eight and kept ten exempt.** The eight have an answer a generator
 can compute: the smallest integer in the domain of `sqrt(x - k)`, a square or cube root of a
 perfect power, `a^b`, the horizontal-axis crossing of a generated line, which of two candidates
-survives an extraneous-root check, the value of `x` in a two-equation system, and how many of three
-listed functions are injective. Each publishes its inputs as facts, and
-`internal/generator/algebra/conversions_test.go` recomputes the answer from them. The other eleven
+survives an extraneous-root check, the value of `x` in a two-equation system, how many of three
+listed functions are injective, and the unknown coefficient in a cubic polynomial under the factor theorem. Each publishes its inputs as facts, and
+`internal/generator/algebra/conversions_test.go` recomputes the answer from them. The other ten
 — the Dirichlet function's continuity, a function's parity, the sigmoid's three fixed questions,
-and the eight multiple-choice concepts — have categorical or definitional answers with no
+and the seven multiple-choice concepts — have categorical or definitional answers with no
 interpolated parameters, so their exemptions stay: a schema for them would be one fixed paragraph,
 which is what the allowlist exists to avoid. Learner-domain schema coverage moves from 355 of 402
-to 362.
+to 363.
 
 ### 4.3 Lesson depth is no longer thin at the bottom
 

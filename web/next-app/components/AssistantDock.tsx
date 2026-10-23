@@ -250,7 +250,7 @@ export default function AssistantDock() {
 							</p>
 							<p className="text-[13px] leading-relaxed text-mathua-primary">
 								Your text goes to an AI provider so it can answer. Do not type names, email
-								addresses, school details, or anything about another person.
+								addresses, school details or anything about another person.
 							</p>
 							<p className="text-[12px] leading-relaxed text-mathua-muted">
 								Your answers, progress and account details are not sent. The message is not

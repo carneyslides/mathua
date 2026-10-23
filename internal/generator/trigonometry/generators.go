@@ -423,47 +423,33 @@ func (g *graphCosGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type periodGen struct{}
 
 func (g *periodGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	configs := []struct {
-		A      int
-		B      int
-		C      int
-		amp    int
-		period string
-		shift  string
-	}{
-		{2, 1, 0, 2, "360°", "0"},
-		{3, 2, 0, 3, "180°", "0"},
-		{1, 3, 0, 1, "120°", "0"},
-		{4, 4, 0, 4, "90°", "0"},
-		{2, 1, 45, 2, "360°", "45°"},
-		{3, 2, 30, 3, "180°", "30°"},
-		{1, 3, 60, 1, "120°", "60°"},
+	// B is chosen from divisors of 360 so the period in degrees is an exact integer.
+	bDivisors := []int{1, 2, 3, 4, 5, 6, 8, 9, 10, 12}
+	b := bDivisors[rand.Intn(len(bDivisors))]
+	a := rand.Intn(7) + 2
+	period := 360 / b
+
+	fn := "sin"
+	if rand.Intn(2) == 1 {
+		fn = "cos"
 	}
-	c := configs[rand.Intn(len(configs))]
-	opts := []struct {
-		q, a, e string
-	}{
-		{
-			fmt.Sprintf("What is the amplitude of \\(y = %d \\sin(%dx)\\)?", c.A, c.B),
-			fmt.Sprintf("%d", c.amp),
-			fmt.Sprintf("Amplitude = \\(|A| = |%d| = %d\\).", c.A, c.amp),
-		},
-		{
-			fmt.Sprintf("What is the period of \\(y = \\sin(%dx)\\)?", c.B),
-			c.period,
-			fmt.Sprintf("Period = \\(360^{\\circ}/|B| = 360^{\\circ}/%d = %s\\).", c.B, c.period),
-		},
-		{
-			fmt.Sprintf("What is the phase shift of \\(y = \\sin(%dx + %d)\\)?", c.B, c.C),
-			c.shift,
-			fmt.Sprintf("Phase shift = \\(-C/B = -%d/%d = -%s\\) (shifted right).", c.C, c.B, c.shift),
-		},
-	}
-	opt := opts[rand.Intn(3)]
+
+	q := fmt.Sprintf("For the trigonometric function \\(y = %d \\%s(%dx)\\), what is its period in degrees? (enter an integer)",
+		a, fn, b)
+	exp := fmt.Sprintf("The period of a standard \\(\\%s\\) function is \\(360^{\\circ}\\). The frequency multiplier \\(B = %d\\) compresses the period by a factor of %d: \\(360^{\\circ} / %d = %d^{\\circ}\\).",
+		fn, b, b, b, period)
+
 	return generator.Problem{
-		Question:    opt.q,
-		Answer:      opt.a,
-		Explanation: opt.e,
+		Question:    q,
+		Answer:      strconv.Itoa(period),
+		Explanation: exp,
+		Facts: map[string]string{
+			"A":           strconv.Itoa(a),
+			"B":           strconv.Itoa(b),
+			"fn":          fn,
+			"base_period": "360",
+			"answer":      strconv.Itoa(period),
+		},
 	}
 }
 

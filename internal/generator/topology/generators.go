@@ -602,29 +602,130 @@ func (g *completelyRegularGen) Generate(ctx generator.GeneratorContext) generato
 type fundamentalGen struct{}
 
 func (g *fundamentalGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
+	mode := rand.Intn(6)
+
+	switch mode {
+	case 0:
+		// n-torus T^n = (S^1)^n, pi_1(T^n) = Z^n (rank n).
+		n := rand.Intn(5) + 2
+		q := fmt.Sprintf("What is the rank (number of independent \\(\\mathbb{Z}\\) factors) of the fundamental group \\(\\pi_1(T^{%d})\\) of the %d-dimensional torus \\(T^{%d} = (S^1)^{%d}\\)?",
+			n, n, n, n)
+		exp := fmt.Sprintf("The %d-torus is the product of %d circles, so \\(\\pi_1(T^{%d}) \\cong \\pi_1(S^1)^{%d} \\cong \\mathbb{Z}^{%d}\\). The rank of \\(\\mathbb{Z}^{%d}\\) is %d.",
+			n, n, n, n, n, n, n)
+		return generator.Problem{
+			Question:    q,
+			Answer:      strconv.Itoa(n),
+			Explanation: exp,
+			Facts: map[string]string{
+				"kind":   "torus",
+				"n":      strconv.Itoa(n),
+				"answer": strconv.Itoa(n),
+			},
+		}
+
+	case 1:
+		// Wedge of k circles, pi_1 = F_k (free group of rank k).
+		k := rand.Intn(6) + 2
+		q := fmt.Sprintf("By the Seifert-van Kampen theorem, the fundamental group of a wedge sum of %d circles \\(\\bigvee_{i=1}^{%d} S^1\\) is the free group \\(F_{%d}\\). What is the rank (number of free generators) of \\(\\pi_1\\left(\\bigvee_{i=1}^{%d} S^1\\right)\\)?",
+			k, k, k, k)
+		exp := fmt.Sprintf("A wedge of %d circles at a common basepoint has fundamental group isomorphic to the free product of %d copies of \\(\\pi_1(S^1) \\cong \\mathbb{Z}\\), which is the free group on %d generators. The rank is %d.",
+			k, k, k, k)
+		return generator.Problem{
+			Question:    q,
+			Answer:      strconv.Itoa(k),
+			Explanation: exp,
+			Facts: map[string]string{
+				"kind":   "wedge_circles",
+				"k":      strconv.Itoa(k),
+				"answer": strconv.Itoa(k),
+			},
+		}
+
+	case 2:
+		// Punctured plane R^2 \ {p_1, ..., p_k}, deformation retracts to wedge of k circles.
+		k := rand.Intn(6) + 2
+		q := fmt.Sprintf("The Euclidean plane minus %d distinct points, \\(\\mathbb{R}^2 \\setminus \\{p_1, \\dots, p_{%d}\\}\\), deformation retracts onto a wedge sum of circles. What is the rank of its fundamental group?",
+			k, k)
+		exp := fmt.Sprintf("Removing %d points from \\(\\mathbb{R}^2\\) leaves a space homotopy equivalent to a bouquet of %d circles. Its fundamental group is the free group on %d generators, so the rank is %d.",
+			k, k, k, k)
+		return generator.Problem{
+			Question:    q,
+			Answer:      strconv.Itoa(k),
+			Explanation: exp,
+			Facts: map[string]string{
+				"kind":   "punctured_plane",
+				"points": strconv.Itoa(k),
+				"answer": strconv.Itoa(k),
+			},
+		}
+
+	case 3:
+		// Lens space L(p, q), pi_1 = Z_p (order p).
+		primes := []int{2, 3, 5, 7, 11, 13}
+		p := primes[rand.Intn(len(primes))]
+		qVal := 1
+		for qCandidate := 2; qCandidate < p; qCandidate++ {
+			a, b := p, qCandidate
+			for b != 0 {
+				a, b = b, a%b
+			}
+			if a == 1 {
+				qVal = qCandidate
+				break
+			}
+		}
+		q := fmt.Sprintf("The 3-dimensional lens space \\(L(%d, %d)\\) has fundamental group isomorphic to the cyclic group \\(\\mathbb{Z}/%d\\mathbb{Z}\\). What is the order of \\(\\pi_1(L(%d, %d))\\)?",
+			p, qVal, p, p, qVal)
+		exp := fmt.Sprintf("By definition, the lens space \\(L(%d, %d)\\) is the quotient of \\(S^3\\) by a free action of \\(\\mathbb{Z}/%d\\mathbb{Z}\\). Since \\(S^3\\) is simply connected, \\(\\pi_1(L(%d, %d)) \\cong \\mathbb{Z}/%d\\mathbb{Z}\\), which has order %d.",
+			p, qVal, p, p, qVal, p, p)
+		return generator.Problem{
+			Question:    q,
+			Answer:      strconv.Itoa(p),
+			Explanation: exp,
+			Facts: map[string]string{
+				"kind":   "lens_space",
+				"p":      strconv.Itoa(p),
+				"q":      strconv.Itoa(qVal),
+				"answer": strconv.Itoa(p),
+			},
+		}
+
+	case 4:
+		// Surface of genus g, rank of abelianized fundamental group is 2g.
+		gVal := rand.Intn(5) + 1
+		rank := 2 * gVal
+		q := fmt.Sprintf("For a closed connected orientable surface \\(\\Sigma_{%d}\\) of genus %d, what is the rank of the abelianized fundamental group \\(\\pi_1(\\Sigma_{%d})^{ab} \\cong H_1(\\Sigma_{%d}, \\mathbb{Z})\\)?",
+			gVal, gVal, gVal, gVal)
+		exp := fmt.Sprintf("The fundamental group of a surface of genus %d has %d generator pairs \\(a_i, b_i\\) subject to a single relation \\(\\prod [a_i, b_i] = 1\\). In the abelianization, all commutators become trivial, leaving \\(\\mathbb{Z}^{2g} = \\mathbb{Z}^{%d}\\) of rank %d.",
+			gVal, gVal, rank, rank)
+		return generator.Problem{
+			Question:    q,
+			Answer:      strconv.Itoa(rank),
+			Explanation: exp,
+			Facts: map[string]string{
+				"kind":   "surface_genus",
+				"genus":  strconv.Itoa(gVal),
+				"answer": strconv.Itoa(rank),
+			},
+		}
+
+	default:
+		// Sphere S^n for n >= 2, simply connected, order of pi_1 is 1.
+		n := rand.Intn(5) + 2
+		q := fmt.Sprintf("For the %d-dimensional sphere \\(S^{%d}\\), what is the order of the fundamental group \\(\\pi_1(S^{%d})\\)?",
+			n, n, n)
+		exp := fmt.Sprintf("Every sphere \\(S^n\\) with \\(n \\ge 2\\) is simply connected: every loop can be homotoped away from a point and contracted to the basepoint. The fundamental group is trivial (order 1).")
+		return generator.Problem{
+			Question:    q,
+			Answer:      "1",
+			Explanation: exp,
+			Facts: map[string]string{
+				"kind":   "sphere",
+				"n":      strconv.Itoa(n),
+				"answer": "1",
+			},
+		}
 	}
-	easy := []entry{
-		{"What is pi_1(T^2)? (type like ZxZ)", "ZxZ", "The torus is a product of two circles, so loops carry two winding numbers."},
-		{"Is pi_1(S^1) = Z? (yes/no)", "yes", "Winding number classifies loops on the circle."},
-		{"Is pi_1(S^2) trivial? (yes/no)", "yes", "S^2 simply connected: every loop contracts."},
-		{"Is pi_1(T^2) = ZxZ? (yes/no)", "yes", "Torus product of circles gives product of winding numbers."},
-	}
-	hard := []entry{
-		{"Is π_1(R^2 minus n points) free group on n generators? (yes/no)", "yes", "Punctured plane."},
-		{"Is π_1(Klein bottle) non-abelian? (yes/no)", "yes", "Presentation ⟨a,b|aba^{-1}=b^{-1}⟩."},
-		{"Does Van Kampen compute π_1 of wedge of circles? (yes/no)", "yes", "Free group."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 // ----- 20. orientability -----

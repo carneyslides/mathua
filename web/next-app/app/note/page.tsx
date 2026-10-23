@@ -122,7 +122,7 @@ const SECTIONS: Section[] = [
     blocks: [
       { ipa: '/ˌɔːtəməˈtɪsɪti/' },
       {
-        text: 'Automaticity is the ability to perform tasks, behaviors, or mental processes effortlessly and without conscious thought as a result of extensive practice, repetition, and learning.',
+        text: 'Automaticity is the ability to perform tasks, behaviors, or mental processes effortlessly and without conscious thought as a result of extensive practice, repetition and learning.',
       },
       {
         text: "Can we do maths with this ability on display? what is required in order to do maths like this? is it just Genius? I acknowledge that there are intellectual differences in individuals but dont count your self short. All great individuals have a period of doing low-level grunt work in a whatever manner some structured or in a disciplined and passionate way, because of intellectual differences some people might make it look easy but the grunt work was done regardless.",
@@ -130,7 +130,7 @@ const SECTIONS: Section[] = [
       {
         parts: [
           "Luffy didn't immediately go striaght to gear 5 remember? instead he went through gear 1 2 3 4 then gear 5, and gear 4 even had ",
-          { strong: 'Bounceman/Boundman, Tankman, and Snakeman' },
+          { strong: 'Bounceman/Boundman, Tankman and Snakeman' },
           '.',
         ],
       },

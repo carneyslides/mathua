@@ -225,7 +225,7 @@ export default function PlanEditor({ compact = false, initialDestination, onSave
       </div>
 
       {e ? (
-        <p className="mt-3 font-mono text-[11px] text-mathua-muted">Illustrative estimate from Mathua&apos;s measured curriculum workload — actual completion depends on pace, reviews, and checks. It never changes quiz eligibility or mastery rules.</p>
+        <p className="mt-3 font-mono text-[11px] text-mathua-muted">Illustrative estimate from Mathua&apos;s measured curriculum workload — actual completion depends on pace, reviews and checks. It never changes quiz eligibility or mastery rules.</p>
       ) : (
         <p className="mt-3 font-mono text-[11px] text-mathua-muted">
           Your plan is saved as a destination and a daily pace. The workload estimate is not

@@ -6426,7 +6426,7 @@
   },
   {
     "domain": "complex_numbers",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "id": "complex.ops.argument",
     "label": "Argument of a complex number",
     "mastery_threshold": {

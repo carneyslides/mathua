@@ -92,8 +92,18 @@ export default function ReportButton(props: ReportButtonProps) {
     )
   }
 
+  // A fixed sheet, not an inline block. Inline, the panel moved whenever the
+  // verdict above it appeared or the question changed, which dismissed the
+  // native picker on Android about half a second after it opened. The sheet
+  // sits above the keyboard and its position cannot be shifted by the form.
   return (
-    <div className="mt-2 border border-mathua-border bg-mathua-bg p-3">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Report a problem"
+      className="fixed inset-0 z-[3000] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4"
+    >
+    <div className="w-full sm:max-w-md max-h-[85vh] overflow-y-auto border border-mathua-border bg-mathua-bg p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
       <div className="flex items-center justify-between mb-2">
         <span className="font-mono text-[10px] text-mathua-secondary uppercase tracking-wider">
           What&apos;s wrong?
@@ -116,6 +126,7 @@ export default function ReportButton(props: ReportButtonProps) {
         ))}
       </select>
       <textarea
+        autoFocus
         value={detail}
         onChange={e => setDetail(e.target.value)}
         placeholder="Optional details (what did you expect?)"
@@ -134,6 +145,7 @@ export default function ReportButton(props: ReportButtonProps) {
       >
         {sending ? 'Sending…' : 'Send report'}
       </button>
+    </div>
     </div>
   )
 }

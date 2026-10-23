@@ -1749,7 +1749,7 @@
     "label": "The factor theorem",
     "domain": "algebra",
     "subdomain": "algebra.polynomials",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "alg.poly.roots"
     ],

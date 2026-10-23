@@ -46,7 +46,6 @@ func registerRaise(reg *generator.Registry) {
 	reg.Register("alg.systems.nonlinear", &nonlinearSystemGen{})
 	reg.Register("alg.seq.sigma", &sigmaGen{})
 	reg.Register("alg.seq.induction", &inductionGen{})
-	reg.Register("alg.poly.factor_theorem", &factorTheoremGen{})
 	reg.Register("alg.poly.rational_root", &rationalRootGen{})
 }
 
@@ -640,35 +639,6 @@ func (g *inductionGen) Generate(ctx generator.GeneratorContext) generator.Proble
 			correct:     "does not establish the statement",
 			distractors: []string{"still proves the statement", "proves it for every n except the base", "proves the converse instead"},
 			reason:      "Without a starting point the chain never begins, so no instance is reached.",
-		},
-	})
-}
-
-// ---------------------------------------------------------------------------
-// The factor theorem (multiple choice)
-// ---------------------------------------------------------------------------
-
-type factorTheoremGen struct{}
-
-func (g *factorTheoremGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return algPickMC([]algMCClaim{
-		{
-			q:           "The factor theorem says that (x - r) is a factor of a polynomial p(x) exactly when...",
-			correct:     "p(r) = 0",
-			distractors: []string{"p(0) = r", "the leading coefficient is 1", "the derivative p'(r) = 0"},
-			reason:      "Dividing by x - r leaves a remainder equal to p(r), so the factor divides exactly only when that remainder is zero.",
-		},
-		{
-			q:           "If p(3) = 0 for a polynomial p, then...",
-			correct:     "(x - 3) divides p(x)",
-			distractors: []string{"(x + 3) divides p(x)", "3 is the leading coefficient", "p has no other roots"},
-			reason:      "A zero at 3 means the corresponding linear factor is x - 3.",
-		},
-		{
-			q:           "Dividing a polynomial p(x) by (x - r) and getting a remainder of 0 shows that...",
-			correct:     "r is a root of p",
-			distractors: []string{"r is not a root of p", "the degree of p increases", "p is irreducible"},
-			reason:      "A zero remainder is the factor theorem read backwards, so the value at r is zero.",
 		},
 	})
 }

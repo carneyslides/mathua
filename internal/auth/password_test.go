@@ -44,3 +44,49 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+func TestValidateEmail(t *testing.T) {
+	cases := []struct {
+		email   string
+		wantErr bool
+	}{
+		{"", false},
+		{"   ", false},
+		{"user@example.com", false},
+		{"first.last+tag@sub.domain.org", false},
+		{"plainaddress", true},
+		{"@missinguser.com", true},
+		{"missingdomain@", true},
+	}
+	for _, tc := range cases {
+		err := ValidateEmail(tc.email)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("ValidateEmail(%q) err=%v, wantErr=%v", tc.email, err, tc.wantErr)
+		}
+	}
+}
+
+func TestValidateUsername(t *testing.T) {
+	cases := []struct {
+		name    string
+		u       string
+		wantErr bool
+	}{
+		{"valid 3 chars", "ada", false},
+		{"valid with underscore and dot", "ada_lovelace.01", false},
+		{"valid numbers and letters", "student123", false},
+		{"too short", "ab", true},
+		{"too long", "a_very_long_username_exceeding_twenty", true},
+		{"invalid char space", "user name", true},
+		{"invalid char at", "user@name", true},
+		{"invalid char hash", "user#1", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateUsername(tc.u)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("ValidateUsername(%q) err=%v, wantErr=%v", tc.u, err, tc.wantErr)
+			}
+		})
+	}
+}

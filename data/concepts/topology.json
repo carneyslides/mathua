@@ -263,7 +263,7 @@
     "label": "Fundamental group calculations",
     "domain": "topology",
     "subdomain": "topology.algebraic",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "topo.homotopy"
     ],

@@ -22,11 +22,8 @@ func Register(reg *generator.Registry) {
 	reg.Register("nt.basics.crt", &crtGen{})
 	reg.Register("nt.adv.wilson", &wilsonGen{})
 	reg.Register("nt.basics.prime_inf", &primeInfGen{})
-	reg.Register("nt.adv.legendre", &legendreGen{})
 	reg.Register("nt.adv.quadratic_reciprocity", &quadraticReciprocityGen{})
-	reg.Register("nt.basics.order_mod", &orderModGen{})
 	reg.Register("nt.adv.primitive_root", &primitiveRootGen{})
-	reg.Register("nt.adv.mobius", &mobiusGen{})
 	reg.Register("nt.analytic.prime_number_theorem", &pntGen{})
 	reg.Register("nt.adv.dirichlet", &dirichletGen{})
 	reg.Register("nt.adv.sieve", &sieveGen{})
@@ -37,6 +34,7 @@ func Register(reg *generator.Registry) {
 	reg.Register("nt.adv.class_number", &classNumberGen{})
 	registerNumeric(reg)
 	registerBatch(reg)
+	registerConversions(reg)
 }
 
 type divisibilityGen struct{}
@@ -307,34 +305,6 @@ func joinProd(primes []int) string {
 	return s.String()
 }
 
-type legendreGen struct{}
-
-func (g *legendreGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
-	}
-	easy := []entry{
-		{"What is the Legendre symbol (1/5)? (enter -1,0,1)", "1", "1 is a quadratic residue mod 5 (1^2=1)."},
-		{"What is the Legendre symbol (4/5)? (enter -1,0,1)", "1", "4=2^2 mod5, so residue."},
-		{"What is the Legendre symbol (2/5)? (enter -1,0,1)", "-1", "2 is non-residue mod5 (no x with x^2=2)."},
-		{"Is (a/p)=0 iff p divides a? (yes/no)", "yes", "Legendre 0 exactly when p|a."},
-	}
-	hard := []entry{
-		{"What is the Legendre symbol (3/7)? (enter -1,0,1)", "-1", "Quadratic residues mod7 are 1,2,4; 3 not in set."},
-		{"Does Euler's criterion give (a/p)≡a^{(p-1)/2} mod p? (yes/no)", "yes", "Euler's criterion for odd prime p."},
-		{"Is (2/p)=1 iff p≡±1 mod8? (yes/no)", "yes", "Supplement to quadratic reciprocity."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
-}
-
 type quadraticReciprocityGen struct{}
 
 func (g *quadraticReciprocityGen) Generate(ctx generator.GeneratorContext) generator.Problem {
@@ -373,40 +343,6 @@ func (g *quadraticReciprocityGen) Generate(ctx generator.GeneratorContext) gener
 	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
-type orderModGen struct{}
-
-func (g *orderModGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	// order of 2 mod small primes
-	entries := []struct {
-		a, m, ord, phi int
-	}{
-		{2, 5, 4, 4}, {2, 7, 3, 6}, {3, 7, 6, 6}, {2, 9, 6, 6}, {3, 8, 2, 4}, {2, 11, 10, 10},
-	}
-	e := entries[rand.Intn(len(entries))]
-	if rand.Intn(3) == 0 {
-		// typed production: the order value itself
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the order of %d modulo %d? (smallest k with %d^k≡1 mod %d)", e.a, e.m, e.a, e.m),
-			Answer:      fmt.Sprintf("%d", e.ord),
-			Explanation: fmt.Sprintf("Powers of %d mod %d cycle with period %d.", e.a, e.m, e.ord),
-		}
-	}
-	if scale > 3 {
-		// for harder, ask for order value; easy asks yes/no about divisibility of phi
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the order of %d modulo %d? (smallest k with %d^k≡1 mod %d)", e.a, e.m, e.a, e.m),
-			Answer:      fmt.Sprintf("%d", e.ord),
-			Explanation: fmt.Sprintf("Powers of %d mod %d cycle with period %d.", e.a, e.m, e.ord),
-		}
-	}
-	return generator.Problem{
-		Question:    fmt.Sprintf("Does the order of %d mod %d divide φ(%d)=%d? (yes/no)", e.a, e.m, e.m, e.phi),
-		Answer:      "yes",
-		Explanation: "Order always divides φ(m) (Euler) or p-1 for prime.",
-	}
-}
-
 type primitiveRootGen struct{}
 
 func (g *primitiveRootGen) Generate(ctx generator.GeneratorContext) generator.Problem {
@@ -442,32 +378,6 @@ func (g *primitiveRootGen) Generate(ctx generator.GeneratorContext) generator.Pr
 	}
 	e := pool[rand.Intn(len(pool))]
 	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
-}
-
-type mobiusGen struct{}
-
-func (g *mobiusGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		n  int
-		mu int
-	}
-	easy := []entry{
-		{1, 1}, {2, -1}, {3, -1}, {5, -1}, {6, 1}, {30, -1},
-	}
-	hard := []entry{
-		{4, 0}, {8, 0}, {12, 0}, {18, 0}, {7, -1}, {10, 1},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{
-		Question:    fmt.Sprintf("What is μ(%d) (Möbius function)? (enter -1,0,1)", e.n),
-		Answer:      fmt.Sprintf("%d", e.mu),
-		Explanation: fmt.Sprintf("μ(n)=0 if squared prime divides n, otherwise (-1)^k where k is number of prime factors; μ(%d)=%d.", e.n, e.mu),
-	}
 }
 
 type pntGen struct{}

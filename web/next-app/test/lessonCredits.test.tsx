@@ -9,7 +9,7 @@ import LessonCredits from '../components/LessonCredits'
  * left to the component's own wording.
  */
 const SENTENCE =
-  'Original source material, products with readable and accessible math content, and other information are freely available at pcc.edu/orcca.'
+  'Original source material, products with readable and accessible math content and other information are freely available at pcc.edu/orcca.'
 
 describe('LessonCredits', () => {
   it('renders the sentence ORCCA requires, with its link', () => {

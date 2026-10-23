@@ -19,8 +19,12 @@ export default function SectionHeader({ label, title, center = false, className 
           fontFamily: "var(--font-space-grotesk), 'Space Grotesk', serif",
           fontWeight: 400,
           color: 'var(--text-primary)',
-          borderLeft: '2px solid var(--accent-blue)',
-          paddingLeft: '1rem',
+          // A horizontal rule under the title, not a vertical bar beside it. The
+          // bar was a second accent competing with the mono eyebrow above and it
+          // read as a quote mark next to a page heading; the owner's own rule is
+          // that this site does not use the left bar.
+          paddingBottom: '0.75rem',
+          borderBottom: '1px solid var(--border)',
           marginBottom: '1.5rem',
         }}
       >

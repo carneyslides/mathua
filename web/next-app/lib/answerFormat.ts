@@ -32,7 +32,7 @@ export function formatForQuestion(q: QuestionFormatFields): AnswerFormat {
 export function formatForGradingType(gradingType?: string): AnswerFormat {
   switch (gradingType) {
     case 'numeric':
-      return { hint: 'Answer with a number, fraction, or mixed number (e.g. 4 1/10)', inputMode: 'numeric' }
+      return { hint: 'Answer with a number, fraction or mixed number (e.g. 4 1/10)', inputMode: 'numeric' }
     case 'expression':
     case 'polynomial':
       return { hint: 'Answer as an expression', inputMode: 'text' }
@@ -41,7 +41,7 @@ export function formatForGradingType(gradingType?: string): AnswerFormat {
     case 'multiple_choice':
       return { hint: 'Type the exact answer', inputMode: 'text' }
     case 'comparison':
-      return { hint: 'Answer <, >, or =', inputMode: 'text' }
+      return { hint: 'Answer <, > or =', inputMode: 'text' }
     case 'ordering':
       return { hint: 'Answer in order, separated by commas', inputMode: 'text' }
     case 'tuple':

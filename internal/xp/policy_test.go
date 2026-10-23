@@ -194,3 +194,35 @@ func TestEffortBaseOverTheCorpus(t *testing.T) {
 	t.Logf("%.1f expected minutes priced at %.0f XP = %.2f XP per real minute",
 		minutes, total, total/minutes)
 }
+
+func TestBaseDifficultyAndBaseXP(t *testing.T) {
+	for _, task := range []string{TaskLesson, TaskReview, TaskMultistep, TaskQuiz, "unknown"} {
+		if d := BaseDifficulty(task); d != 0.5 {
+			t.Errorf("BaseDifficulty(%q) = %v, want 0.5", task, d)
+		}
+		if base := BaseXP(task); base != 1 {
+			t.Errorf("BaseXP(%q) = %d, want 1", task, base)
+		}
+	}
+}
+
+func TestExpectedXPClamping(t *testing.T) {
+	// Negative pCorrect clamps to 0
+	if got := ExpectedXP(-0.5, 5.0, 10.0, 0, TaskLesson); got != 0 {
+		t.Errorf("ExpectedXP(-0.5) = %v, want 0", got)
+	}
+	// pCorrect exceeding 1 clamps to 1
+	face := float64(Award(true, 5.0, 10.0, 0, TaskLesson))
+	if got := ExpectedXP(1.5, 5.0, 10.0, 0, TaskLesson); got != face {
+		t.Errorf("ExpectedXP(1.5) = %v, want face %v", got, face)
+	}
+}
+
+func TestEffortBaseDifficultyClamping(t *testing.T) {
+	// Negative difficulty clamps to 0
+	zero := EffortBase(60, 0)
+	neg := EffortBase(60, -0.5)
+	if neg != zero {
+		t.Errorf("EffortBase(60, -0.5) = %d, want %d", neg, zero)
+	}
+}

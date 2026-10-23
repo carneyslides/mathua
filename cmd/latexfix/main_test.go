@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -202,5 +205,82 @@ func TestUnescapeDistinguishesDisplayFromRowBreak(t *testing.T) {
 		if got != c.want {
 			t.Errorf("unescapeDelimiters(%q)\n got %q\nwant %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestRun_DryRunAndWrite(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "lesson.md")
+	content := "# Lesson\n\nHere is a formula $f✓(x)$ in prose.\n"
+	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+
+	// Dry run mode (default)
+	var stdout, stderr bytes.Buffer
+	code := run([]string{dir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("dry run exit code = %d, want 0\nstderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "repaired math span") {
+		t.Errorf("expected 'repaired math span' in stdout, got:\n%s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "dry run (pass -w to write)") {
+		t.Errorf("expected dry run notice in stderr, got:\n%s", stderr.String())
+	}
+
+	// File on disk must remain unchanged in dry run
+	data, _ := os.ReadFile(filePath)
+	if string(data) != content {
+		t.Fatalf("dry run altered file content")
+	}
+
+	// In-place write mode (-w)
+	stdout.Reset()
+	stderr.Reset()
+	code = run([]string{"-w", dir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("write exit code = %d, want 0\nstderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "written") {
+		t.Errorf("expected 'written' in stderr, got:\n%s", stderr.String())
+	}
+
+	// File on disk must now be updated
+	data, _ = os.ReadFile(filePath)
+	expected := "# Lesson\n\nHere is a formula $f(x)$ in prose.\n"
+	if string(data) != expected {
+		t.Fatalf("file content = %q, want %q", string(data), expected)
+	}
+}
+
+func TestRun_FlagAndPathErrors(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	// Invalid flag returns code 2
+	code := run([]string{"-invalid-flag-xyz"}, &stdout, &stderr)
+	if code != 2 {
+		t.Errorf("invalid flag code = %d, want 2", code)
+	}
+
+	// Nonexistent root path returns code 1
+	stdout.Reset()
+	stderr.Reset()
+	code = run([]string{"/nonexistent/directory/path/surely"}, &stdout, &stderr)
+	if code != 1 {
+		t.Errorf("nonexistent path code = %d, want 1", code)
+	}
+}
+
+func TestSnippet_LengthBounds(t *testing.T) {
+	short := "short text"
+	if got := snippet(short, 50); got != short {
+		t.Errorf("snippet short = %q, want %q", got, short)
+	}
+
+	long := "a very long sentence with many words that exceeds the maximum length"
+	got := snippet(long, 20)
+	if !strings.Contains(got, "…") {
+		t.Errorf("snippet long = %q, want ellipsis", got)
 	}
 }

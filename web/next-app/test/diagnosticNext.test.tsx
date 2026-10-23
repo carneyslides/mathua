@@ -16,7 +16,7 @@ import { answerValue, findAnswerField, findMathField, isMathField, typeAnswer } 
 
 describe('formatForGradingType', () => {
   it('maps known types to hint + keyboard, unknowns to generic text', () => {
-    expect(formatForGradingType('numeric')).toEqual({ hint: 'Answer with a number, fraction, or mixed number (e.g. 4 1/10)', inputMode: 'numeric' })
+    expect(formatForGradingType('numeric')).toEqual({ hint: 'Answer with a number, fraction or mixed number (e.g. 4 1/10)', inputMode: 'numeric' })
     expect(formatForGradingType('expression').inputMode).toBe('text')
     expect(formatForGradingType('multiple_choice').hint).toBe('Type the exact answer')
     expect(formatForGradingType(undefined)).toEqual({ hint: 'Answer in the form shown', inputMode: 'text' })
@@ -326,7 +326,7 @@ describe('DiagnosticHost manual advance', () => {
     await screen.findByText('Q1 text')
 
     // Format hint from the served grading_type, with numeric keyboard.
-    expect(screen.getByText('Answer with a number, fraction, or mixed number (e.g. 4 1/10)')).toBeInTheDocument()
+    expect(screen.getByText('Answer with a number, fraction or mixed number (e.g. 4 1/10)')).toBeInTheDocument()
     // `numeric` selects the math editor, which brings its own virtual keyboard
     // rather than the OS numeric pad — so the control itself is the assertion.
     // `findMathField`, not `findAnswerField`: the loading state is a working plain

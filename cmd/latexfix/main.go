@@ -40,6 +40,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -336,16 +337,20 @@ func scanAndFix(src *string) []change {
 	return changes
 }
 
-func main() {
-	write := flag.Bool("w", false, "write fixes in place (default: report only)")
-	flag.Parse()
-
-	root := "data/lessons"
-	if flag.NArg() > 0 {
-		root = flag.Arg(0)
+func run(args []string, stdout, stderr io.Writer) int {
+	fsFlags := flag.NewFlagSet("latexfix", flag.ContinueOnError)
+	fsFlags.SetOutput(stderr)
+	write := fsFlags.Bool("w", false, "write fixes in place (default: report only)")
+	if err := fsFlags.Parse(args); err != nil {
+		return 2
 	}
 
-	enc := json.NewEncoder(os.Stdout)
+	root := "data/lessons"
+	if fsFlags.NArg() > 0 {
+		root = fsFlags.Arg(0)
+	}
+
+	enc := json.NewEncoder(stdout)
 	touched, changed := 0, 0
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -387,15 +392,20 @@ func main() {
 		return nil
 	})
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "latexfix:", err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, "latexfix:", err)
+		return 1
 	}
 
 	mode := "dry run (pass -w to write)"
 	if *write {
 		mode = "written"
 	}
-	fmt.Fprintf(os.Stderr, "latexfix: %d files scanned, %d changed, %s\n", touched, changed, mode)
+	fmt.Fprintf(stderr, "latexfix: %d files scanned, %d changed, %s\n", touched, changed, mode)
+	return 0
+}
+
+func main() {
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
 func snippet(s string, max int) string {

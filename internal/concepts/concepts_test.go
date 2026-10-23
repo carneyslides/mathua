@@ -142,6 +142,22 @@ func TestDAG_DependentsOf(t *testing.T) {
 	}
 }
 
+func TestDAG_Lookups_Nonexistent(t *testing.T) {
+	d := buildTestDAG(t)
+	if got := d.DependentsOf("nonexistent"); got != nil {
+		t.Errorf("expected nil dependents for nonexistent, got %v", got)
+	}
+	if got := d.EncompassedBy("nonexistent"); got != nil {
+		t.Errorf("expected nil encompassedBy for nonexistent, got %v", got)
+	}
+	if got := d.EncompassesOf("nonexistent"); got != nil {
+		t.Errorf("expected nil encompassesOf for nonexistent, got %v", got)
+	}
+	if got := d.InterferersOf("nonexistent"); got != nil {
+		t.Errorf("expected nil interferersOf for nonexistent, got %v", got)
+	}
+}
+
 func TestDAG_Available(t *testing.T) {
 	d := buildTestDAG(t)
 

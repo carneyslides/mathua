@@ -570,7 +570,7 @@
     "label": "Metric spaces",
     "domain": "real_analysis",
     "subdomain": "real_analysis.metric",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "ra.seq.cauchy"
     ],

@@ -70,7 +70,7 @@ func (u *Updater) Compute(studentID string) (*Scores, error) {
 	level := levels.Compute(mastered)
 	streak := computeCurrentStreak(progress)
 	xpTotal, xpToday, _ := u.repo.GetXP(studentID)
-	dailyGoal := 10
+	dailyGoal := xp.DefaultDailyGoal
 	if st, err := u.repo.GetStudent(studentID); err == nil && st != nil && st.DailyXPGoal > 0 {
 		dailyGoal = st.DailyXPGoal
 	}

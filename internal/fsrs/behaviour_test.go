@@ -1,6 +1,7 @@
 package fsrs
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -213,5 +214,74 @@ func TestInvalidRatingsDoNotPanic(t *testing.T) {
 		if got := p.NextDifficulty(5, r); got != 5 {
 			t.Errorf("NextDifficulty with rating %d = %v, want it unchanged", r, got)
 		}
+	}
+}
+
+func TestFSRSEdgeCasesAndClamping(t *testing.T) {
+	p := DefaultParameters()
+
+	// Retrievability with NaN or negative stability and negative elapsed days
+	if got := p.Retrievability(-5, 10); got != 1.0 {
+		t.Errorf("Retrievability(-5, 10) = %v, want 1.0", got)
+	}
+	if got := p.Retrievability(1, math.NaN()); got <= 0 || got > 1 {
+		t.Errorf("Retrievability with NaN stability = %v, want valid probability", got)
+	}
+	if got := p.Retrievability(1, -2); got <= 0 || got > 1 {
+		t.Errorf("Retrievability with negative stability = %v, want valid probability", got)
+	}
+
+	// IntervalForRetention with NaN stability
+	if got := p.IntervalForRetention(math.NaN(), 0.9); got != 1 {
+		t.Errorf("IntervalForRetention with NaN stability = %d, want 1", got)
+	}
+
+	// NextDifficulty boundary clamping
+	if got := p.NextDifficulty(0.5, Good); got < 1 {
+		t.Errorf("NextDifficulty with sub-1 difficulty = %v, want >= 1", got)
+	}
+	if got := p.NextDifficulty(15, Good); got > 10 {
+		t.Errorf("NextDifficulty with over-10 difficulty = %v, want <= 10", got)
+	}
+	if got := p.NextDifficulty(math.NaN(), Good); got < 1 || got > 10 {
+		t.Errorf("NextDifficulty with NaN difficulty = %v, want clamped [1, 10]", got)
+	}
+
+	// NextStability with Hard and Easy ratings
+	sHard := p.NextStability(10, 5, 0.9, Hard)
+	sGood := p.NextStability(10, 5, 0.9, Good)
+	sEasy := p.NextStability(10, 5, 0.9, Easy)
+	if sHard >= sGood {
+		t.Errorf("NextStability(Hard)=%v should be less than Good=%v", sHard, sGood)
+	}
+	if sEasy <= sGood {
+		t.Errorf("NextStability(Easy)=%v should be greater than Good=%v", sEasy, sGood)
+	}
+
+	// NextStability retrievability clamping (<0, >1 and NaN)
+	sNegR := p.NextStability(10, 5, -0.5, Good)
+	sZeroR := p.NextStability(10, 5, 0.0, Good)
+	if sNegR != sZeroR {
+		t.Errorf("NextStability with negative R = %v, want %v", sNegR, sZeroR)
+	}
+	sOverR := p.NextStability(10, 5, 1.5, Good)
+	sOneR := p.NextStability(10, 5, 1.0, Good)
+	if sOverR != sOneR {
+		t.Errorf("NextStability with R > 1 = %v, want %v", sOverR, sOneR)
+	}
+	sNaNR := p.NextStability(10, 5, math.NaN(), Good)
+	sDefR := p.NextStability(10, 5, DefaultRetention, Good)
+	if sNaNR != sDefR {
+		t.Errorf("NextStability with NaN R = %v, want %v", sNaNR, sDefR)
+	}
+
+	// clampStability upper bound (MaxStabilityDays) and NaN
+	hugeS := p.NextStability(1e9, 1, 1.0, Easy)
+	if hugeS > MaxStabilityDays {
+		t.Errorf("NextStability huge S = %v, want <= MaxStabilityDays", hugeS)
+	}
+	nanS := p.NextStability(math.NaN(), 5, 0.9, Good)
+	if nanS < StabilityMin {
+		t.Errorf("NextStability with NaN S = %v, want >= StabilityMin", nanS)
 	}
 }

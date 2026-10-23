@@ -12,6 +12,7 @@ build-all:
 	GOOS=darwin GOARCH=arm64 go build -o dist/mathua-darwin-arm64 ./cmd/mathua
 
 test:
+	python3 scripts/check_duplicate_tests.py
 	go test ./...
 
 # The browser suite runs against the static export, so it needs a fresh `out/`
@@ -32,6 +33,7 @@ e2e-hermetic:
 	cd web/next-app && npx playwright test
 
 validate:
+	python3 scripts/check_duplicate_tests.py
 	go run scripts/validate_graph.go
 	go run ./cmd/validate-mastery-units
 	python3 scripts/audit_lessons.py

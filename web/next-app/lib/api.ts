@@ -686,10 +686,14 @@ export async function submitGoalAnswer(
 	dontKnow?: boolean,
 ): Promise<GoalDiagAnswerRes> {
 	const res = await authedFetch(`${API_BASE}/api/goal/diagnostic/answer`, {
-		// No attempt id on this path, so the request is not idempotent: it gets a
-		// deadline shorter than the server's 20s grade bound, but never an
-		// automatic retry. A retry here is the learner's explicit choice.
+		// The server now records each verdict in diagnostic_answers, keyed by
+		// session and concept, and replays a duplicate instead of grading twice.
+		// That makes one automatic retry safe in both cases: if the first request
+		// committed, the retry receives the stored verdict; if it never arrived,
+		// the retry is graded fresh. Without it, a single dropped packet on
+		// mobile data ended the whole run.
 		timeoutMs: 25000,
+		retryAttempts: 1,
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
 		body: JSON.stringify({ session_id: sessionId, concept_id: conceptId, answer, elapsed, dont_know: dontKnow ?? false }),

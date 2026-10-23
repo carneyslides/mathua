@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -378,7 +379,7 @@ func securityHeaders(next http.Handler) http.Handler {
 func nextStaticFS(root string) http.Handler {
 	fs := http.FileServer(http.Dir(root))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cleaned := filepath.Clean(r.URL.Path)
+		cleaned := path.Clean(r.URL.Path)
 		if strings.Contains(cleaned, "..") {
 			http.NotFound(w, r)
 			return
@@ -387,7 +388,7 @@ func nextStaticFS(root string) http.Handler {
 			fs.ServeHTTP(w, r)
 			return
 		}
-		localPath := filepath.Join(root, cleaned)
+		localPath := filepath.Join(root, filepath.FromSlash(cleaned))
 		// Regular files only. `os.Stat` succeeds for a directory too, and a Next.js export
 		// creates one for any route that has child routes — `/admin` because of /admin/users,
 		// `/docs` because of /docs/architecture. Handing a directory to http.FileServer makes
@@ -399,9 +400,9 @@ func nextStaticFS(root string) http.Handler {
 			fs.ServeHTTP(w, r)
 			return
 		}
-		if filepath.Ext(cleaned) == "" {
+		if path.Ext(cleaned) == "" {
 			htmlPath := cleaned + ".html"
-			if _, err := os.Stat(filepath.Join(root, htmlPath)); err == nil {
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(htmlPath))); err == nil {
 				r.URL.Path = htmlPath
 				fs.ServeHTTP(w, r)
 				return

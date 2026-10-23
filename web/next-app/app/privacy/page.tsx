@@ -7,7 +7,7 @@ import BottomTabs from '../../components/BottomTabs'
 export const metadata: Metadata = {
   title: 'Privacy notice — Mathua',
   description:
-    'What the assistant sends to an AI provider, what Mathua keeps, and what it never sends.',
+    'What the assistant sends to an AI provider, what Mathua keeps and what it never sends.',
 }
 
 const monoFont = "var(--font-jetbrains-mono), 'JetBrains Mono', monospace"
@@ -72,7 +72,7 @@ export default function PrivacyPage() {
         <p style={textStyle}>
           Your message is sent with up to eight earlier turns of the same conversation, so that
           a follow-up question can be answered. Nothing else is sent: not your name, not your
-          email address, not your student id, not your answers, not your progress, and not the
+          email address, not your student id, not your answers, not your progress and not the
           expected answer to an exercise.
         </p>
 

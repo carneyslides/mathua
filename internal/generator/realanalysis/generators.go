@@ -49,7 +49,6 @@ func Register(reg *generator.Registry) {
 	reg.Register("ra.deriv.power_series", &powerSeriesGen{})
 	reg.Register("ra.deriv.interchange", &interchangeGen{})
 	// Metric spaces.
-	reg.Register("ra.metric.spaces", &metricSpacesGen{})
 	reg.Register("ra.metric.open_closed", &openClosedGen{})
 	reg.Register("ra.metric.closure", &closureGen{})
 	reg.Register("ra.metric.convergence", &metricConvGen{})
@@ -59,4 +58,5 @@ func Register(reg *generator.Registry) {
 	reg.Register("ra.metric.contraction", &contractionGen{})
 	reg.Register("ra.metric.baire", &baireGen{})
 	reg.Register("ra.metric.equivalent", &equivalentGen{})
+	registerConversions(reg)
 }

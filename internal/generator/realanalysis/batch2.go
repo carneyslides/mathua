@@ -210,35 +210,6 @@ func (g *interchangeGen) Generate(ctx generator.GeneratorContext) generator.Prob
 }
 
 // ---------------------------------------------------------------------------
-// Metric spaces (multiple choice)
-// ---------------------------------------------------------------------------
-
-type metricSpacesGen struct{}
-
-func (g *metricSpacesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return pickMC([]mcClaim{
-		{
-			q:           "A metric on a set is a distance function that is...",
-			correct:     "nonnegative, symmetric, zero exactly on equal points, and obeys the triangle inequality",
-			distractors: []string{"any symmetric function", "a function that is positive and bounded", "an antisymmetric bilinear form"},
-			reason:      "Those four properties are the definition; each one is used somewhere in the proofs that follow.",
-		},
-		{
-			q:           "An open ball of radius r about a centre in a metric space is...",
-			correct:     "the set of points whose distance from the centre is less than r",
-			distractors: []string{"the set of points at distance exactly r", "the set of points at distance at most r", "the whole space whenever r is positive"},
-			reason:      "The strict inequality is the metric reading of an open interval.",
-		},
-		{
-			q:           "Two metrics on the same set are equivalent when...",
-			correct:     "they induce the same collection of open sets",
-			distractors: []string{"they assign the same distance to every pair of points", "one is a constant multiple of the other", "they agree on a dense subset"},
-			reason:      "Topological equivalence is about the same open sets, which is also the same convergent sequences.",
-		},
-	})
-}
-
-// ---------------------------------------------------------------------------
 // Open and closed sets (multiple choice)
 // ---------------------------------------------------------------------------
 

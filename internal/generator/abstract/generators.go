@@ -19,7 +19,6 @@ func Register(reg *generator.Registry) {
 	reg.Register("abstract.group.normal", &normalSubgroupGen{})
 	reg.Register("abstract.group.quotient_group", &quotientGroupGen{})
 	reg.Register("abstract.rings.polynomial", &polynomialRingGen{})
-	reg.Register("abstract.group.sylow", &sylowGen{})
 	reg.Register("abstract.rings.ufd", &ufdGen{})
 	reg.Register("abstract.field.extension", &fieldExtensionGen{})
 	reg.Register("abstract.structures.galois", &galoisGen{})

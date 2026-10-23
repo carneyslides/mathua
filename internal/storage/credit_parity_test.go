@@ -69,7 +69,9 @@ func readDueRepo(t *testing.T, repo Repository, studentID, conceptID string) str
 // the same projection and the same refusal to underfund an ordinal.
 func TestCreditParity(t *testing.T) {
 	for tag, repo := range creditStores(t) {
-		repo := repo
+		// Shadowed because the goroutines below outlive the loop iteration; a
+		// captured range variable is how the wrong store tag reaches a worker.
+		tag, repo := tag, repo
 		t.Run(tag, func(t *testing.T) {
 			credit := repo.(CreditStore)
 			stu, err := repo.CreateStudent("parity credit " + tag)
@@ -151,11 +153,11 @@ func TestCreditParity_ConcurrentDuplicatesInsertOnce(t *testing.T) {
 			fresh := make([]bool, n)
 			for i := 0; i < n; i++ {
 				wg.Add(1)
-				go func(i int) {
+				go func(i int, attemptKey string) {
 					defer wg.Done()
-					_, fresh[i], errs[i] = credit.AllocateCredit(stu.ID, tag+":dup", 1,
+					_, fresh[i], errs[i] = credit.AllocateCredit(stu.ID, attemptKey, 1,
 						[]CreditCandidate{{ConceptID: "a", RawUnits: 1_000_000}})
-				}(i)
+				}(i, tag+":dup")
 			}
 			wg.Wait()
 			winners := 0

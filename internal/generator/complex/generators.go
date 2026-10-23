@@ -146,22 +146,23 @@ type polarGen struct{}
 
 func (g *polarGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	scale := int(1 + ctx.Difficulty*5)
+	type angle struct {
+		deg     int
+		cosReal int
+		sinImag int
+	}
+	angles := []angle{
+		{0, 1, 0},
+		{90, 0, 1},
+		{180, -1, 0},
+		{270, 0, -1},
+	}
+	a := angles[rand.Intn(len(angles))]
+	r := rand.Intn(max(1, scale*4)) + 2
+	realPart := r * a.cosReal
+	imagPart := r * a.sinImag
+
 	if rand.Intn(2) == 0 {
-		type angle struct {
-			deg     int
-			cosReal int
-			sinImag int
-		}
-		angles := []angle{
-			{0, 1, 0},
-			{90, 0, 1},
-			{180, -1, 0},
-			{270, 0, -1},
-		}
-		a := angles[rand.Intn(len(angles))]
-		r := rand.Intn(max(1, scale*4)) + 2
-		realPart := r * a.cosReal
-		imagPart := r * a.sinImag
 		return generator.Problem{
 			Question:    fmt.Sprintf("Convert \\(%d(\\cos %d^{\\circ} + i\\sin %d^{\\circ})\\) to rectangular form.", r, a.deg, a.deg),
 			Answer:      fmtComplex(realPart, imagPart),
@@ -169,22 +170,10 @@ func (g *polarGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 		}
 	}
 
-	type triple struct{ a, b, r int }
-	triples := []triple{
-		{3, 4, 5},
-		{4, 3, 5},
-		{5, 12, 13},
-		{12, 5, 13},
-		{6, 8, 10},
-		{8, 6, 10},
-	}
-	t := triples[rand.Intn(len(triples))]
-	theta := math.Atan2(float64(t.b), float64(t.a)) * 180 / math.Pi
-	thetaStr := strconv.Itoa(int(math.Round(theta)))
 	return generator.Problem{
-		Question:    fmt.Sprintf("Convert \\(%s\\) to polar form.", fmtComplex(t.a, t.b)),
-		Answer:      fmt.Sprintf("%d(cos %s° + i sin %s°)", t.r, thetaStr, thetaStr),
-		Explanation: fmt.Sprintf("r = √(a²+b²) = √(%d²+%d²) = %d. θ = arctan(b/a) = arctan(%d/%d) ≈ %s°", t.a, t.b, t.r, t.b, t.a, thetaStr),
+		Question:    fmt.Sprintf("Convert \\(%s\\) to polar form.", fmtComplex(realPart, imagPart)),
+		Answer:      fmt.Sprintf("%d(cos %d° + i sin %d°)", r, a.deg, a.deg),
+		Explanation: fmt.Sprintf("r = √(a²+b²) = √((%d)²+(%d)²) = %d. θ = %d°", realPart, imagPart, r, a.deg),
 	}
 }
 
@@ -353,31 +342,179 @@ func (g *modulusGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 type argumentGen struct{}
 
 func (g *argumentGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type qa struct {
-		q string
-		a string
-		e string
+	k := rand.Intn(max(1, int(1+ctx.Difficulty*4))) + 1
+
+	type angleCase struct {
+		zLatex      string
+		deg         int
+		quadrant    string
+		explanation string
 	}
-	tableEasy := []qa{
-		{q: "What is \\(\\arg(1)\\) in degrees? (enter a number)", a: "0", e: "1 lies on the positive real axis, so arg = 0°."},
-		{q: "What is \\(\\arg(i)\\) in degrees? (enter a number)", a: "90", e: "i lies on the positive imaginary axis, so arg = 90°."},
-		{q: "What is \\(\\arg(-1)\\) in degrees? (enter a number)", a: "180", e: "-1 lies on the negative real axis, so arg = 180°."},
-		{q: "What is \\(\\arg(-i)\\) in degrees? (enter a number)", a: "270", e: "-i lies on the negative imaginary axis, so arg = 270° (or -90°)."},
-		{q: "Does \\(\\arg(z_1 z_2) = \\arg(z_1)+\\arg(z_2)\\) hold mod \\(360^{\\circ}\\)? (yes/no)", a: "yes", e: "Arguments add when multiplying complex numbers (mod 360°)."},
-		{q: "Is \\(\\arg(z)\\) always between 0 and 90 degrees? (yes/no)", a: "no", e: "Arguments span the full circle: arg(-1) = 180°, outside 0-90°."},
+
+	var cases []angleCase
+
+	kStr := strconv.Itoa(k)
+	if k == 1 {
+		kStr = ""
 	}
-	tableHard := []qa{
-		{q: "What is \\(\\arg(1+i)\\) in degrees? (enter a number)", a: "45", e: "1+i is in the first quadrant with b/a=1, so arg = 45°."},
-		{q: "What is \\(\\arg(-1+i)\\) in degrees? (enter a number)", a: "135", e: "-1+i is in the second quadrant, 180°-45° = 135°."},
-		{q: "What is \\(\\arg(1-i)\\) in degrees? (enter a number)", a: "315", e: "1-i is in the fourth quadrant, 360°-45° = 315°."},
+	cases = append(cases,
+		angleCase{
+			zLatex:      strconv.Itoa(k),
+			deg:         0,
+			quadrant:    "positive real axis",
+			explanation: fmt.Sprintf("The complex number \\(z = %d\\) lies on the positive real axis. Therefore, \\(\\arg(z) = 0^\\circ\\).", k),
+		},
+		angleCase{
+			zLatex:      kStr + "i",
+			deg:         90,
+			quadrant:    "positive imaginary axis",
+			explanation: fmt.Sprintf("The complex number \\(z = %si\\) lies on the positive imaginary axis. Therefore, \\(\\arg(z) = 90^\\circ\\).", kStr),
+		},
+		angleCase{
+			zLatex:      fmt.Sprintf("-%d", k),
+			deg:         180,
+			quadrant:    "negative real axis",
+			explanation: fmt.Sprintf("The complex number \\(z = -%d\\) lies on the negative real axis. Therefore, \\(\\arg(z) = 180^\\circ\\).", k),
+		},
+		angleCase{
+			zLatex:      "-" + kStr + "i",
+			deg:         270,
+			quadrant:    "negative imaginary axis",
+			explanation: fmt.Sprintf("The complex number \\(z = -%si\\) lies on the negative imaginary axis. Therefore, \\(\\arg(z) = 270^\\circ\\).", kStr),
+		},
+	)
+
+	var z45, z135, z225, z315 string
+	if k == 1 {
+		z45 = "1 + i"
+		z135 = "-1 + i"
+		z225 = "-1 - i"
+		z315 = "1 - i"
+	} else {
+		z45 = fmt.Sprintf("%d + %di", k, k)
+		z135 = fmt.Sprintf("-%d + %di", k, k)
+		z225 = fmt.Sprintf("-%d - %di", k, k)
+		z315 = fmt.Sprintf("%d - %di", k, k)
 	}
-	pool := tableEasy
-	if scale > 3 {
-		pool = append(tableEasy, tableHard...)
+
+	cases = append(cases,
+		angleCase{
+			zLatex:      z45,
+			deg:         45,
+			quadrant:    "quadrant 1",
+			explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 1 with equal real and imaginary parts. The reference angle is \\(\\arctan(1) = 45^\\circ\\), so \\(\\arg(z) = 45^\\circ\\).", z45),
+		},
+		angleCase{
+			zLatex:      z135,
+			deg:         135,
+			quadrant:    "quadrant 2",
+			explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 2. The reference angle is \\(\\arctan(1) = 45^\\circ\\), so \\(\\arg(z) = 180^\\circ - 45^\\circ = 135^\\circ\\).", z135),
+		},
+		angleCase{
+			zLatex:      z225,
+			deg:         225,
+			quadrant:    "quadrant 3",
+			explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 3. The reference angle is \\(\\arctan(1) = 45^\\circ\\), so \\(\\arg(z) = 180^\\circ + 45^\\circ = 225^\\circ\\).", z225),
+		},
+		angleCase{
+			zLatex:      z315,
+			deg:         315,
+			quadrant:    "quadrant 4",
+			explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 4. The reference angle is \\(\\arctan(1) = 45^\\circ\\), so \\(\\arg(z) = 360^\\circ - 45^\\circ = 315^\\circ\\).", z315),
+		},
+	)
+
+	if ctx.Difficulty > 0.3 {
+		var sqrt3Term, kTerm string
+		if k == 1 {
+			sqrt3Term = "\\sqrt{3}"
+			kTerm = "1"
+		} else {
+			sqrt3Term = fmt.Sprintf("%d\\sqrt{3}", k)
+			kTerm = strconv.Itoa(k)
+		}
+		var iTerm string
+		if k == 1 {
+			iTerm = "i"
+		} else {
+			iTerm = fmt.Sprintf("%di", k)
+		}
+
+		z30 := fmt.Sprintf("%s + %s", sqrt3Term, iTerm)
+		z60 := fmt.Sprintf("%s + %s i", kTerm, sqrt3Term)
+		z120 := fmt.Sprintf("-%s + %s i", kTerm, sqrt3Term)
+		z150 := fmt.Sprintf("-%s + %s", sqrt3Term, iTerm)
+		z210 := fmt.Sprintf("-%s - %s", sqrt3Term, iTerm)
+		z240 := fmt.Sprintf("-%s - %s i", kTerm, sqrt3Term)
+		z300 := fmt.Sprintf("%s - %s i", kTerm, sqrt3Term)
+		z330 := fmt.Sprintf("%s - %s", sqrt3Term, iTerm)
+
+		cases = append(cases,
+			angleCase{
+				zLatex:      z30,
+				deg:         30,
+				quadrant:    "quadrant 1",
+				explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 1 with imaginary-to-real ratio \\(1/\\sqrt{3}\\). The reference angle is \\(\\arctan(1/\\sqrt{3}) = 30^\\circ\\), so \\(\\arg(z) = 30^\\circ\\).", z30),
+			},
+			angleCase{
+				zLatex:      z60,
+				deg:         60,
+				quadrant:    "quadrant 1",
+				explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 1 with imaginary-to-real ratio \\(\\sqrt{3}\\). The reference angle is \\(\\arctan(\\sqrt{3}) = 60^\\circ\\), so \\(\\arg(z) = 60^\\circ\\).", z60),
+			},
+			angleCase{
+				zLatex:      z120,
+				deg:         120,
+				quadrant:    "quadrant 2",
+				explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 2. The reference angle is \\(\\arctan(\\sqrt{3}) = 60^\\circ\\), so \\(\\arg(z) = 180^\\circ - 60^\\circ = 120^\\circ\\).", z120),
+			},
+			angleCase{
+				zLatex:      z150,
+				deg:         150,
+				quadrant:    "quadrant 2",
+				explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 2. The reference angle is \\(\\arctan(1/\\sqrt{3}) = 30^\\circ\\), so \\(\\arg(z) = 180^\\circ - 30^\\circ = 150^\\circ\\).", z150),
+			},
+			angleCase{
+				zLatex:      z210,
+				deg:         210,
+				quadrant:    "quadrant 3",
+				explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 3. The reference angle is \\(\\arctan(1/\\sqrt{3}) = 30^\\circ\\), so \\(\\arg(z) = 180^\\circ + 30^\\circ = 210^\\circ\\).", z210),
+			},
+			angleCase{
+				zLatex:      z240,
+				deg:         240,
+				quadrant:    "quadrant 3",
+				explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 3. The reference angle is \\(\\arctan(\\sqrt{3}) = 60^\\circ\\), so \\(\\arg(z) = 180^\\circ + 60^\\circ = 240^\\circ\\).", z240),
+			},
+			angleCase{
+				zLatex:      z300,
+				deg:         300,
+				quadrant:    "quadrant 4",
+				explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 4. The reference angle is \\(\\arctan(\\sqrt{3}) = 60^\\circ\\), so \\(\\arg(z) = 360^\\circ - 60^\\circ = 300^\\circ\\).", z300),
+			},
+			angleCase{
+				zLatex:      z330,
+				deg:         330,
+				quadrant:    "quadrant 4",
+				explanation: fmt.Sprintf("The complex number \\(z = %s\\) lies in quadrant 4. The reference angle is \\(\\arctan(1/\\sqrt{3}) = 30^\\circ\\), so \\(\\arg(z) = 360^\\circ - 30^\\circ = 330^\\circ\\).", z330),
+			},
+		)
 	}
-	t := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: t.q, Answer: t.a, Explanation: t.e}
+
+	c := cases[rand.Intn(len(cases))]
+	q := fmt.Sprintf("What is the principal argument \\(\\arg(z)\\) in degrees for \\(z = %s\\)? (enter an integer in \\([0, 360)\\))", c.zLatex)
+	ans := strconv.Itoa(c.deg)
+
+	return generator.Problem{
+		Question:    q,
+		Answer:      ans,
+		Explanation: c.explanation,
+		Facts: map[string]string{
+			"z":        c.zLatex,
+			"arg_deg":  strconv.Itoa(c.deg),
+			"quadrant": c.quadrant,
+		},
+	}
 }
 
 type eulerIdentityGen struct{}

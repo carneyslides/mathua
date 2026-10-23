@@ -33,6 +33,12 @@ jobs:
       - run: pip install -r grading/requirements.txt latex2sympy2 antlr4-python3-runtime==4.7.2
       - run: go mod tidy
       - run: go build ./...
+      # Two green pull requests can still land an uncompilable package, because
+      # each suite was written against a main that lacked its sibling. That
+      # happened twice on 2026-10-23 (three TestCheckPassword declarations in
+      # internal/auth, two TestEngine_SettleCurrent in internal/diagnostic).
+      # This names the duplicate instead of leaving a compiler error.
+      - run: python3 scripts/check_duplicate_tests.py
       - run: go test ./...
       - run: make lint-go
       - run: go run scripts/validate_graph.go
@@ -207,6 +213,9 @@ jobs:
       - name: Procedural prose follows the STE subset
         continue-on-error: true
         run: python3 scripts/check_ste.py
+      - name: Oxford comma report
+        continue-on-error: true
+        run: python3 scripts/check_oxford_comma.py
       - name: The published docs bundle matches its sources
         continue-on-error: true
         working-directory: web/next-app

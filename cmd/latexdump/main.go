@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -39,14 +40,18 @@ type span struct {
 	Offset int `json:"offset"`
 }
 
-func main() {
-	spansOnly := flag.Bool("spans", false, "emit math spans as JSONL instead of a JSON map of bodies")
-	flag.Parse()
+func run(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("latexdump", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	spansOnly := flags.Bool("spans", false, "emit math spans as JSONL instead of a JSON map of bodies")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
 
 	// Positional, as before: `latexdump [root]`.
 	root := "data/lessons"
-	if flag.NArg() > 0 {
-		root = flag.Arg(0)
+	if flags.NArg() > 0 {
+		root = flags.Arg(0)
 	}
 
 	walked := 0
@@ -59,7 +64,7 @@ func main() {
 				continue
 			}
 			found++
-			enc := json.NewEncoder(os.Stdout)
+			enc := json.NewEncoder(stdout)
 			if err := enc.Encode(span{
 				File:    rel,
 				Index:   i,
@@ -99,17 +104,22 @@ func main() {
 		return nil
 	})
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "latexdump:", err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, "latexdump:", err)
+		return 1
 	}
 
 	if *spansOnly {
-		fmt.Fprintf(os.Stderr, "latexdump: %d files, %d math spans\n", walked, found)
-		return
+		fmt.Fprintf(stderr, "latexdump: %d files, %d math spans\n", walked, found)
+		return 0
 	}
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(stdout)
 	if err := enc.Encode(out); err != nil {
-		fmt.Fprintln(os.Stderr, "latexdump encode:", err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, "latexdump encode:", err)
+		return 1
 	}
+	return 0
+}
+
+func main() {
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }

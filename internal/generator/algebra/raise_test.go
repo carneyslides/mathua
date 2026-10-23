@@ -47,7 +47,6 @@ var algRaiseMCIDs = []string{
 	"alg.rational.complex_fraction",
 	"alg.systems.matrices",
 	"alg.seq.induction",
-	"alg.poly.factor_theorem",
 }
 
 var algRaiseNumericIDs = []string{
@@ -63,6 +62,7 @@ var algRaiseNumericIDs = []string{
 	"alg.systems.nonlinear",
 	"alg.seq.sigma",
 	"alg.poly.rational_root",
+	"alg.poly.factor_theorem",
 }
 
 func TestRaiseAnswersGradeWithTheirShippedType(t *testing.T) {

@@ -2,6 +2,7 @@ package complex
 
 import (
 	"math/rand"
+	"strings"
 	"testing"
 
 	"github.com/chuma-beep/mathua/internal/generator"
@@ -24,6 +25,31 @@ func TestMultGen(t *testing.T)         { fuzzGen(t, &multGen{}) }
 func TestConjugateGen(t *testing.T)    { fuzzGen(t, &conjugateGen{}) }
 func TestDivideGen(t *testing.T)       { fuzzGen(t, &divideGen{}) }
 func TestPolarGen(t *testing.T)        { fuzzGen(t, &polarGen{}) }
+
+func TestPolarGenExactAngles(t *testing.T) {
+	gen := &polarGen{}
+	validAngles := map[string]bool{
+		"0": true, "90": true, "180": true, "270": true,
+	}
+	for i := 0; i < 100; i++ {
+		p := gen.Generate(generator.GeneratorContext{Difficulty: float64(i%20) / 19.0})
+		if p.Question == "" || p.Answer == "" || p.Explanation == "" {
+			t.Fatalf("empty field: q=%q a=%q", p.Question, p.Answer)
+		}
+		if strings.Contains(p.Answer, "cos") {
+			found := false
+			for ang := range validAngles {
+				if strings.Contains(p.Answer, ang+"°") {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("polar answer %q uses non-exact angle", p.Answer)
+			}
+		}
+	}
+}
 func TestDeMoivreGen(t *testing.T)     { fuzzGen(t, &deMoivreGen{}) }
 func TestRootsGen(t *testing.T)        { fuzzGen(t, &rootsGen{}) }
 func TestExponentialGen(t *testing.T)  { fuzzGen(t, &exponentialGen{}) }
