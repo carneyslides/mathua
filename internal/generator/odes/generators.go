@@ -964,27 +964,70 @@ func (g *lyapunovGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type laplaceEqGen struct{}
 
 func (g *laplaceEqGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct{ q, a, e string }
-	easy := []entry{
-		{"Is xy harmonic (Δ(xy) = 0)? (yes/no)", "yes", "Second derivatives both vanish."},
-		{"Is x^2 + y^2 harmonic? (yes/no)", "no", "Δ = 2+2 = 4 ≠ 0."},
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Mean Value Property at circle center
+		R := smallInt(2, 6)
+		x0 := smallInt(1, 5)
+		y0 := smallInt(1, 5)
+		v := smallInt(3, 25)
+		return generator.Problem{
+			Question: fmt.Sprintf("A function \\(u(x, y)\\) is harmonic on a disk of radius \\(R = %d\\) centered at \\((%d, %d)\\). If its average boundary value satisfies \\(\\frac{1}{2\\pi R}\\oint_{\\partial B} u\\,ds = %d\\), what is the center value \\(u(%d, %d)\\)?", R, x0, y0, v, x0, y0),
+			Answer:   fmt.Sprintf("%d", v),
+			Explanation: fmt.Sprintf(
+				"By the Gauss Mean Value Property for harmonic functions, the value at the center of a disk equals the average over its boundary circle: \\(u(%d, %d) = \\frac{1}{2\\pi R}\\oint_{\\partial B} u\\,ds = %d\\).",
+				x0, y0, v,
+			),
+		}
+
+	case 1:
+		// Harmonic cubic polynomial coefficient b for u = a*x^3 + b*x*y^2
+		a := smallInt(1, 5)
+		b := -3 * a
+		return generator.Problem{
+			Question: fmt.Sprintf("For what integer coefficient \\(b\\) is the polynomial \\(u(x, y) = %dx^3 + bx y^2\\) a harmonic function (\\(\\Delta u = 0\\))?", a),
+			Answer:   fmt.Sprintf("%d", b),
+			Explanation: fmt.Sprintf(
+				"Calculating second partial derivatives: \\(u_{xx} = 6(%d)x = %dx\\) and \\(u_{yy} = 2bx\\). Requiring \\(\\Delta u = u_{xx} + u_{yy} = %dx + 2bx = 0\\) yields \\(2b = -%d\\), so \\(b = %d\\).",
+				a, 6*a, 6*a, 6*a, b,
+			),
+		}
+
+	case 2:
+		// Harmonic polynomial evaluation u(x, y) = x^2 - y^2
+		x0 := smallInt(3, 8)
+		y0 := smallInt(1, x0-1)
+		ans := x0*x0 - y0*y0
+		return generator.Problem{
+			Question: fmt.Sprintf("Evaluate the harmonic polynomial \\(u(x, y) = x^2 - y^2\\) at the point \\((%d, %d)\\).", x0, y0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"The polynomial is harmonic because \\(\\Delta u = u_{xx} + u_{yy} = 2 - 2 = 0\\). Evaluating at \\((%d, %d)\\) gives \\(u(%d, %d) = %d^2 - %d^2 = %d - %d = %d\\).",
+				x0, y0, x0, y0, x0, y0, x0*x0, y0*y0, ans,
+			),
+		}
+
+	case 3:
+		// Elliptic maximum principle interior bound
+		M := smallInt(15, 60)
+		return generator.Problem{
+			Question: fmt.Sprintf("A harmonic function \\(u(x, y)\\) on the unit square satisfies boundary temperatures bounded by \\(u \\le %d\\). By the maximum principle, what is the maximum possible temperature at the interior center \\((0.5, 0.5)\\)?", M),
+			Answer:   fmt.Sprintf("%d", M),
+			Explanation: fmt.Sprintf(
+				"By the strong maximum principle for elliptic equations, a non-constant harmonic function achieves its maximum strictly on the boundary. Therefore the interior temperature cannot exceed the boundary upper bound of %d.",
+				M,
+			),
+		}
+
+	default:
+		// Total outward normal flux of harmonic function vanishes
+		return generator.Problem{
+			Question: "For a smooth harmonic function \\(u(x, y)\\) on a bounded planar domain \\(\\Omega\\), evaluate the total outward boundary normal flux \\(\\oint_{\\partial \\Omega} \\frac{\\partial u}{\\partial n}\\,ds\\).",
+			Answer:   "0",
+			Explanation: "By Green's first identity (the divergence theorem), \\(\\oint_{\\partial \\Omega} \\frac{\\partial u}{\\partial n}\\,ds = \\iint_\\Omega \\Delta u\\,dA\\). Because \\(u\\) is harmonic (\\(\\Delta u = 0\\)), the integral vanishes identically, yielding 0.",
+		}
 	}
-	// Parameterized production: mean value property at the center.
-	vs := []int{2, 3, 5, 7}
-	v := vs[rand.Intn(len(vs))]
-	easy = append(easy, entry{
-		q: fmt.Sprintf("u is harmonic and averages %d on a circle. What is u at the center? (enter a number)", v),
-		a: fmt.Sprintf("%d", v),
-		e: fmt.Sprintf("Mean value property: u(center) equals the average on any circle, so %d.", v),
-	})
-	hard := []entry{{"Does maximum principle hold for Laplace? (yes/no)", "yes", "Interior max = boundary max."}, {"Is fundamental solution log| x| in 2D? (yes/no)", "yes", "Newtonian potential."}, {"Is Dirichlet problem Laplace with boundary values? (yes/no)", "yes", "Boundary condition."}}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type volterraGen struct{}

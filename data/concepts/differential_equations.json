@@ -335,7 +335,7 @@
     "label": "Laplace equation",
     "domain": "differential_equations",
     "subdomain": "differential_equations.pde",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "ode.pde.heat"
     ],
