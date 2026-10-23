@@ -255,3 +255,20 @@ func TestPickQuizConcepts_SameSubdomainFill(t *testing.T) {
 		seen[c.ID] = true
 	}
 }
+
+func TestEngine_RecordAnswer_Mismatch(t *testing.T) {
+	d := miniDAG(t)
+	r := generator.NewRegistry()
+	_ = r.Register("a", &fakeGen{})
+	e := NewEngine(d, r)
+	sess := e.Start(d.Order())
+
+	// Record an answer for a concept that is not the current one ("b" != "a").
+	e.RecordAnswer(sess, "b", false)
+	if len(sess.Attempts) != 1 {
+		t.Fatalf("expected attempt recorded, got %d", len(sess.Attempts))
+	}
+	if sess.Index != 0 {
+		t.Errorf("expected index to stay at 0 on mismatch, got %d", sess.Index)
+	}
+}
