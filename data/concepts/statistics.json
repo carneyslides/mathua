@@ -286,7 +286,7 @@
   "label": "Bayes' theorem",
   "domain": "statistics",
   "subdomain": "statistics.probability",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "stat.prob.basic"
   ],

@@ -982,24 +982,125 @@ func (g *samplingGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type bayesGen struct{}
 
 func (g *bayesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"Is P(A|B) = P(B|A)P(A)/P(B) Bayes theorem? (yes/no)", "yes", "Bayes theorem relates conditional probabilities."},
-		{"In Bayes' theorem, P(A) is called the ____ probability.", "prior", "P(A) is the prior probability before observing B."},
-		{"In Bayes' theorem, P(A|B) is called the ____ probability.", "posterior", "P(A|B) is the updated probability after observing B."},
-		{"What is the denominator in Bayes' theorem called?", "marginal likelihood", "P(B) normalizes the posterior; it is called the marginal likelihood or evidence."},
-		{"In medical testing, P(test positive | has disease) is called ____.", "sensitivity", "Sensitivity = P(positive|disease), the true positive rate."},
-		{"In medical testing, P(test negative | no disease) is called ____.", "specificity", "Specificity = P(negative|no disease), the true negative rate."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type postItem struct {
+			pA      int
+			pBA     int
+			pBAc    int
+			postPct int
+		}
+		items := []postItem{
+			{50, 80, 20, 80},
+			{50, 60, 20, 75},
+			{50, 90, 30, 75},
+			{40, 90, 40, 60},
+			{25, 60, 20, 50},
+			{10, 90, 10, 50},
+			{50, 60, 40, 60},
+			{25, 90, 10, 75},
+		}
+		it := items[rand.Intn(len(items))]
+		num := float64(it.pBA*it.pA) / 10000.0
+		den := num + float64(it.pBAc*(100-it.pA))/10000.0
+		return generator.Problem{
+			Question: fmt.Sprintf("In a binary hypothesis test, event \\(A\\) has prior probability \\(P(A) = %d\\%%\\). Evidence \\(B\\) occurs with likelihood \\(P(B \\mid A) = %d\\%%\\) and false alarm probability \\(P(B \\mid A^c) = %d\\%%\\). Compute the posterior probability \\(P(A \\mid B)\\) as an integer percentage.", it.pA, it.pBA, it.pBAc),
+			Answer:   fmt.Sprintf("%d", it.postPct),
+			Explanation: fmt.Sprintf("By Bayes theorem, \\(P(A \\mid B) = \\frac{P(B \\mid A)P(A)}{P(B \\mid A)P(A) + P(B \\mid A^c)P(A^c)} = \\frac{%.3f}{%.3f} = %d\\%%\\).",
+				num, den, it.postPct),
+		}
+	case 1:
+		type totalItem struct {
+			pA1      int
+			pA2      int
+			pBA1     int
+			pBA2     int
+			totalPct int
+		}
+		items := []totalItem{
+			{60, 40, 30, 80, 50},
+			{70, 30, 40, 90, 55},
+			{50, 50, 24, 66, 45},
+			{80, 20, 25, 75, 35},
+			{40, 60, 50, 20, 32},
+			{30, 70, 80, 40, 52},
+			{50, 50, 36, 84, 60},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(A_1\\) and \\(A_2\\) form a partition of the sample space with \\(P(A_1) = %d\\%%\\) and \\(P(A_2) = %d\\%%\\). If \\(P(B \\mid A_1) = %d\\%%\\) and \\(P(B \\mid A_2) = %d\\%%\\), calculate the total probability \\(P(B)\\) as an integer percentage.", it.pA1, it.pA2, it.pBA1, it.pBA2),
+			Answer:   fmt.Sprintf("%d", it.totalPct),
+			Explanation: fmt.Sprintf("By the law of total probability, \\(P(B) = P(B \\mid A_1)P(A_1) + P(B \\mid A_2)P(A_2) = (%d\\%% \\cdot %d\\%%) + (%d\\%% \\cdot %d\\%%) = %d\\%%\\).",
+				it.pBA1, it.pA1, it.pBA2, it.pA2, it.totalPct),
+		}
+	case 2:
+		type oddsItem struct {
+			priorOdds int
+			lr        int
+			postOdds  int
+		}
+		items := []oddsItem{
+			{2, 3, 6},
+			{3, 4, 12},
+			{1, 5, 5},
+			{4, 2, 8},
+			{5, 3, 15},
+			{2, 7, 14},
+			{6, 3, 18},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A hypothesis has prior odds of %d to 1 in favor of \\(A\\). New observation \\(B\\) produces a likelihood ratio \\(\\frac{P(B \\mid A)}{P(B \\mid A^c)} = %d\\). What are the updated posterior odds in favor of \\(A\\)?", it.priorOdds, it.lr),
+			Answer:   fmt.Sprintf("%d", it.postOdds),
+			Explanation: fmt.Sprintf("In odds form, Bayes rule states \\(\\text{Posterior Odds} = \\text{Prior Odds} \\cdot \\text{Likelihood Ratio} = %d \\cdot %d = %d\\).",
+				it.priorOdds, it.lr, it.postOdds),
+		}
+	case 3:
+		type fpItem struct {
+			n    int
+			spec int
+			fp   int
+		}
+		items := []fpItem{
+			{2000, 95, 100},
+			{5000, 98, 100},
+			{1000, 96, 40},
+			{4000, 97, 120},
+			{3000, 99, 30},
+			{8000, 95, 400},
+			{6000, 98, 120},
+			{10000, 99, 100},
+		}
+		it := items[rand.Intn(len(items))]
+		fpRate := 100 - it.spec
+		return generator.Problem{
+			Question: fmt.Sprintf("A diagnostic screening test has specificity \\(%d\\%%\\). In a control group of %d healthy individuals, how many false positive results are expected?", it.spec, it.n),
+			Answer:   fmt.Sprintf("%d", it.fp),
+			Explanation: fmt.Sprintf("The false positive rate is \\(100\\%% - \\text{specificity} = 100\\%% - %d\\%% = %d\\%%\\). For %d healthy individuals, expected false positives are \\(%d \\cdot %d\\%% = %d\\).",
+				it.spec, fpRate, it.n, it.n, fpRate, it.fp),
+		}
+	default:
+		type compItem struct {
+			k int
+		}
+		items := []compItem{
+			{75},
+			{80},
+			{60},
+			{70},
+			{85},
+			{92},
+			{65},
+			{88},
+		}
+		it := items[rand.Intn(len(items))]
+		comp := 100 - it.k
+		return generator.Problem{
+			Question: fmt.Sprintf("After conditioning on observation \\(B\\), the posterior probability is \\(P(A \\mid B) = %d\\%%\\). What is the probability of the complementary hypothesis \\(P(A^c \\mid B)\\) as an integer percentage?", it.k),
+			Answer:   fmt.Sprintf("%d", comp),
+			Explanation: fmt.Sprintf("Conditional probabilities satisfy the complement rule: \\(P(A^c \\mid B) = 100\\%% - P(A \\mid B) = 100\\%% - %d\\%% = %d\\%%\\).",
+				it.k, comp),
+		}
 	}
 }
 
