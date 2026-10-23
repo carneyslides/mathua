@@ -956,24 +956,123 @@ func (g *confidenceGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type samplingGen struct{}
 
 func (g *samplingGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"The population SD is 12 and n=36. What is the standard error of the mean?", "2", "Standard error = population SD / sqrt(sample size) = 12/6."},
-		{"Does the sampling distribution of the mean approach Normal as n grows? (yes/no)", "yes", "CLT: the sampling distribution of the mean approaches Normal for large n."},
-		{"The population mean is 50. What is the mean of the sampling distribution of xbar?", "50", "xbar is an unbiased estimator of the population mean."},
-		{"Is a sampling distribution the distribution of a statistic over all possible samples? (yes/no)", "yes", "The sampling distribution shows how a statistic varies from sample to sample."},
-		{"Does a larger sample size reduce bias? (yes/no)", "no", "Bias depends on the sampling method, not sample size; bias is independent of n."},
-		{"Is a sample a subset of the population? (yes/no)", "yes", "The population is the entire group; the sample is a subset drawn from it."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type seItem struct {
+			n     int
+			sigma int
+			se    int
+		}
+		items := []seItem{
+			{16, 20, 5},
+			{25, 35, 7},
+			{36, 42, 7},
+			{64, 48, 6},
+			{100, 80, 8},
+			{144, 72, 6},
+			{25, 15, 3},
+			{36, 18, 3},
+		}
+		it := items[rand.Intn(len(items))]
+		sqrtN := it.sigma / it.se
+		return generator.Problem{
+			Question: fmt.Sprintf("A population has standard deviation \\(\\sigma = %d\\). If a random sample of size \\(n = %d\\) is taken, calculate the standard error of the mean \\(\\sigma_{\\bar{x}}\\).", it.sigma, it.n),
+			Answer:   fmt.Sprintf("%d", it.se),
+			Explanation: fmt.Sprintf("The standard error of the mean is \\(\\sigma_{\\bar{x}} = \\frac{\\sigma}{\\sqrt{n}} = \\frac{%d}{\\sqrt{%d}} = \\frac{%d}{%d} = %d\\).",
+				it.sigma, it.n, it.sigma, sqrtN, it.se),
+		}
+	case 1:
+		type varItem struct {
+			varPop int
+			n      int
+			v      int
+		}
+		items := []varItem{
+			{120, 5, 24},
+			{200, 8, 25},
+			{180, 12, 15},
+			{90, 6, 15},
+			{144, 9, 16},
+			{300, 15, 20},
+			{160, 10, 16},
+			{240, 16, 15},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A random variable has population variance \\(\\sigma^2 = %d\\). A random sample of size \\(n = %d\\) is drawn. What is the variance of the sample mean \\(\\operatorname{Var}(\\bar{X})\\)?", it.varPop, it.n),
+			Answer:   fmt.Sprintf("%d", it.v),
+			Explanation: fmt.Sprintf("The variance of the sample mean is \\(\\operatorname{Var}(\\bar{X}) = \\frac{\\sigma^2}{n} = \\frac{%d}{%d} = %d\\).",
+				it.varPop, it.n, it.v),
+		}
+	case 2:
+		type meanItem struct {
+			mu int
+			n  int
+		}
+		items := []meanItem{
+			{45, 25},
+			{72, 36},
+			{110, 50},
+			{85, 100},
+			{28, 16},
+			{135, 64},
+			{54, 40},
+			{96, 60},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A population has mean \\(\\mu = %d\\). If random samples of size \\(n = %d\\) are repeatedly collected, what is the expected value of the sample mean \\(E[\\bar{X}]\\)?", it.mu, it.n),
+			Answer:   fmt.Sprintf("%d", it.mu),
+			Explanation: fmt.Sprintf("The sample mean is an unbiased estimator of the population mean, so \\(E[\\bar{X}] = \\mu = %d\\).",
+				it.mu),
+		}
+	case 3:
+		type sampleSizeReqItem struct {
+			sigma int
+			se    int
+			n     int
+		}
+		items := []sampleSizeReqItem{
+			{24, 4, 36},
+			{30, 5, 36},
+			{40, 5, 64},
+			{50, 5, 100},
+			{36, 4, 81},
+			{48, 6, 64},
+			{60, 5, 144},
+			{42, 6, 49},
+		}
+		it := items[rand.Intn(len(items))]
+		ratio := it.sigma / it.se
+		return generator.Problem{
+			Question: fmt.Sprintf("A population has standard deviation \\(\\sigma = %d\\). What sample size \\(n\\) is needed so that the standard error of the mean equals \\(\\sigma_{\\bar{x}} = %d\\)?", it.sigma, it.se),
+			Answer:   fmt.Sprintf("%d", it.n),
+			Explanation: fmt.Sprintf("Solving \\(\\sigma_{\\bar{x}} = \\frac{\\sigma}{\\sqrt{n}}\\) gives \\(n = \\left(\\frac{\\sigma}{\\sigma_{\\bar{x}}}\\right)^2 = \\left(\\frac{%d}{%d}\\right)^2 = %d^2 = %d\\).",
+				it.sigma, it.se, ratio, it.n),
+		}
+	default:
+		type totalItem struct {
+			n   int
+			mu  int
+			sum int
+		}
+		items := []totalItem{
+			{8, 15, 120},
+			{12, 20, 240},
+			{10, 35, 350},
+			{6, 45, 270},
+			{15, 14, 210},
+			{9, 25, 225},
+			{16, 30, 480},
+			{7, 50, 350},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A sample of size \\(n = %d\\) is taken from a distribution with mean \\(\\mu = %d\\). Find the expected value of the sample total \\(E\\left[\\sum_{i=1}^n X_i\\right]\\).", it.n, it.mu),
+			Answer:   fmt.Sprintf("%d", it.sum),
+			Explanation: fmt.Sprintf("By linearity of expectation, the expected total of observations is \\(E\\left[\\sum_{i=1}^n X_i\\right] = n\\mu = %d \\cdot %d = %d\\).",
+				it.n, it.mu, it.sum),
+		}
 	}
 }
 
