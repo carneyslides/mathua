@@ -1,18 +1,21 @@
 package geometry
 
-// The angle facts, the midsegment, and the prism.
+// The angle facts, the midsegment and the prism.
 //
-// These are the school-course workhorses that were still missing: the exterior angle theorem, the
-// midsegment's half, the base angles of an isosceles triangle, the opposite angles of a cyclic
-// quadrilateral, and the prism volume that a pyramid's third is measured against.
+// These are the school-course workhorses: the exterior angle theorem, the
+// midsegment half, the base angles of an isosceles triangle, the opposite angles of a cyclic
+// quadrilateral and the prism volume that a pyramid third is measured against.
 //
-// Every answer is an integer by construction, and each ships an authored solution schema because
-// geometry is one of the six learner domains.
+// Every answer is an integer by construction with dynamic difficulty scaling,
+// structured cognitive scaffolding and parameter transparency.
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func registerAngleFacts(reg *generator.Registry) {
@@ -27,36 +30,84 @@ func registerAngleFacts(reg *generator.Registry) {
 type triangleExteriorAngleGen struct{}
 
 func (g *triangleExteriorAngleGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	// two interior angles that leave a sensible third; the second is clamped rather than redrawn,
-	// so the generator cannot spin
-	a := 20 + rand.Intn(30+int(ctx.Difficulty*40))
-	b := 20 + rand.Intn(30+int(ctx.Difficulty*40))
-	if a+b > 150 {
-		b = 150 - a
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b int
+	var answer string
+
+	for iter := 0; iter < 20; iter++ {
+		a = 25 + rand.Intn(25+tier*20)
+		b = 25 + rand.Intn(25+tier*20)
+		if a == b {
+			b += 5
+		}
+		if a+b > 155 {
+			b = 155 - a
+		}
+		ext := a + b
+		answer = strconv.Itoa(ext)
+
+		// Read-off avoidance: answer must not match a or b
+		if ext != a && ext != b {
+			break
+		}
 	}
+
+	third := 180 - a - b
+	subgoal1 := "Subgoal 1: State governing formula. The exterior angle theorem states that an exterior angle of a triangle is equal to the sum of the two remote interior angles: \\theta_{ext} = \\angle A + \\angle B."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For remote interior angles measuring %d degrees and %d degrees, the sum is %d + %d.",
+		a, b, a, b)
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Evaluating the sum gives exterior angle measure \\theta_{ext} = %s degrees.",
+		answer)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("In a triangle, one side is extended to form an exterior angle. The two interior angles not adjacent to it are %d and %d degrees. What is the measure of the exterior angle, in degrees?", a, b),
-		Answer:   fmt.Sprintf("%d", a+b),
-		Explanation: fmt.Sprintf("The three interior angles sum to 180, so the third one is 180 - %d - %d = %d. The exterior angle and that interior angle are supplementary, so it is 180 - %d = %d, which is the same as the sum of the two remote interior angles.",
-			a, b, 180-a-b, 180-a-b, a+b),
-		Facts: map[string]string{"exterior": fmt.Sprintf("%d", a+b), "interior_a": fmt.Sprintf("%d", a),
-			"interior_b": fmt.Sprintf("%d", b), "third": fmt.Sprintf("%d", 180-a-b)},
+		Question:    fmt.Sprintf("In a triangle, one side is extended to form an exterior angle. The two interior angles not adjacent to it are %d and %d degrees. What is the measure of the exterior angle, in degrees?", a, b),
+		Answer:      answer,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
+		Facts: map[string]string{
+			"interior_a": strconv.Itoa(a),
+			"interior_b": strconv.Itoa(b),
+			"third":      strconv.Itoa(third),
+			"exterior":   answer,
+			"answer":     answer,
+		},
 	}
 }
 
-// midsegmentGen uses the midsegment's half of the third side.
+// midsegmentGen uses the midsegment half of the third side.
 type midsegmentGen struct{}
 
 func (g *midsegmentGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	// an even third side, so the half is whole
-	third := 2 * (3 + rand.Intn(8+int(ctx.Difficulty*10)))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var third, mid int
+	var answer string
+
+	for iter := 0; iter < 20; iter++ {
+		baseK := mathutil.ScaleInt(ctx.Difficulty, 4, 15)
+		third = 2 * (baseK + rand.Intn(4+tier*5))
+		mid = third / 2
+		answer = strconv.Itoa(mid)
+
+		// Read-off avoidance: answer must not match third
+		if mid != third {
+			break
+		}
+	}
+
+	subgoal1 := "Subgoal 1: State governing formula. By the triangle midsegment theorem, a segment connecting the midpoints of two sides is parallel to the third side and has length equal to half that side: M = s / 2."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. Given third side length s = %d units, the midsegment length is %d / 2.",
+		third, third)
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Evaluating the division yields midsegment length M = %s units.",
+		answer)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A midsegment of a triangle joins the midpoints of two of its sides. The third side is %d units long. How long is the midsegment?", third),
-		Answer:   fmt.Sprintf("%d", third/2),
-		Explanation: fmt.Sprintf("A midsegment is parallel to the third side and half its length, so it is %d / 2 = %d. That is the same similarity ratio that makes the small triangle at the vertex similar to the whole one with factor 1/2.",
-			third, third/2),
-		Facts: map[string]string{"midsegment": fmt.Sprintf("%d", third/2),
-			"third_side": fmt.Sprintf("%d", third)},
+		Question:    fmt.Sprintf("A midsegment of a triangle joins the midpoints of two of its sides. The third side is %d units long. How long is the midsegment?", third),
+		Answer:      answer,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
+		Facts: map[string]string{
+			"third_side": strconv.Itoa(third),
+			"midsegment": answer,
+			"answer":     answer,
+		},
 	}
 }
 
@@ -64,18 +115,43 @@ func (g *midsegmentGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type isoscelesGen struct{}
 
 func (g *isoscelesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	// an even vertex angle, so the two base angles are whole
-	vertex := 2 * (5 + rand.Intn(40+int(ctx.Difficulty*30)))
-	if vertex > 178 {
-		vertex = 178
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var vertex, base int
+	var answer string
+
+	for iter := 0; iter < 20; iter++ {
+		k := 12 + rand.Intn(25+tier*20)
+		vertex = 2 * k
+		if vertex > 140 {
+			vertex = 140
+		}
+		// Read-off avoidance: avoid equilateral case where vertex equals base angle (60 degrees)
+		if vertex == 60 {
+			vertex = 64
+		}
+		base = (180 - vertex) / 2
+		answer = strconv.Itoa(base)
+
+		if base != vertex {
+			break
+		}
 	}
+
+	subgoal1 := "Subgoal 1: State governing formula. The interior angles of a triangle sum to 180 degrees and the two base angles of an isosceles triangle are congruent: 2\\theta + V = 180^\\circ, giving \\theta = (180^\\circ - V) / 2."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For vertex angle V = %d degrees, the remaining sum for both base angles is 180 - %d = %d degrees.",
+		vertex, vertex, 180-vertex)
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Dividing by 2 yields each base angle \\theta = %d / 2 = %s degrees.",
+		180-vertex, answer)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("An isosceles triangle has a vertex angle of %d degrees. What is the measure of each base angle, in degrees?", vertex),
-		Answer:   fmt.Sprintf("%d", (180-vertex)/2),
-		Explanation: fmt.Sprintf("The two base angles of an isosceles triangle are equal, and the three angles sum to 180, so each base angle is (180 - %d) / 2 = %d.",
-			vertex, (180-vertex)/2),
-		Facts: map[string]string{"base_angle": fmt.Sprintf("%d", (180-vertex)/2),
-			"vertex_angle": fmt.Sprintf("%d", vertex)},
+		Question:    fmt.Sprintf("An isosceles triangle has a vertex angle of %d degrees. What is the measure of each base angle, in degrees?", vertex),
+		Answer:      answer,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
+		Facts: map[string]string{
+			"vertex_angle": strconv.Itoa(vertex),
+			"base_angle":   answer,
+			"answer":       answer,
+		},
 	}
 }
 
@@ -83,31 +159,80 @@ func (g *isoscelesGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type cyclicQuadGen struct{}
 
 func (g *cyclicQuadGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := 30 + rand.Intn(50+int(ctx.Difficulty*50))
-	if a > 150 {
-		a = 150
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, opp int
+	var answer string
+
+	for iter := 0; iter < 20; iter++ {
+		a = 35 + rand.Intn(40+tier*35)
+		if a > 145 {
+			a = 145
+		}
+		// Read-off avoidance: avoid 90 degrees where opposite angle equals given angle
+		if a == 90 {
+			a = 95
+		}
+		opp = 180 - a
+		answer = strconv.Itoa(opp)
+
+		if opp != a {
+			break
+		}
 	}
+
+	subgoal1 := "Subgoal 1: State governing formula. Opposite angles of a cyclic quadrilateral inscribed in a circle sum to 180 degrees: \\angle A + \\angle C = 180^\\circ, giving \\angle C = 180^\\circ - \\angle A."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For inscribed angle \\angle A = %d degrees, the opposite angle equation gives %d + \\angle C = 180.",
+		a, a)
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Subtracting yields opposite angle \\angle C = 180 - %d = %s degrees.",
+		a, answer)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A quadrilateral is inscribed in a circle, so its four vertices lie on the circle. One of its angles is %d degrees. What is the measure of the opposite angle, in degrees?", a),
-		Answer:   fmt.Sprintf("%d", 180-a),
-		Explanation: fmt.Sprintf("Opposite angles of a cyclic quadrilateral are supplementary, because they subtend the two arcs that together make the whole circle and each is half of its arc: 180 - %d = %d.",
-			a, 180-a),
-		Facts: map[string]string{"opposite": fmt.Sprintf("%d", 180-a), "angle": fmt.Sprintf("%d", a)},
+		Question:    fmt.Sprintf("A quadrilateral is inscribed in a circle, so its four vertices lie on the circle. One of its angles is %d degrees. What is the measure of the opposite angle, in degrees?", a),
+		Answer:      answer,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
+		Facts: map[string]string{
+			"angle":    strconv.Itoa(a),
+			"opposite": answer,
+			"answer":   answer,
+		},
 	}
 }
 
-// prismVolumeGen is the comparison figure a pyramid's third is taken against.
+// prismVolumeGen computes the volume of a right prism from base area and height.
 type prismVolumeGen struct{}
 
 func (g *prismVolumeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	base := 2 + rand.Intn(10+int(ctx.Difficulty*15))
-	h := 2 + rand.Intn(6+int(ctx.Difficulty*8))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var base, h, vol int
+	var answer string
+
+	for iter := 0; iter < 20; iter++ {
+		base = mathutil.ScaleInt(ctx.Difficulty, 4, 12) + rand.Intn(5+tier*4)
+		h = mathutil.ScaleInt(ctx.Difficulty, 3, 8) + rand.Intn(4+tier*3)
+		vol = base * h
+		answer = strconv.Itoa(vol)
+
+		// Read-off avoidance: answer must not match base or h
+		if vol != base && vol != h {
+			break
+		}
+	}
+
+	subgoal1 := "Subgoal 1: State governing formula. The volume of a prism equals the product of its base area B and height h: V = B \\cdot h."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. Substituting base area B = %d square units and height h = %d units gives V = (%d)(%d).",
+		base, h, base, h)
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Multiplying yields volume V = %s cubic units.",
+		answer)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A prism has a base of area %d square units and a height of %d units. What is its volume, in cubic units?", base, h),
-		Answer:   fmt.Sprintf("%d", base*h),
-		Explanation: fmt.Sprintf("A prism's volume is the base area times the height, because every cross-section parallel to the base is the same: %d * %d = %d. The shape of the base does not matter, only its area.",
-			base, h, base*h),
-		Facts: map[string]string{"volume": fmt.Sprintf("%d", base*h), "base": fmt.Sprintf("%d", base),
-			"height": fmt.Sprintf("%d", h)},
+		Question:    fmt.Sprintf("A prism has a base of area %d square units and a height of %d units. What is its volume, in cubic units?", base, h),
+		Answer:      answer,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
+		Facts: map[string]string{
+			"base":   strconv.Itoa(base),
+			"height": strconv.Itoa(h),
+			"volume": answer,
+			"answer": answer,
+		},
 	}
 }
