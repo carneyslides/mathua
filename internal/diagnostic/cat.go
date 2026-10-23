@@ -696,43 +696,115 @@ func (e *Engine) recordTimed(s *Session, conceptID string, correct bool, elapsed
 	}
 }
 
+type nodeDistance struct {
+	id   string
+	dist int
+}
+
+func (e *Engine) ancestorsWithDistance(conceptID string) []nodeDistance {
+	visited := map[string]int{conceptID: 0}
+	queue := []nodeDistance{{id: conceptID, dist: 0}}
+	var out []nodeDistance
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+		for _, pr := range e.dag.PrereqsOf(curr.id) {
+			if pr.ID == curr.id {
+				continue
+			}
+			if _, seen := visited[pr.ID]; !seen {
+				d := curr.dist + 1
+				visited[pr.ID] = d
+				nd := nodeDistance{id: pr.ID, dist: d}
+				queue = append(queue, nd)
+				out = append(out, nd)
+			}
+		}
+	}
+	return out
+}
+
+func (e *Engine) descendantsWithDistance(conceptID string) []nodeDistance {
+	visited := map[string]int{conceptID: 0}
+	queue := []nodeDistance{{id: conceptID, dist: 0}}
+	var out []nodeDistance
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+		for _, dep := range e.dag.DependentsOf(curr.id) {
+			if dep.ID == curr.id {
+				continue
+			}
+			if _, seen := visited[dep.ID]; !seen {
+				d := curr.dist + 1
+				visited[dep.ID] = d
+				nd := nodeDistance{id: dep.ID, dist: d}
+				queue = append(queue, nd)
+				out = append(out, nd)
+			}
+		}
+	}
+	return out
+}
+
 // propagateEvidence applies ±evidence weights along DAG edges with
 // conflictDiscount damping both directions when prior evidence conflicts.
 func (e *Engine) propagateEvidence(s *Session, conceptID string, correct bool, slowFactor float64) {
 	if correct {
-		for _, pr := range e.dag.PrereqsOf(conceptID) {
-			if pr.ID == conceptID {
-				continue
+		ancestors := e.ancestorsWithDistance(conceptID)
+		for _, pr := range ancestors {
+			decay := math.Pow(0.8, float64(pr.dist-1))
+			b := s.beliefs[pr.id]
+			b += evidenceCorrectWeight * slowFactor * decay * (1 - b) * conflictDiscount
+			if b > 0.95 {
+				b = 0.95
 			}
-			s.beliefs[pr.ID] += evidenceCorrectWeight * slowFactor * (1 - s.beliefs[pr.ID]) * conflictDiscount
+			s.beliefs[pr.id] = b
+			s.confidence[pr.id] = math.Max(s.confidence[pr.id], math.Min(0.65, s.confidence[pr.id]+0.15*decay*slowFactor))
 		}
 		return
 	}
-	for _, dep := range e.dag.DependentsOf(conceptID) {
-		if dep.ID == conceptID {
-			continue
+	descendants := e.descendantsWithDistance(conceptID)
+	for _, dep := range descendants {
+		decay := math.Pow(0.8, float64(dep.dist-1))
+		b := s.beliefs[dep.id]
+		b *= (1 - evidenceIncorrectWeight*conflictDiscount*decay)
+		if b < 0.05 {
+			b = 0.05
 		}
-		s.beliefs[dep.ID] *= (1 - evidenceIncorrectWeight*conflictDiscount)
+		s.beliefs[dep.id] = b
 	}
-	// MA fall-back: a miss also strips "conditionally completed" credit
-	// from barely-passed prerequisites — the frontier falls backwards
-	// along the learning path immediately on struggle.
-	for _, pr := range e.dag.PrereqsOf(conceptID) {
-		if pr.ID == conceptID {
-			continue
-		}
-		if pb := s.beliefs[pr.ID]; pb >= beliefThreshold && pb < beliefThreshold+0.15 {
-			s.beliefs[pr.ID] = pb * conditionalStripFactor
+	// Fall-back: a miss also strips conditionally completed credit
+	// from barely-passed prerequisites.
+	ancestors := e.ancestorsWithDistance(conceptID)
+	for _, pr := range ancestors {
+		if pb := s.beliefs[pr.id]; pb >= beliefThreshold && pb < beliefThreshold+0.15 {
+			s.beliefs[pr.id] = pb * conditionalStripFactor
 		}
 	}
 }
 
-// supplementalDiagnostic re-probes settled cover concepts whose confidence
-// never reached confidenceThreshold (e.g. answers recorded without question
-// probes on the legacy API path). Each concept gets at most
-// maxSupplementalProbes extra probes; "" means supplemental is complete.
+// supplementalDiagnostic re-probes settled concepts when confidence remains
+// below confidenceThreshold (0.70). It prioritizes the knowledge frontier concept,
+// then examines covering set concepts.
 // Caller must hold s.Lock (NextQuestion does).
 func (e *Engine) supplementalDiagnostic(s *Session) string {
+	// Re-probe the knowledge frontier when its confidence remains below 0.70.
+	frontierIdx := -1
+	for i, c := range s.order {
+		if s.beliefs[c.ID] >= beliefThreshold {
+			frontierIdx = i
+		}
+	}
+	if frontierIdx >= 0 && frontierIdx < len(s.order) {
+		fc := s.order[frontierIdx]
+		if s.confidence[fc.ID] < confidenceThreshold && s.supplementalCount[fc.ID] < maxSupplementalProbes {
+			s.supplementalCount[fc.ID]++
+			delete(s.doneSet, fc.ID)
+			return fc.ID
+		}
+	}
+
 	cover := e.compressedCover(s)
 	for _, c := range cover {
 		if !s.doneSet[c.ID] {
@@ -832,7 +904,7 @@ func (e *Engine) Progress(s *Session) Progress {
 	if budget > maxTotalQuestions {
 		budget = maxTotalQuestions
 	}
-	if s.State == StateDone && answered < budget {
+	if s.State == StateDone {
 		budget = answered
 	}
 	return Progress{
