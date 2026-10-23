@@ -338,7 +338,7 @@
     "label": "QR decomposition",
     "domain": "linear_algebra",
     "subdomain": "linear_algebra.decompositions",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "linalg.decomp.lu",
       "linalg.inner_product"

@@ -843,44 +843,75 @@ func (g *luGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type qrGen struct{}
 
 func (g *qrGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
+	triples := [][3]int{
+		{3, 4, 5},
+		{4, 3, 5},
+		{6, 8, 10},
+		{8, 6, 10},
+		{5, 12, 13},
+		{12, 5, 13},
 	}
-	easy := []entry{
-		{"Does QR write A=QR with Q orthogonal and R upper triangular? (yes/no)", "yes", "QR via Gram-Schmidt."},
-		{"Is Q's columns orthonormal? (yes/no)", "yes", "QᵀQ=I."},
-		{"Does QR solve least squares via R x = Qᵀb? (yes/no)", "yes", "Normal equations stability."},
-		{"Is R lower triangular? (yes/no)", "no", "R is upper triangular by construction."},
+	trip := triples[rand.Intn(len(triples))]
+	a, b, r := trip[0], trip[1], trip[2]
+
+	u := 1 + rand.Intn(3)
+	v := 1 + rand.Intn(3)
+	if rand.Intn(2) == 0 {
+		u = -u
 	}
-	hard := []entry{
-		{"For A=[[1,1],[1,0]], is Q's first column normalized (1,1)/√2? (yes/no)", "yes", "Gram-Schmidt on columns."},
-		{"Does Householder reflection give stable QR? (yes/no)", "yes", "Householder is stable."},
-		{"Is R's diagonal positive if using standard Gram-Schmidt? (yes/no)", "yes", "By convention."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: Gram-Schmidt quantities (unique answers).
-		type qrEntry struct {
-			question string
-			answer   string
-			reason   string
+	c := u*a - v*b
+	d := u*b + v*a
+
+	switch rand.Intn(5) {
+	case 0:
+		return generator.Problem{
+			Question: fmt.Sprintf("The first column of real matrix \\(A\\) is \\(a_1 = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). In the QR decomposition \\(A = QR\\), find the diagonal entry \\(r_{11} = \\|a_1\\|\\).", a, b),
+			Answer:   fmt.Sprintf("%d", r),
+			Explanation: fmt.Sprintf("The entry \\(r_{11}\\) is the Euclidean norm of the first column: \\(r_{11} = \\sqrt{%d^2 + %d^2} = \\sqrt{%d} = %d\\).",
+				a, b, a*a+b*b, r),
 		}
-		qrTable := []qrEntry{
-			{"Gram-Schmidt on (1,1): what is ||(1,1)||? (enter like sqrt(2))", "sqrt(2)", "sqrt(1+1) = sqrt(2)."},
-			{"R is 2x2 upper triangular. How many possibly-nonzero entries? (enter a number)", "3", "Two diagonal plus one above: 3."},
-			{"Least squares via Rx=Qᵀb with upper-triangular R: forward or back substitution? (type one word)", "back", "Upper-triangular systems solve bottom-up: back substitution."},
+	case 1:
+		r12 := u * r
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) with columns \\(a_1\\) and \\(a_2\\). In the QR factorization \\(A = QR\\), compute the upper entry \\(r_{12} = q_1^T a_2\\).", a, c, b, d),
+			Answer:   fmt.Sprintf("%d", r12),
+			Explanation: fmt.Sprintf("The first normalized column is \\(q_1 = \\frac{1}{%d} \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Taking the inner product gives \\(r_{12} = q_1^T a_2 = \\frac{1}{%d}(%d \\cdot (%d) + %d \\cdot (%d)) = \\frac{%d}{%d} = %d\\).",
+				r, a, b, r, a, c, b, d, a*c+b*d, r, r12),
 		}
-		v := qrTable[rand.Intn(len(qrTable))]
-		return generator.Problem{Question: v.question, Answer: v.answer, Explanation: v.reason}
+	case 2:
+		r22 := v * r
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\). In the QR decomposition \\(A = QR\\) with positive diagonal entries, find \\(r_{22}\\).", a, c, b, d),
+			Answer:   fmt.Sprintf("%d", r22),
+			Explanation: fmt.Sprintf("Orthogonalizing \\(a_2\\) gives \\(v_2 = a_2 - r_{12} q_1 = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Its Euclidean length gives \\(r_{22} = \\|v_2\\| = %d\\).",
+				-v*b, v*a, r22),
+		}
+	case 3:
+		d1 := 1 + rand.Intn(5)
+		d2 := 1 + rand.Intn(5)
+		d3 := 1 + rand.Intn(4)
+		detR := d1 * d2 * d3
+		return generator.Problem{
+			Question: fmt.Sprintf("A \\(3 \\times 3\\) matrix \\(A\\) has QR decomposition \\(A = QR\\), where \\(Q\\) is an orthogonal matrix with \\(\\det(Q) = 1\\) and \\(R\\) has diagonal entries %d, %d and %d. Find \\(\\det(A)\\).", d1, d2, d3),
+			Answer:   fmt.Sprintf("%d", detR),
+			Explanation: fmt.Sprintf("Because \\(A = QR\\), the determinant satisfies \\(\\det(A) = \\det(Q) \\det(R)\\). For triangular matrix \\(R\\), the determinant is the product of diagonal entries: \\(\\det(R) = %d \\times %d \\times %d = %d\\). With \\(\\det(Q) = 1\\), \\(\\det(A) = %d\\).",
+				d1, d2, d3, detR, detR),
+		}
+	default:
+		r11 := 1 + rand.Intn(4)
+		r12 := rand.Intn(4) + 1
+		r22 := 1 + rand.Intn(4)
+		x2 := 1 + rand.Intn(5)
+		x1 := 1 + rand.Intn(5)
+		c2 := r22 * x2
+		c1 := r11*x1 + r12*x2
+		return generator.Problem{
+			Question: fmt.Sprintf("To solve the least-squares problem \\(Ax = b\\) via QR decomposition \\(Rx = Q^T b\\), let \\(R = \\begin{pmatrix} %d & %d \\\\ 0 & %d \\end{pmatrix}\\) and \\(Q^T b = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Find \\(x_1\\).", r11, r12, r22, c1, c2),
+			Answer:   fmt.Sprintf("%d", x1),
+			Explanation: fmt.Sprintf("From the second equation, \\(%d x_2 = %d\\) gives \\(x_2 = %d\\). Back substitution into the first row yields \\(%d x_1 + %d(%d) = %d\\), so \\(x_1 = %d\\).",
+				r22, c2, x2, r11, r12, x2, c1, x1),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 type svdGen struct{}
