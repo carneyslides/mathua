@@ -1,14 +1,14 @@
 package numerical
 
 // The first numerical-analysis batch: twenty concepts that open the domain with
-// error and conditioning, root finding, and the first half of interpolation.
+// error and conditioning, root finding and the first half of interpolation.
 //
 // The domain is about the gap between an exact mathematical object and the
 // finitely many digits a machine can hold and the finitely many steps a method
 // can afford. This batch measures that gap (absolute and relative error,
 // roundoff, cancellation, conditioning, stability, truncation), closes it by
-// iteration (bisection, fixed-point, Newton, secant, false position, and the
-// orders those methods achieve), and starts reconstructing a function from
+// iteration (bisection, fixed-point, Newton, secant, false position and the
+// orders those methods achieve) and starts reconstructing a function from
 // samples (Lagrange interpolation, divided differences, the error formula,
 // Chebyshev nodes and splines).
 //
@@ -17,12 +17,14 @@ package numerical
 // recompute the answer rather than trusting the author's arithmetic.
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"strconv"
 	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func decimal6(v float64) string {
@@ -42,27 +44,31 @@ func decimal6(v float64) string {
 type absRelErrorGen struct{}
 
 func (g *absRelErrorGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		true, approx int
-		reason       string
+	maxTrue := mathutil.ScaleInt(ctx.Difficulty, 500, 4000)
+	tVal := (1 + rand.Intn(maxTrue/100)) * 100
+	maxDelta := mathutil.ScaleInt(ctx.Difficulty, 4, 25)
+	delta := 1 + rand.Intn(maxDelta)
+	approx := tVal + delta
+	if rand.Intn(2) == 1 {
+		approx = tVal - delta
 	}
-	claims := []claim{
-		{true: 1000, approx: 999, reason: "The absolute error is 1 and the true value is 1000, so the relative error is 1/1000 = 0.001."},
-		{true: 500, approx: 505, reason: "The absolute error is 5 and the true value is 500, so 5/500 = 0.01."},
-		{true: 200, approx: 198, reason: "The absolute error is 2 and the true value is 200, so 2/200 = 0.01."},
-		{true: 250, approx: 245, reason: "The absolute error is 5 and the true value is 250, so 5/250 = 0.02."},
-		{true: 1000, approx: 1004, reason: "The absolute error is 4 and the true value is 1000, so 4/1000 = 0.004."},
-		{true: 400, approx: 404, reason: "The absolute error is 4 and the true value is 400, so 4/400 = 0.01."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(math.Abs(float64(c.approx-c.true)) / math.Abs(float64(c.true)))
+
+	relErr := float64(delta) / float64(tVal)
+	ans := decimal6(relErr)
+
+	q := fmt.Sprintf("A quantity has true value %d and is approximated by %d. What is the relative error |approx − true|/|true|? (enter a decimal)", tVal, approx)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The relative error measures the magnitude of approximation error relative to the true quantity: \\(\\text{RelErr} = \\frac{|\\text{approx} - \\text{true}|}{|\\text{true}|}\\).\n\nSubgoal 2: Substitute parameters. Given true value %d and approximation %d, substitute into the formula: \\(\\text{RelErr} = \\frac{|%d - %d|}{|%d|}\\).\n\nSubgoal 3: Evaluate and simplify. Compute the absolute difference \\(|%d - %d| = %d\\) and divide by %d: \\(\\text{RelErr} = \\frac{%d}{%d} = %s\\).",
+		tVal, approx, approx, tVal, tVal,
+		approx, tVal, delta, tVal, delta, tVal, ans)
+
 	return generator.Problem{
-		Question: "A quantity has true value " + strconv.Itoa(c.true) + " and is approximated by " +
-			strconv.Itoa(c.approx) + ". What is the relative error |approx − true|/|true|? (enter a decimal)",
-		Answer:      answer,
-		Explanation: "The relative error divides the absolute error by the size of the true value, which makes it independent of the units; " + c.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"true": strconv.Itoa(c.true), "approx": strconv.Itoa(c.approx), "answer": answer,
+			"true":   strconv.Itoa(tVal),
+			"approx": strconv.Itoa(approx),
+			"answer": ans,
 		},
 	}
 }
@@ -125,27 +131,35 @@ func (g *roundoffGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type cancellationGen struct{}
 
 func (g *cancellationGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		x, y   int
-		reason string
+	maxK := mathutil.ScaleInt(ctx.Difficulty, 10, 200)
+	k := 5 + rand.Intn(maxK-4)
+	d := 2 + rand.Intn(10)
+	if ((k+1)*d)%2 != 0 {
+		d = 2 * d
 	}
-	claims := []claim{
-		{x: 1001, y: 999, reason: "(1001 + 999)/|1001 − 999| = 2000/2 = 1000."},
-		{x: 1002, y: 998, reason: "(1002 + 998)/4 = 500."},
-		{x: 1005, y: 995, reason: "(1005 + 995)/10 = 200."},
-		{x: 1010, y: 990, reason: "(1010 + 990)/20 = 100."},
-		{x: 1100, y: 900, reason: "(1100 + 900)/200 = 10."},
-		{x: 1001, y: 1000, reason: "(1001 + 1000)/1 = 2001."},
+	x := (k + 1) * d / 2
+	y := x - d
+
+	for iter := 0; iter < 5 && (k == x || k == y); iter++ {
+		k += 10
+		x = (k + 1) * d / 2
+		y = x - d
 	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(absInt(c.x)+absInt(c.y)) / float64(absInt(c.x-c.y)))
+
+	ans := decimal6(float64(x+y) / float64(d))
+	q := fmt.Sprintf("The subtraction x − y loses accuracy when x and y are close: the relative error of the difference is amplified by (|x| + |y|)/|x − y| relative to the inputs. For x = %d and y = %d, what is that amplification factor? (enter a decimal)", x, y)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. Subtraction of nearby quantities suffers from catastrophic cancellation, amplifying input errors by the factor \\(\\kappa = \\frac{|x| + |y|}{|x - y|}\\).\n\nSubgoal 2: Substitute parameters. Substitute \\(x = %d\\) and \\(y = %d\\) into the amplification ratio: \\(\\kappa = \\frac{|%d| + |%d|}{|%d - %d|}\\).\n\nSubgoal 3: Evaluate and simplify. Compute the numerator \\(%d + %d = %d\\) and denominator \\(|%d| = %d\\), then divide: \\(\\kappa = \\frac{%d}{%d} = %s\\).",
+		x, y, x, y, x, y,
+		x, y, x+y, x-y, d, x+y, d, ans)
+
 	return generator.Problem{
-		Question: "The subtraction x − y loses accuracy when x and y are close: the relative error of the difference is amplified by (|x| + |y|)/|x − y| relative to the inputs. For x = " +
-			strconv.Itoa(c.x) + " and y = " + strconv.Itoa(c.y) + ", what is that amplification factor? (enter a decimal)",
-		Answer:      answer,
-		Explanation: "Cancellation is the loss of leading digits when nearly equal numbers are subtracted, and the amplification grows as the difference shrinks; " + c.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"x": strconv.Itoa(c.x), "y": strconv.Itoa(c.y), "answer": answer,
+			"x":      strconv.Itoa(x),
+			"y":      strconv.Itoa(y),
+			"answer": ans,
 		},
 	}
 }
@@ -157,27 +171,22 @@ func (g *cancellationGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type conditioningGen struct{}
 
 func (g *conditioningGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		n      int
-		reason string
-	}
-	claims := []claim{
-		{n: 2, reason: "|x·2x|/|x²| = 2."},
-		{n: 3, reason: "|x·3x²|/|x³| = 3."},
-		{n: 4, reason: "|x·4x³|/|x⁴| = 4."},
-		{n: 5, reason: "|x·5x⁴|/|x⁵| = 5."},
-		{n: 6, reason: "|x·6x⁵|/|x⁶| = 6."},
-		{n: 7, reason: "|x·7x⁶|/|x⁷| = 7."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(c.n))
+	maxN := mathutil.ScaleInt(ctx.Difficulty, 6, 25)
+	n := 2 + rand.Intn(maxN-1)
+	ans := decimal6(float64(n))
+
+	q := fmt.Sprintf("The relative condition number of the function x raised to the power n at a point x is |x·f'(x)|/|f(x)|. For f(x) = x^%d, what is that condition number? (enter a decimal)", n)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The relative condition number of a differentiable function \\(f(x)\\) measures output sensitivity to input perturbation: \\(\\kappa(x) = \\frac{|x f'(x)|}{|f(x)|}\\).\n\nSubgoal 2: Substitute parameters. For monomial \\(f(x) = x^{%d}\\), compute derivative \\(f'(x) = %d x^{%d}\\) and substitute: \\(\\kappa(x) = \\frac{|x \\cdot %d x^{%d}|}{|x^{%d}|}\\).\n\nSubgoal 3: Evaluate and simplify. Multiply in the numerator to obtain \\(%d |x^{%d}|\\) and divide out \\(|x^{%d}|\\): \\(\\kappa(x) = %d\\).",
+		n, n, n-1, n, n-1, n,
+		n, n, n, n)
+
 	return generator.Problem{
-		Question: "The relative condition number of the function x raised to the power n at a point x is |x·f'(x)|/|f(x)|. For f(x) = x^" +
-			strconv.Itoa(c.n) + ", what is that condition number? (enter a decimal)",
-		Answer:      answer,
-		Explanation: "Differentiating the power and simplifying cancels the x, leaving the exponent, so the evaluation is as well or badly conditioned as the exponent says; " + c.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"n": strconv.Itoa(c.n), "answer": answer,
+			"n":      strconv.Itoa(n),
+			"answer": ans,
 		},
 	}
 }
@@ -206,7 +215,7 @@ func (g *stabilityGen) Generate(ctx generator.GeneratorContext) generator.Proble
 			question:    "A stable algorithm applied to an ill-conditioned problem...",
 			correct:     "can still return an inaccurate answer, because the problem amplifies the perturbation",
 			distractors: []string{"always returns an accurate answer", "cannot be implemented", "has no rounding error"},
-			reason:      "Stability controls the algorithm; the condition number controls the problem, and the two multiply.",
+			reason:      "Stability controls the algorithm; the condition number controls the problem and the two multiply.",
 		},
 		{
 			question:    "The condition number of a problem measures...",
@@ -251,7 +260,7 @@ func (g *taylorErrorGen) Generate(ctx generator.GeneratorContext) generator.Prob
 			question:    "The truncation error of a numerical method is the error made by...",
 			correct:     "replacing an exact process with a finite approximation",
 			distractors: []string{"finite-precision arithmetic", "noisy input data", "a badly chosen algorithm"},
-			reason:      "It is the price of cutting off a series or a limiting process, and it is separate from roundoff.",
+			reason:      "It is the price of cutting off a series or a limiting process and it is separate from roundoff.",
 		},
 		{
 			question:    "For a method of order n the local truncation error behaves like...",
@@ -291,30 +300,39 @@ func (g *taylorErrorGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type bisectionGen struct{}
 
 func (g *bisectionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		width, tol float64
-		widthStr   string
-		tolStr     string
-		reason     string
+	widths := []float64{1, 2, 4, 8, 16, 32}
+	w := widths[rand.Intn(len(widths))]
+	wStr := strconv.Itoa(int(w))
+
+	maxK := mathutil.ScaleInt(ctx.Difficulty, 6, 16)
+	k := 4 + rand.Intn(maxK-3)
+	tol := w / math.Pow(2, float64(k))
+	tolStr := strconv.FormatFloat(tol, 'f', -1, 64)
+
+	steps := int(math.Ceil(math.Log2(w / tol)))
+	ans := strconv.Itoa(steps)
+
+	for iter := 0; iter < 5 && ans == wStr; iter++ {
+		k++
+		tol = w / math.Pow(2, float64(k))
+		tolStr = strconv.FormatFloat(tol, 'f', -1, 64)
+		steps = int(math.Ceil(math.Log2(w / tol)))
+		ans = strconv.Itoa(steps)
 	}
-	claims := []claim{
-		{width: 8, tol: 0.5, widthStr: "8", tolStr: "0.5", reason: "log2(16) = 4, so four halvings bring the width to the tolerance."},
-		{width: 1, tol: 0.001, widthStr: "1", tolStr: "0.001", reason: "log2(1000) = 9.97, so ten steps are needed."},
-		{width: 2, tol: 0.01, widthStr: "2", tolStr: "0.01", reason: "log2(200) = 7.64, so eight steps are needed."},
-		{width: 16, tol: 0.25, widthStr: "16", tolStr: "0.25", reason: "log2(64) = 6, so six steps."},
-		{width: 1, tol: 0.0009765625, widthStr: "1", tolStr: "0.0009765625", reason: "1/0.0009765625 = 1024 = 2^10, so ten steps."},
-		{width: 4, tol: 0.001, widthStr: "4", tolStr: "0.001", reason: "log2(4000) = 11.97, so twelve steps are needed."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	steps := int(math.Ceil(math.Log2(c.width / c.tol)))
-	answer := strconv.Itoa(steps)
+
+	q := fmt.Sprintf("Bisection halves the interval at each step. Starting from an interval of width %s, how many steps are needed to make the width at most %s? (enter a whole number)", wStr, tolStr)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The bisection method halves the search interval at each iteration, giving width \\(W_k = \\frac{W_0}{2^k}\\) after k steps. Requiring \\(W_k \\le \\epsilon\\) implies \\(2^k \\ge \\frac{W_0}{\\epsilon}\\), so \\(k = \\lceil \\log_2(W_0 / \\epsilon) \\rceil\\).\n\nSubgoal 2: Substitute parameters. Substitute initial width \\(W_0 = %s\\) and tolerance \\(\\epsilon = %s\\): \\(\\frac{W_0}{\\epsilon} = \\frac{%s}{%s} = %s\\).\n\nSubgoal 3: Evaluate and simplify. Take the base-two logarithm \\(\\log_2(%s) = %d\\), which establishes that exactly %d steps are required.",
+		wStr, tolStr, wStr, tolStr, strconv.FormatFloat(w/tol, 'f', -1, 64),
+		strconv.FormatFloat(w/tol, 'f', -1, 64), steps, steps)
+
 	return generator.Problem{
-		Question: "Bisection halves the interval at each step. Starting from an interval of width " +
-			c.widthStr + ", how many steps are needed to make the width at most " + c.tolStr + "? (enter a whole number)",
-		Answer:      answer,
-		Explanation: "The width after k steps is the starting width divided by 2^k, so k must be at least the base-two logarithm of the ratio; " + c.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"width": c.widthStr, "tol": c.tolStr, "answer": answer,
+			"width":  wStr,
+			"tol":    tolStr,
+			"answer": ans,
 		},
 	}
 }
@@ -326,35 +344,46 @@ func (g *bisectionGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type fixedPointGen struct{}
 
 func (g *fixedPointGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, bn, bd, x0, n int
-		reason           string
+	maxA := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	a := 1 + rand.Intn(maxA)
+	bd := 2 + rand.Intn(3)
+	bn := 1
+	if bd > 2 && rand.Intn(2) == 1 {
+		bn = bd - 1
 	}
-	claims := []claim{
-		{a: 1, bn: 1, bd: 2, x0: 0, n: 3, reason: "The iterates are 1, 1.5 and 1.75."},
-		{a: 2, bn: 1, bd: 2, x0: 0, n: 2, reason: "The iterates are 2 and 3."},
-		{a: 1, bn: 1, bd: 3, x0: 0, n: 2, reason: "1 then 1 + 1/3 = 1.333333."},
-		{a: 0, bn: 1, bd: 2, x0: 4, n: 3, reason: "The iterates halve: 4, 2, 1, 0.5."},
-		{a: 3, bn: 1, bd: 2, x0: 0, n: 2, reason: "The iterates are 3 and 4.5."},
-		{a: 1, bn: 1, bd: 4, x0: 0, n: 2, reason: "1 then 1.25."},
+	x0 := rand.Intn(4)
+	n := 2
+	if ctx.Difficulty >= 0.5 {
+		n = 3
 	}
-	c := claims[rand.Intn(len(claims))]
-	x := float64(c.x0)
-	b := float64(c.bn) / float64(c.bd)
-	for i := 0; i < c.n; i++ {
-		x = float64(c.a) + b*x
+
+	x := float64(x0)
+	b := float64(bn) / float64(bd)
+	var steps []string
+	cur := x
+	for i := 0; i < n; i++ {
+		cur = float64(a) + b*cur
+		steps = append(steps, fmt.Sprintf("x_%d = %d + (%d/%d)(%s) = %s", i+1, a, bn, bd, decimal6(x), decimal6(cur)))
+		x = cur
 	}
-	answer := decimal6(x)
+	ans := decimal6(x)
+
+	q := fmt.Sprintf("Fixed-point iteration applies x_{k+1} = a + b·x_k with a = %d, b = %d/%d, starting from x_0 = %d. What is x_%d after %d steps? (enter a decimal)",
+		a, bn, bd, x0, n, n)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. Fixed-point iteration generates sequential estimates through the map \\(x_{k+1} = g(x_k)\\), where \\(g(x) = a + b x\\).\n\nSubgoal 2: Substitute parameters. Given affine map \\(g(x) = %d + \\frac{%d}{%d} x\\) and initial estimate \\(x_0 = %d\\), evaluate iterates iteratively.\n\nSubgoal 3: Evaluate and simplify. %s, concluding with \\(x_%d = %s\\).",
+		a, bn, bd, x0, strings.Join(steps, ", "), n, ans)
+
 	return generator.Problem{
-		Question: "Fixed-point iteration applies x_{k+1} = a + b·x_k with a = " + strconv.Itoa(c.a) +
-			", b = " + strconv.Itoa(c.bn) + "/" + strconv.Itoa(c.bd) + ", starting from x_0 = " +
-			strconv.Itoa(c.x0) + ". What is x_" + strconv.Itoa(c.n) + " after " + strconv.Itoa(c.n) +
-			" steps? (enter a decimal)",
-		Answer:      answer,
-		Explanation: "Substitute the previous iterate into the right-hand side repeatedly; the iteration converges when the slope of the right-hand side is smaller than one in absolute value; " + c.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"a": strconv.Itoa(c.a), "bn": strconv.Itoa(c.bn), "bd": strconv.Itoa(c.bd),
-			"x0": strconv.Itoa(c.x0), "n": strconv.Itoa(c.n), "answer": answer,
+			"a":      strconv.Itoa(a),
+			"bn":     strconv.Itoa(bn),
+			"bd":     strconv.Itoa(bd),
+			"x0":     strconv.Itoa(x0),
+			"n":      strconv.Itoa(n),
+			"answer": ans,
 		},
 	}
 }
@@ -366,29 +395,40 @@ func (g *fixedPointGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type newtonGen struct{}
 
 func (g *newtonGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		c, x0  float64
-		cStr   string
-		x0Str  string
-		reason string
+	maxC := mathutil.ScaleInt(ctx.Difficulty, 8, 40)
+	c := 2 + rand.Intn(maxC-1)
+	maxX0 := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	x0 := 1 + rand.Intn(maxX0)
+
+	for x0*x0 == c {
+		c++
 	}
-	claims := []claim{
-		{c: 2, x0: 1, cStr: "2", x0Str: "1", reason: "(1 + 2/1)/2 = 1.5."},
-		{c: 2, x0: 2, cStr: "2", x0Str: "2", reason: "(2 + 2/2)/2 = 1.5."},
-		{c: 9, x0: 2, cStr: "9", x0Str: "2", reason: "(2 + 9/2)/2 = 3.25."},
-		{c: 16, x0: 5, cStr: "16", x0Str: "5", reason: "(5 + 16/5)/2 = 4.1."},
-		{c: 4, x0: 1, cStr: "4", x0Str: "1", reason: "(1 + 4/1)/2 = 2.5."},
-		{c: 25, x0: 4, cStr: "25", x0Str: "4", reason: "(4 + 25/4)/2 = 5.125."},
+
+	cStr := strconv.Itoa(c)
+	x0Str := strconv.Itoa(x0)
+	x1 := (float64(x0) + float64(c)/float64(x0)) / 2
+	ans := decimal6(x1)
+
+	for iter := 0; iter < 5 && (ans == cStr || ans == x0Str); iter++ {
+		c += 3
+		cStr = strconv.Itoa(c)
+		x1 = (float64(x0) + float64(c)/float64(x0)) / 2
+		ans = decimal6(x1)
 	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6((c.x0 + c.c/c.x0) / 2)
+
+	q := fmt.Sprintf("One Newton step for f(x) = x² − c is x_1 = (x_0 + c/x_0)/2. For c = %s and x_0 = %s, what is x_1? (enter a decimal)", cStr, x0Str)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. Newton's method for \\(f(x) = x^2 - c\\) simplifies to the Babylonian averaging recurrence \\(x_1 = \\frac{1}{2} \\left(x_0 + \\frac{c}{x_0}\\right)\\).\n\nSubgoal 2: Substitute parameters. Substitute parameter \\(c = %s\\) and initial guess \\(x_0 = %s\\): \\(x_1 = \\frac{1}{2} \\left(%s + \\frac{%s}{%s}\\right)\\).\n\nSubgoal 3: Evaluate and simplify. Compute quotient \\(\\frac{%s}{%s} = %s\\), add %s and divide by 2: \\(x_1 = %s\\).",
+		cStr, x0Str, x0Str, cStr, x0Str,
+		cStr, x0Str, decimal6(float64(c)/float64(x0)), x0Str, ans)
+
 	return generator.Problem{
-		Question: "One Newton step for f(x) = x² − c is x_1 = (x_0 + c/x_0)/2. For c = " + c.cStr +
-			" and x_0 = " + c.x0Str + ", what is x_1? (enter a decimal)",
-		Answer:      answer,
-		Explanation: "Newton replaces the function by its tangent line, and the tangent for the square touches the axis at the average of the current guess and c divided by it; " + c.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"c": c.cStr, "x0": c.x0Str, "answer": answer,
+			"c":      cStr,
+			"x0":     x0Str,
+			"answer": ans,
 		},
 	}
 }
@@ -400,29 +440,40 @@ func (g *newtonGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type secantGen struct{}
 
 func (g *secantGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		c, x0, x1 float64
-		reason    string
+	maxC := mathutil.ScaleInt(ctx.Difficulty, 6, 30)
+	c := float64(2 + rand.Intn(maxC-1))
+	x0 := float64(1 + rand.Intn(4))
+	x1 := x0 + float64(1+rand.Intn(3))
+
+	f := func(x float64) float64 { return x*x - c }
+	for f(x1) == f(x0) {
+		x1++
 	}
-	claims := []claim{
-		{c: 2, x0: 1, x1: 2, reason: "(2 − 2)·(2 − 1)/(2 − (−1)) is subtracted from 2, giving 1.333333."},
-		{c: 9, x0: 1, x1: 2, reason: "x_2 = 2 − (−5)(1)/3 = 3.666667."},
-		{c: 4, x0: 1, x1: 3, reason: "x_2 = 3 − 5·2/8 = 1.75."},
-		{c: 5, x0: 2, x1: 3, reason: "x_2 = 3 − 4·1/5 = 2.2."},
-		{c: 10, x0: 2, x1: 4, reason: "x_2 = 4 − 6·2/12 = 3."},
-		{c: 3, x0: 1, x1: 2, reason: "x_2 = 2 − 1·1/3 = 1.666667."},
+	x2 := x1 - f(x1)*(x1-x0)/(f(x1)-f(x0))
+	ans := decimal6(x2)
+
+	for iter := 0; iter < 5 && (ans == decimal6(c) || ans == decimal6(x0) || ans == decimal6(x1)); iter++ {
+		c += 2
+		x2 = x1 - f(x1)*(x1-x0)/(f(x1)-f(x0))
+		ans = decimal6(x2)
 	}
-	c := claims[rand.Intn(len(claims))]
-	f := func(x float64) float64 { return x*x - c.c }
-	x2 := c.x1 - f(c.x1)*(c.x1-c.x0)/(f(c.x1)-f(c.x0))
-	answer := decimal6(x2)
+
+	q := fmt.Sprintf("One step of the secant method for f(x) = x² − c uses x_2 = x_1 − f(x_1)(x_1 − x_0)/(f(x_1) − f(x_0)). For c = %s, x_0 = %s and x_1 = %s, what is x_2? (enter a decimal)",
+		decimal6(c), decimal6(x0), decimal6(x1))
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The secant method replaces the analytical derivative with the difference quotient across the two previous points: \\(x_2 = x_1 - f(x_1) \\frac{x_1 - x_0}{f(x_1) - f(x_0)}\\).\n\nSubgoal 2: Substitute parameters. For \\(f(x) = x^2 - %s\\), evaluate \\(f(x_0) = f(%s) = %s\\) and \\(f(x_1) = f(%s) = %s\\). Substitute into the secant recurrence: \\(x_2 = %s - (%s) \\frac{%s - %s}{(%s) - (%s)}\\).\n\nSubgoal 3: Evaluate and simplify. Evaluate the finite difference quotient and subtract to obtain \\(x_2 = %s\\).",
+		decimal6(c), decimal6(x0), decimal6(f(x0)), decimal6(x1), decimal6(f(x1)),
+		decimal6(x1), decimal6(f(x1)), decimal6(x1), decimal6(x0), decimal6(f(x1)), decimal6(f(x0)),
+		ans)
+
 	return generator.Problem{
-		Question: "One step of the secant method for f(x) = x² − c uses x_2 = x_1 − f(x_1)(x_1 − x_0)/(f(x_1) − f(x_0)). For c = " +
-			decimal6(c.c) + ", x_0 = " + decimal6(c.x0) + " and x_1 = " + decimal6(c.x1) + ", what is x_2? (enter a decimal)",
-		Answer:      answer,
-		Explanation: "The secant method replaces the derivative by the slope of the line through the two most recent points; " + c.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"c": decimal6(c.c), "x0": decimal6(c.x0), "x1": decimal6(c.x1), "answer": answer,
+			"c":      decimal6(c),
+			"x0":     decimal6(x0),
+			"x1":     decimal6(x1),
+			"answer": ans,
 		},
 	}
 }
@@ -485,28 +536,30 @@ func (g *falsePositionGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type orderGen struct{}
 
 func (g *orderGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, b, c int
-		reason  string
-	}
-	claims := []claim{
-		{a: 1, b: 2, c: 4, reason: "(4 − 2)/(2 − 1) = 2, the quadratic order."},
-		{a: 1, b: 2, c: 3, reason: "(3 − 2)/(2 − 1) = 1, the linear order."},
-		{a: 1, b: 2, c: 6, reason: "(6 − 2)/(2 − 1) = 4."},
-		{a: 1, b: 3, c: 9, reason: "(9 − 3)/(3 − 1) = 3."},
-		{a: 2, b: 4, c: 8, reason: "(8 − 4)/(4 − 2) = 2."},
-		{a: 1, b: 2, c: 5, reason: "(5 − 2)/(2 − 1) = 3."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(c.c-c.b) / float64(c.b-c.a))
+	maxP := mathutil.ScaleInt(ctx.Difficulty, 3, 5)
+	p := 1 + rand.Intn(maxP)
+	a := p + 1 + rand.Intn(3)
+	diff := 1 + rand.Intn(2)
+	b := a + diff
+	c := b + p*diff
+
+	ans := decimal6(float64(c-b) / float64(b-a))
+
+	q := fmt.Sprintf("The errors of an iterative method satisfy e_{k+2} ≈ e_{k+1}^p / e_k^{p−1}. From three successive errors of 10^-%d, 10^-%d and 10^-%d, estimate the order p as log(e_{k+2}/e_{k+1}) divided by log(e_{k+1}/e_k). (enter a decimal)",
+		a, b, c)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The order of convergence p satisfies \\(p = \\frac{\\log(e_{k+2}/e_{k+1})}{\\log(e_{k+1}/e_k)}\\). For error powers \\(e_i = 10^{-a_i}\\), this logarithmic ratio reduces directly to the exponent difference ratio: \\(p = \\frac{c - b}{b - a}\\).\n\nSubgoal 2: Substitute parameters. Substitute exponents \\(a = %d\\), \\(b = %d\\) and \\(c = %d\\): \\(p = \\frac{%d - %d}{%d - %d}\\).\n\nSubgoal 3: Evaluate and simplify. Compute numerator \\(%d - %d = %d\\) and denominator \\(%d - %d = %d\\), then divide: \\(p = \\frac{%d}{%d} = %s\\).",
+		a, b, c, c, b, b, a,
+		c, b, c-b, b, a, b-a, c-b, b-a, ans)
+
 	return generator.Problem{
-		Question: "The errors of an iterative method satisfy e_{k+2} ≈ e_{k+1}^p / e_k^{p−1}. From three successive errors of 10^-" +
-			strconv.Itoa(c.a) + ", 10^-" + strconv.Itoa(c.b) + " and 10^-" + strconv.Itoa(c.c) +
-			", estimate the order p as log(e_{k+2}/e_{k+1}) divided by log(e_{k+1}/e_k). (enter a decimal)",
-		Answer:      answer,
-		Explanation: "Taking logarithms turns the error relation into a linear equation for p, and the differences of the exponents solve it; " + c.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b), "c": strconv.Itoa(c.c), "answer": answer,
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"c":      strconv.Itoa(c),
+			"answer": ans,
 		},
 	}
 }
@@ -553,7 +606,7 @@ func (g *multipleRootGen) Generate(ctx generator.GeneratorContext) generator.Pro
 			question:    "Detecting a multiple root numerically is hard because...",
 			correct:     "the function is flat near the root, so small errors blur the multiplicity",
 			distractors: []string{"the derivative is infinite there", "the function is discontinuous", "there is no root"},
-			reason:      "Near a repeated root the graph is tangent to the axis, and the tiny function values are dominated by roundoff.",
+			reason:      "Near a repeated root the graph is tangent to the axis and the tiny function values are dominated by roundoff.",
 		},
 	}
 	c := claims[rand.Intn(len(claims))]
@@ -598,7 +651,7 @@ func (g *bracketingGen) Generate(ctx generator.GeneratorContext) generator.Probl
 			question:    "Newton's method can fail when...",
 			correct:     "the derivative is zero or the iterate leaves the region of attraction",
 			distractors: []string{"the function is continuous", "a bracket is given", "the root is simple"},
-			reason:      "A vanishing derivative makes the step infinite, and a distant iterate can converge elsewhere or diverge.",
+			reason:      "A vanishing derivative makes the step infinite and a distant iterate can converge elsewhere or diverge.",
 		},
 		{
 			question:    "The secant method differs from false position in that...",
@@ -620,36 +673,52 @@ func (g *bracketingGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type hornerGen struct{}
 
 func (g *hornerGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		coeffs []int
-		x      int
-		reason string
+	deg := 2
+	if ctx.Difficulty >= 0.5 {
+		deg = 3
 	}
-	claims := []claim{
-		{coeffs: []int{1, 2, 3}, x: 2, reason: "1 + 2·2 + 3·4 = 17."},
-		{coeffs: []int{1, -1, 1}, x: 3, reason: "1 − 3 + 9 = 7."},
-		{coeffs: []int{2, 0, 1}, x: 4, reason: "2 + 0 + 16 = 18."},
-		{coeffs: []int{1, 1, 1, 1}, x: 2, reason: "1 + 2 + 4 + 8 = 15."},
-		{coeffs: []int{3, 2}, x: 5, reason: "3 + 10 = 13."},
-		{coeffs: []int{1, 0, 0, 1}, x: 3, reason: "1 + 27 = 28."},
+	maxCoeff := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	coeffs := make([]int, deg+1)
+	for i := range coeffs {
+		coeffs[i] = rand.Intn(2*maxCoeff+1) - maxCoeff
 	}
-	c := claims[rand.Intn(len(claims))]
+	if coeffs[deg] == 0 {
+		coeffs[deg] = 1 + rand.Intn(maxCoeff)
+	}
+	maxX := mathutil.ScaleInt(ctx.Difficulty, 2, 5)
+	x := 2 + rand.Intn(maxX-1)
+
 	val := 0
-	for i := len(c.coeffs) - 1; i >= 0; i-- {
-		val = val*c.x + c.coeffs[i]
+	var stepDesc []string
+	for k := len(coeffs) - 1; k >= 0; k-- {
+		prev := val
+		val = val*x + coeffs[k]
+		if k == len(coeffs)-1 {
+			stepDesc = append(stepDesc, fmt.Sprintf("b_%d = %d", k, val))
+		} else {
+			stepDesc = append(stepDesc, fmt.Sprintf("b_%d = (%d)(%d) + (%d) = %d", k, prev, x, coeffs[k], val))
+		}
 	}
-	answer := strconv.Itoa(val)
-	parts := make([]string, len(c.coeffs))
-	for i, a := range c.coeffs {
+	ans := strconv.Itoa(val)
+
+	parts := make([]string, len(coeffs))
+	for i, a := range coeffs {
 		parts[i] = strconv.Itoa(a)
 	}
+
+	q := fmt.Sprintf("Horner's method evaluates a polynomial by nested multiplication. For the polynomial with coefficients (constant first) %s evaluated at x = %d, what is the value p(x)? (enter a decimal)",
+		strings.Join(parts, ", "), x)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. Horner's nested evaluation computes \\(p(x) = a_n x^n + \\dots + a_1 x + a_0\\) through intermediate values: \\(b_n = a_n\\) and \\(b_k = b_{k+1} x + a_k\\) for \\(k = n-1, \\dots, 0\\), where \\(p(x) = b_0\\).\n\nSubgoal 2: Substitute parameters. For coefficients \\((%s)\\) and evaluation point \\(x = %d\\), compute nested operations sequentially.\n\nSubgoal 3: Evaluate and simplify. %s, which yields final polynomial value \\(p(%d) = %s\\).",
+		strings.Join(parts, ", "), x, strings.Join(stepDesc, ", "), x, ans)
+
 	return generator.Problem{
-		Question: "Horner's method evaluates a polynomial by nested multiplication. For the polynomial with coefficients (constant first) " +
-			strings.Join(parts, ", ") + " evaluated at x = " + strconv.Itoa(c.x) + ", what is the value p(x)? (enter a decimal)",
-		Answer:      answer,
-		Explanation: "Horner's scheme starts from the leading coefficient and repeatedly multiplies by x and adds the next coefficient, using one multiplication per term; " + c.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"coeffs": strings.Join(parts, ","), "x": strconv.Itoa(c.x), "answer": answer,
+			"coeffs": strings.Join(parts, ","),
+			"x":      strconv.Itoa(x),
+			"answer": ans,
 		},
 	}
 }
@@ -661,33 +730,49 @@ func (g *hornerGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type lagrangeGen struct{}
 
 func (g *lagrangeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, b, c, q int
-		reason     string
+	maxA := mathutil.ScaleInt(ctx.Difficulty, 2, 5)
+	a := 1 + rand.Intn(maxA)
+	maxB := mathutil.ScaleInt(ctx.Difficulty, 2, 6)
+	b := rand.Intn(2*maxB+1) - maxB
+	maxC := mathutil.ScaleInt(ctx.Difficulty, 2, 8)
+	c := rand.Intn(2*maxC+1) - maxC
+	maxQ := mathutil.ScaleInt(ctx.Difficulty, 3, 6)
+	qVal := 3 + rand.Intn(maxQ-2)
+
+	y0 := c
+	y1 := a + b + c
+	y2 := 4*a + 2*b + c
+	val := a*qVal*qVal + b*qVal + c
+	ans := strconv.Itoa(val)
+
+	for iter := 0; iter < 5 && (ans == strconv.Itoa(y0) || ans == strconv.Itoa(y1) || ans == strconv.Itoa(y2) || ans == strconv.Itoa(qVal)); iter++ {
+		a++
+		y1 = a + b + c
+		y2 = 4*a + 2*b + c
+		val = a*qVal*qVal + b*qVal + c
+		ans = strconv.Itoa(val)
 	}
-	claims := []claim{
-		{a: 1, b: 0, c: 0, q: 3, reason: "The quadratic is x² and its value at 3 is 9."},
-		{a: 1, b: 1, c: 1, q: 2, reason: "x² + x + 1 evaluates to 7 at 2."},
-		{a: 2, b: -1, c: 0, q: 2, reason: "2x² − x is 6 at 2."},
-		{a: 1, b: 2, c: 3, q: 2, reason: "x² + 2x + 3 is 11 at 2."},
-		{a: 2, b: 0, c: 1, q: 3, reason: "2x² + 1 is 19 at 3."},
-		{a: 1, b: -1, c: 2, q: 3, reason: "x² − x + 2 is 8 at 3."},
-	}
-	cl := claims[rand.Intn(len(claims))]
-	y0 := cl.c
-	y1 := cl.a + cl.b + cl.c
-	y2 := 4*cl.a + 2*cl.b + cl.c
-	val := cl.a*cl.q*cl.q + cl.b*cl.q + cl.c
-	answer := strconv.Itoa(val)
+
+	l0 := (qVal - 1) * (qVal - 2) / 2
+	l1 := -qVal * (qVal - 2)
+	l2 := qVal * (qVal - 1) / 2
+
+	q := fmt.Sprintf("The Lagrange interpolant through the three points (0, %d), (1, %d) and (2, %d) is the quadratic through them. What is the interpolated value at x = %d? (enter a decimal)",
+		y0, y1, y2, qVal)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The quadratic Lagrange interpolant through nodes 0, 1 and 2 is \\(P(x) = y_0 L_0(x) + y_1 L_1(x) + y_2 L_2(x)\\), with cardinal basis polynomials \\(L_0(x) = \\frac{(x-1)(x-2)}{2}\\), \\(L_1(x) = -x(x-2)\\) and \\(L_2(x) = \\frac{x(x-1)}{2}\\).\n\nSubgoal 2: Substitute parameters. At query point \\(x = %d\\), evaluate basis weights: \\(L_0(%d) = %d\\), \\(L_1(%d) = %d\\) and \\(L_2(%d) = %d\\).\n\nSubgoal 3: Evaluate and simplify. Multiply each basis weight by its nodal value: \\(P(%d) = (%d)(%d) + (%d)(%d) + (%d)(%d) = %s\\).",
+		qVal, qVal, l0, qVal, l1, qVal, l2,
+		qVal, y0, l0, y1, l1, y2, l2, ans)
+
 	return generator.Problem{
-		Question: "The Lagrange interpolant through the three points (0, " + strconv.Itoa(y0) + "), (1, " +
-			strconv.Itoa(y1) + ") and (2, " + strconv.Itoa(y2) + ") is the quadratic through them. What is the interpolated value at x = " +
-			strconv.Itoa(cl.q) + "? (enter a decimal)",
-		Answer:      answer,
-		Explanation: "Each Lagrange basis polynomial is one at its own node and zero at the others, so the interpolant is the corresponding weighted sum of the three values; " + cl.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"y0": strconv.Itoa(y0), "y1": strconv.Itoa(y1), "y2": strconv.Itoa(y2),
-			"q": strconv.Itoa(cl.q), "answer": answer,
+			"y0":     strconv.Itoa(y0),
+			"y1":     strconv.Itoa(y1),
+			"y2":     strconv.Itoa(y2),
+			"q":      strconv.Itoa(qVal),
+			"answer": ans,
 		},
 	}
 }
@@ -699,28 +784,45 @@ func (g *lagrangeGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type dividedDiffGen struct{}
 
 func (g *dividedDiffGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		x0, y0, x1, y1 int
-		reason         string
+	maxX0 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+	x0 := rand.Intn(maxX0 + 1)
+	maxDx := mathutil.ScaleInt(ctx.Difficulty, 2, 6)
+	dx := 1 + rand.Intn(maxDx)
+	x1 := x0 + dx
+
+	maxM := mathutil.ScaleInt(ctx.Difficulty, 4, 30)
+	m := 2 + rand.Intn(maxM)
+	for m == x0 || m == x1 {
+		m++
 	}
-	claims := []claim{
-		{x0: 1, y0: 2, x1: 4, y1: 11, reason: "(11 − 2)/(4 − 1) = 3."},
-		{x0: 0, y0: 3, x1: 2, y1: 7, reason: "(7 − 3)/2 = 2."},
-		{x0: 2, y0: 1, x1: 5, y1: 16, reason: "(16 − 1)/3 = 5."},
-		{x0: 0, y0: 0, x1: 3, y1: 6, reason: "6/3 = 2."},
-		{x0: 1, y0: 4, x1: 3, y1: 8, reason: "(8 − 4)/2 = 2."},
-		{x0: 2, y0: 2, x1: 6, y1: 14, reason: "(14 − 2)/4 = 3."},
+	maxY0 := mathutil.ScaleInt(ctx.Difficulty, 10, 30)
+	y0 := 20 + rand.Intn(maxY0)
+	for y0 == m {
+		y0 += 5
 	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(c.y1-c.y0) / float64(c.x1-c.x0))
+	y1 := y0 + m*dx
+	for y1 == m {
+		y0 += 5
+		y1 = y0 + m*dx
+	}
+	ans := decimal6(float64(m))
+
+	q := fmt.Sprintf("The first divided difference of the points (%d, %d) and (%d, %d) is (y_1 − y_0)/(x_1 − x_0). What is it? (enter a decimal)",
+		x0, y0, x1, y1)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The first divided difference between two distinct points \\((x_0, y_0)\\) and \\((x_1, y_1)\\) measures the average rate of change: \\(f[x_0, x_1] = \\frac{y_1 - y_0}{x_1 - x_0}\\).\n\nSubgoal 2: Substitute parameters. Substitute coordinates \\((%d, %d)\\) and \\((%d, %d)\\): \\(f[x_0, x_1] = \\frac{%d - (%d)}{%d - %d}\\).\n\nSubgoal 3: Evaluate and simplify. Compute numerator \\(%d - (%d) = %d\\) and denominator \\(%d - %d = %d\\), then divide: \\(f[x_0, x_1] = \\frac{%d}{%d} = %s\\).",
+		x0, y0, x1, y1, y1, y0, x1, x0,
+		y1, y0, y1-y0, x1, x0, dx, y1-y0, dx, ans)
+
 	return generator.Problem{
-		Question: "The first divided difference of the points (" + strconv.Itoa(c.x0) + ", " + strconv.Itoa(c.y0) +
-			") and (" + strconv.Itoa(c.x1) + ", " + strconv.Itoa(c.y1) + ") is (y_1 − y_0)/(x_1 − x_0). What is it? (enter a decimal)",
-		Answer:      answer,
-		Explanation: "Divided differences are the slopes that build the Newton form of the interpolant, and the first one is the average slope over the interval; " + c.reason,
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
 		Facts: map[string]string{
-			"x0": strconv.Itoa(c.x0), "y0": strconv.Itoa(c.y0),
-			"x1": strconv.Itoa(c.x1), "y1": strconv.Itoa(c.y1), "answer": answer,
+			"x0":     strconv.Itoa(x0),
+			"y0":     strconv.Itoa(y0),
+			"x1":     strconv.Itoa(x1),
+			"y1":     strconv.Itoa(y1),
+			"answer": ans,
 		},
 	}
 }
@@ -743,7 +845,7 @@ func (g *interpErrorGen) Generate(ctx generator.GeneratorContext) generator.Prob
 			question:    "The error of polynomial interpolation at a point is proportional to...",
 			correct:     "the product of the distances from that point to the interpolation nodes",
 			distractors: []string{"the spacing of the nodes only", "the number of nodes", "the derivative at the nodes"},
-			reason:      "The node product vanishes at the nodes and grows between them, and it multiplies the derivative term.",
+			reason:      "The node product vanishes at the nodes and grows between them and it multiplies the derivative term.",
 		},
 		{
 			question:    "By the interpolation error formula, the error involves the (n+1)-th derivative...",
