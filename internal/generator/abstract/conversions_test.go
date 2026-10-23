@@ -23,6 +23,7 @@ var convertedIDs = []string{
 	"abstract.group.homomorphism",
 	"abstract.group.automorphism",
 	"abstract.rings.euclidean",
+	"abstract.group.sylow",
 }
 
 func convertedInt(t *testing.T, facts map[string]string, key string) int {
@@ -145,6 +146,26 @@ func TestConvertedAnswersRecomputeFromFacts(t *testing.T) {
 		b := convertedInt(t, p.Facts, "b")
 		if want := abstractGCD(a, b); p.Answer != strconv.Itoa(want) {
 			t.Fatalf("euclidean: a=%d b=%d answer=%s want %d", a, b, p.Answer, want)
+		}
+	}
+
+	for i := 0; i < 100; i++ {
+		p := abstractSample(t, reg, "abstract.group.sylow", i)
+		ans := convertedInt(t, p.Facts, "answer")
+		if p.Answer != strconv.Itoa(ans) {
+			t.Fatalf("sylow: answer=%s want %d", p.Answer, ans)
+		}
+		g := convertedInt(t, p.Facts, "group_order")
+		prime := convertedInt(t, p.Facts, "p")
+		if p.Facts["sylow_order"] != "" {
+			pk := convertedInt(t, p.Facts, "sylow_order")
+			if g%pk != 0 {
+				t.Fatalf("sylow order %d does not divide |G|=%d", pk, g)
+			}
+			rem := g / pk
+			if rem%prime == 0 {
+				t.Fatalf("sylow order %d is not maximal prime power for p=%d, |G|=%d", pk, prime, g)
+			}
 		}
 	}
 }

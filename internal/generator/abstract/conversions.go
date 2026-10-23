@@ -291,6 +291,111 @@ func (g *euclideanGCDGen) Generate(ctx generator.GeneratorContext) generator.Pro
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Sylow p-subgroups (abstract.group.sylow)
+// ---------------------------------------------------------------------------
+
+type sylowSubgroupGen struct{}
+
+func (g *sylowSubgroupGen) Generate(ctx generator.GeneratorContext) generator.Problem {
+	mode := rand.Intn(3)
+
+	type sylowCase struct {
+		groupOrder int
+		p          int
+		pk         int
+		m          int
+		forcedN    int
+	}
+
+	cases := []sylowCase{
+		{12, 2, 4, 3, 0},
+		{12, 3, 3, 4, 0},
+		{15, 5, 5, 3, 1},
+		{15, 3, 3, 5, 1},
+		{20, 2, 4, 5, 0},
+		{20, 5, 5, 4, 1},
+		{21, 7, 7, 3, 1},
+		{24, 2, 8, 3, 0},
+		{24, 3, 3, 8, 0},
+		{33, 11, 11, 3, 1},
+		{35, 7, 7, 5, 1},
+		{35, 5, 5, 7, 1},
+		{40, 2, 8, 5, 0},
+		{40, 5, 5, 8, 1},
+		{45, 3, 9, 5, 1},
+		{45, 5, 5, 9, 1},
+		{54, 3, 27, 2, 0},
+		{60, 2, 4, 15, 0},
+		{60, 3, 3, 20, 0},
+		{60, 5, 5, 12, 0},
+		{72, 2, 8, 9, 0},
+		{72, 3, 9, 8, 0},
+		{77, 11, 11, 7, 1},
+		{99, 11, 11, 9, 1},
+		{100, 2, 4, 25, 0},
+		{100, 5, 25, 4, 1},
+	}
+
+	if mode == 1 {
+		var forcedCases []sylowCase
+		for _, c := range cases {
+			if c.forcedN == 1 {
+				forcedCases = append(forcedCases, c)
+			}
+		}
+		c := forcedCases[rand.Intn(len(forcedCases))]
+		q := fmt.Sprintf("A group G has order %d (%d * %d). By the Sylow theorems, the number n_%d of Sylow %d-subgroups must divide %d and satisfy n_%d ≡ 1 (mod %d). How many Sylow %d-subgroups does G have?",
+			c.groupOrder, c.pk, c.m, c.p, c.p, c.m, c.p, c.p, c.p)
+		exp := fmt.Sprintf("By the third Sylow theorem, n_%d divides %d and n_%d ≡ 1 (mod %d). The only positive divisor of %d congruent to 1 modulo %d is 1, so G has exactly 1 Sylow %d-subgroup (which is therefore normal).",
+			c.p, c.m, c.p, c.p, c.m, c.p, c.p)
+		return generator.Problem{
+			Question:    q,
+			Answer:      "1",
+			Explanation: exp,
+			Facts: map[string]string{
+				"group_order": fmt.Sprintf("%d", c.groupOrder),
+				"p":           fmt.Sprintf("%d", c.p),
+				"answer":      "1",
+			},
+		}
+	}
+
+	c := cases[rand.Intn(len(cases))]
+	if mode == 0 {
+		q := fmt.Sprintf("A finite group G has order %d. By the first Sylow theorem, what is the order of a Sylow %d-subgroup of G?", c.groupOrder, c.p)
+		exp := fmt.Sprintf("The prime factorization of %d has %d^k = %d with gcd(%d, %d/%d) = 1. By Sylow's theorem, a Sylow %d-subgroup has maximum prime-power order %d.",
+			c.groupOrder, c.p, c.pk, c.p, c.groupOrder, c.pk, c.p, c.pk)
+		return generator.Problem{
+			Question:    q,
+			Answer:      fmt.Sprintf("%d", c.pk),
+			Explanation: exp,
+			Facts: map[string]string{
+				"group_order": fmt.Sprintf("%d", c.groupOrder),
+				"p":           fmt.Sprintf("%d", c.p),
+				"sylow_order": fmt.Sprintf("%d", c.pk),
+				"answer":      fmt.Sprintf("%d", c.pk),
+			},
+		}
+	}
+
+	// mode == 2: index [G : P]
+	q := fmt.Sprintf("A group G has order %d and P is a Sylow %d-subgroup of order %d. What is the index [G : P] of P in G?", c.groupOrder, c.p, c.pk)
+	exp := fmt.Sprintf("By Lagrange's theorem, the index [G : P] is |G| / |P| = %d / %d = %d.", c.groupOrder, c.pk, c.m)
+	return generator.Problem{
+		Question:    q,
+		Answer:      fmt.Sprintf("%d", c.m),
+		Explanation: exp,
+		Facts: map[string]string{
+			"group_order": fmt.Sprintf("%d", c.groupOrder),
+			"p":           fmt.Sprintf("%d", c.p),
+			"sylow_order": fmt.Sprintf("%d", c.pk),
+			"index":       fmt.Sprintf("%d", c.m),
+			"answer":      fmt.Sprintf("%d", c.m),
+		},
+	}
+}
+
 // registerConversions registers the concepts of this batch that used to be
 // multiple choice. The old registrations are removed from Register, because a
 // concept id may be registered only once.
@@ -305,4 +410,5 @@ func registerConversions(reg *generator.Registry) {
 	reg.Register("abstract.group.homomorphism", &kernelSizeGen{})
 	reg.Register("abstract.group.automorphism", &automorphismCountGen{})
 	reg.Register("abstract.rings.euclidean", &euclideanGCDGen{})
+	reg.Register("abstract.group.sylow", &sylowSubgroupGen{})
 }

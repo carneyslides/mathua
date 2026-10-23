@@ -266,7 +266,7 @@
     "label": "Sylow theorems",
     "domain": "abstract_algebra",
     "subdomain": "abstract_algebra.groups",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "abstract.group.action",
       "abstract.group.lagrange"
