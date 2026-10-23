@@ -1,23 +1,20 @@
 package odes
 
-// The numeric differential-equations concepts the domain was missing: an initial value problem
-// evaluated at a point, the sum of a characteristic equation's roots, a non-zero equilibrium, the
-// Wronskian of two powers, the number of Euler steps between two points, the Laplace transform of a
-// power evaluated at a point, and the discriminant that classifies a second-order PDE.
+// The numeric differential-equations concepts: an initial value problem
+// evaluated at a point, the sum of a characteristic equation's roots, a non-zero equilibrium,
+// the Wronskian of two powers, the number of Euler steps between two points, the Laplace transform
+// of a power evaluated at a point and the discriminant that classifies a second-order PDE.
 //
-// The domain had twenty-five concepts and twenty-four of them `multiple_choice`, which is the most
-// recognition-shaped surface in the corpus and the one section 4.2 of docs/content-expansion.md
-// measures. These seven are computed.
-//
-// Every answer is an integer by construction: the forcing is chosen so the antiderivative is whole,
-// the characteristic sum is a ratio that divides, the equilibrium is the root the form makes visible,
-// the Wronskian is evaluated at one, the step size divides the interval, the transform is evaluated
-// at one, and the discriminant is a difference of products.
+// Converted to parametric generators scaling with ctx.Difficulty using mathutil primitives
+// and structured three-subgoal cognitive derivations in explanations.
+
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func registerNumeric(reg *generator.Registry) {
@@ -30,81 +27,135 @@ func registerNumeric(reg *generator.Registry) {
 	reg.Register("ode.pde.discriminant", &pdeDiscriminantGen{})
 }
 
-func smallInt(lo, hi int) int {
-	if hi < lo {
-		hi = lo
-	}
-	return lo + rand.Intn(hi-lo+1)
-}
-
 // ivpEvaluateGen integrates a linear forcing and evaluates the solution at a point.
 type ivpEvaluateGen struct{}
 
 func (g *ivpEvaluateGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := 2 * (1 + rand.Intn(2+int(ctx.Difficulty*3))) // even, so a t^2 / 2 is whole
-	b := smallInt(-5, 5)
-	c := smallInt(-5, 5+int(ctx.Difficulty*6))
-	t := smallInt(1, 3+int(ctx.Difficulty*4))
-	// y = a x^2/2 + b x + c
-	v := a*t*t/2 + b*t + c
+	maxA := mathutil.ScaleInt(ctx.Difficulty, 3, 8)
+	aHalf := 1 + rand.Intn(maxA)
+	a := 2 * aHalf // even so a/2 is whole
+	maxB := mathutil.ScaleInt(ctx.Difficulty, 4, 12)
+	b := rand.Intn(2*maxB+1) - maxB
+	if b == 0 {
+		b = 1
+	}
+	maxC := mathutil.ScaleInt(ctx.Difficulty, 5, 15)
+	c := rand.Intn(2*maxC+1) - maxC
+	if c == 0 {
+		c = 2
+	}
+	maxT := mathutil.ScaleInt(ctx.Difficulty, 2, 6)
+	t := 1 + rand.Intn(maxT)
+
+	v := aHalf*t*t + b*t + c
+	ans := strconv.Itoa(v)
+	q := fmt.Sprintf("Solve \\(y' = %dx %+d\\) with \\(y(0) = %d\\) and find \\(y(%d)\\).", a, b, c, t)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The solution to a first-order linear differential equation y' = f(x) is obtained by indefinite integration y(x) = ∫ f(x) dx + C, with integration constant C determined by the initial condition y(0).\n\nSubgoal 2: Substitute parameters. Integrate the right side to obtain y(x) = (%d/2)x^2 %+dx + C = %dx^2 %+dx + C. Applying the initial condition y(0) = %d gives C = %d, so the particular solution is y(x) = %dx^2 %+dx %+d.\n\nSubgoal 3: Evaluate and simplify. Substitute x = %d into the particular solution: y(%d) = %d(%d)^2 %+d(%d) %+d = %d.",
+		a, b, aHalf, b, c, c, aHalf, b, c, t, t, aHalf, t, b, t, c, v)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Solve \\\\(y' = %dx + %d\\\\) with \\\\(y(0) = %d\\\\), and find \\\\(y(%d)\\\\).", a, b, c, t),
-		Answer:   fmt.Sprintf("%d", v),
-		Explanation: fmt.Sprintf("Integrate the right side: y = %dx^2/2 + %dx + C, and the initial condition makes C = %d. Substituting x = %d gives %d. The constant is the only unknown, which is why one initial condition fixes one solution.",
-			a, b, c, t, v),
-		Facts: map[string]string{"value": fmt.Sprintf("%d", v), "constant": fmt.Sprintf("%d", c)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"c":      strconv.Itoa(c),
+			"t":      strconv.Itoa(t),
+			"answer": ans,
+		},
 	}
 }
 
-// characteristicSumGen uses the fact that a monic quadratic's roots sum to the negation of its linear
-// coefficient.
+// characteristicSumGen uses Vieta's formulas to compute the sum of roots.
 type characteristicSumGen struct{}
 
 func (g *characteristicSumGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := smallInt(1, 3+int(ctx.Difficulty*3))
-	// a y'' + b y' + c y = 0, with a dividing b so the root sum -b/a is whole
-	b := a * smallInt(-4, 4)
-	c := smallInt(1, 9)
+	maxA := mathutil.ScaleInt(ctx.Difficulty, 2, 6)
+	a := 1 + rand.Intn(maxA)
+	maxK := mathutil.ScaleInt(ctx.Difficulty, 3, 8)
+	k := rand.Intn(2*maxK+1) - maxK
+	if k == 0 {
+		k = 2
+	}
+	b := a * k
+	maxC := mathutil.ScaleInt(ctx.Difficulty, 5, 20)
+	c := 1 + rand.Intn(maxC)
 	sum := -b / a
+	ans := strconv.Itoa(sum)
+
+	q := fmt.Sprintf("For the equation \\(%dy'' %+dy' %+dy = 0\\), what is the sum of the roots of the characteristic equation?", a, b, c)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. For a second-order linear homogeneous differential equation with constant coefficients ar^2 + br + c = 0, Vieta's formulas state that the sum of the characteristic roots satisfies r₁ + r₂ = -b/a.\n\nSubgoal 2: Substitute parameters. The characteristic polynomial for the differential equation is %dr^2 %+dr %+d = 0 with leading coefficient a = %d and linear coefficient b = %d.\n\nSubgoal 3: Evaluate and simplify. Compute the root sum: r₁ + r₂ = -(%d)/%d = %d.",
+		a, b, c, a, b, b, a, sum)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("For the equation \\\\(%dy'' %+dy' %+dy = 0\\\\), what is the sum of the roots of the characteristic equation?", a, b, c),
-		Answer:   fmt.Sprintf("%d", sum),
-		Explanation: fmt.Sprintf("The characteristic equation is %dr^2 + %dr + %d = 0. Its roots sum to the negation of the linear coefficient over the leading one: %d/%d = %d. That is the same coefficient reading that makes the characteristic equation the reason a constant-coefficient equation solves by exponentials.",
-			a, b, c, -b, a, sum),
-		Facts: map[string]string{"sum": fmt.Sprintf("%d", sum)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"c":      strconv.Itoa(c),
+			"answer": ans,
+		},
 	}
 }
 
-// equilibriumGen asks for the non-zero equilibrium of the logistic form, where the roots are visible.
+// equilibriumGen asks for the non-zero carrying capacity equilibrium.
 type equilibriumGen struct{}
 
 func (g *equilibriumGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	k := smallInt(1, 4+int(ctx.Difficulty*4))
-	a := smallInt(1, 8+int(ctx.Difficulty*8))
+	maxK := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	k := 1 + rand.Intn(maxK)
+	maxA := mathutil.ScaleInt(ctx.Difficulty, 8, 30)
+	a := 2 + rand.Intn(maxA)
+	ans := strconv.Itoa(a)
+
+	q := fmt.Sprintf("The population model \\(y' = %dy(%d - y)\\) has two equilibria. What is the non-zero one?", k, a)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. An equilibrium point y* of an autonomous differential equation y' = f(y) satisfies f(y*) = 0.\n\nSubgoal 2: Substitute parameters. Set the rate of change to zero: %dy(%d - y) = 0.\n\nSubgoal 3: Evaluate and simplify. Since k = %d is positive, the product vanishes when y = 0 or %d - y = 0. Solving %d - y = 0 yields the non-zero equilibrium y* = %d.",
+		k, a, k, a, a, a)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("The population model \\\\(y' = %dy(%d - y)\\\\) has two equilibria. What is the non-zero one?", k, a),
-		Answer:   fmt.Sprintf("%d", a),
-		Explanation: fmt.Sprintf("An equilibrium is where the rate is zero, and the product %dy(%d - y) is zero at y = 0 and at y = %d. The first is extinction and the second is the carrying capacity, which is why the non-zero root is the interesting one.",
-			k, a, a),
-		Facts: map[string]string{"equilibrium": fmt.Sprintf("%d", a)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"k":      strconv.Itoa(k),
+			"a":      strconv.Itoa(a),
+			"answer": ans,
+		},
 	}
 }
 
-// wronskianGen uses two powers, whose Wronskian is a single term.
+// wronskianGen evaluates the Wronskian of two power functions at a point.
 type wronskianGen struct{}
 
 func (g *wronskianGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	m := smallInt(0, 3)
-	n := m + 1 + rand.Intn(3+int(ctx.Difficulty*3))
-	x := 1 + rand.Intn(2+int(ctx.Difficulty*2))
-	// W(x^m, x^n) = (n - m) x^(m+n-1)
-	v := (n - m) * powInt(x, m+n-1)
+	maxM := mathutil.ScaleInt(ctx.Difficulty, 2, 4)
+	m := 1 + rand.Intn(maxM)
+	maxDelta := mathutil.ScaleInt(ctx.Difficulty, 2, 4)
+	delta := 1 + rand.Intn(maxDelta)
+	n := m + delta
+	maxX := mathutil.ScaleInt(ctx.Difficulty, 2, 3)
+	x := 1 + rand.Intn(maxX)
+	expVal := m + n - 1
+	v := delta * powInt(x, expVal)
+	ans := strconv.Itoa(v)
+
+	q := fmt.Sprintf("Find the Wronskian \\(W(x^{%d}, x^{%d})\\) evaluated at \\(x = %d\\).", m, n, x)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The Wronskian of two differentiable functions f(x) and g(x) is defined by the determinant W(f, g)(x) = f(x)g'(x) - f'(x)g(x).\n\nSubgoal 2: Substitute parameters. Differentiating f(x) = x^{%d} gives f'(x) = %d x^{%d}. Differentiating g(x) = x^{%d} gives g'(x) = %d x^{%d}. The Wronskian is W(x) = x^{%d}(%d x^{%d}) - (%d x^{%d})x^{%d} = (%d - %d)x^{%d} = %d x^{%d}.\n\nSubgoal 3: Evaluate and simplify. Evaluate the expression at x = %d: W(%d) = %d(%d)^{%d} = %d.",
+		m, m, m-1, n, n, n-1, m, n, n-1, m, m-1, n, n, m, expVal, delta, expVal, x, x, delta, x, expVal, v)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Find the Wronskian \\\\(W(x^{%d}, x^{%d})\\\\) evaluated at \\\\(x = %d\\\\).", m, n, x),
-		Answer:   fmt.Sprintf("%d", v),
-		Explanation: fmt.Sprintf("The Wronskian is f g' - f' g, which for two powers is (%d - %d) x^(%d+%d-1). At x = %d that is %d. A non-zero Wronskian is what makes the two functions independent, so this number answers a question about independence as well as being a determinant.",
-			m, n, m, n, x, v),
-		Facts: map[string]string{"wronskian": fmt.Sprintf("%d", v)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"m":      strconv.Itoa(m),
+			"n":      strconv.Itoa(n),
+			"x":      strconv.Itoa(x),
+			"answer": ans,
+		},
 	}
 }
 
@@ -112,52 +163,96 @@ func (g *wronskianGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type eulerStepsGen struct{}
 
 func (g *eulerStepsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	h := smallInt(1, 2+int(ctx.Difficulty*2))
-	steps := 2 + rand.Intn(6+int(ctx.Difficulty*8))
-	a := smallInt(0, 4)
+	maxH := mathutil.ScaleInt(ctx.Difficulty, 2, 6)
+	h := 1 + rand.Intn(maxH)
+	maxSteps := mathutil.ScaleInt(ctx.Difficulty, 6, 30)
+	steps := 2 + rand.Intn(maxSteps)
+	maxA := mathutil.ScaleInt(ctx.Difficulty, 4, 15)
+	a := rand.Intn(maxA + 1)
 	b := a + h*steps
+	ans := strconv.Itoa(steps)
+
+	q := fmt.Sprintf("Euler's method runs from \\(x = %d\\) to \\(x = %d\\) with step size \\(h = %d\\). How many steps does it take?", a, b, h)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The number of uniform discretization steps N across an interval [a, b] with step size h is given by N = (b - a)/h.\n\nSubgoal 2: Substitute parameters. Set lower bound a = %d, upper bound b = %d and step size h = %d into the step count formula.\n\nSubgoal 3: Evaluate and simplify. Compute N = (%d - %d)/%d = %d/%d = %d steps.",
+		a, b, h, b, a, h, b-a, h, steps)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Euler's method runs from \\\\(x = %d\\\\) to \\\\(x = %d\\\\) with step size \\\\(h = %d\\\\). How many steps does it take?", a, b, h),
-		Answer:   fmt.Sprintf("%d", steps),
-		Explanation: fmt.Sprintf("The number of steps is the width of the interval divided by the step size: (%d - %d)/%d = %d. The count is exact because the step size divides the interval, which is why an interval is normally chosen to suit the step rather than the other way round.",
-			b, a, h, steps),
-		Facts: map[string]string{"steps": fmt.Sprintf("%d", steps)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"h":      strconv.Itoa(h),
+			"answer": ans,
+		},
 	}
 }
 
-// laplaceValueGen uses L{t^n}(s) = n!/s^(n+1), evaluated where the answer is whole.
+// laplaceValueGen evaluates the Laplace transform of a monomial at s = 1.
 type laplaceValueGen struct{}
 
 func (g *laplaceValueGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	n := smallInt(1, 5)
+	minN := mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+	maxN := mathutil.ScaleInt(ctx.Difficulty, 4, 7)
+	n := minN + rand.Intn(maxN-minN+1)
 	f := 1
 	for i := 2; i <= n; i++ {
 		f *= i
 	}
+	ans := strconv.Itoa(f)
+
+	q := fmt.Sprintf("Evaluate the Laplace transform \\(L\\{t^{%d}\\}(s)\\) at \\(s = 1\\).", n)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The Laplace transform of the power function t^n for a non-negative integer n is L{t^n}(s) = n! / s^{n+1} for s > 0.\n\nSubgoal 2: Substitute parameters. Substitute power n = %d and evaluation point s = 1 into the transform: L{t^%d}(1) = %d! / 1^{%d}.\n\nSubgoal 3: Evaluate and simplify. Compute the factorial %d! = %d and divide by 1: %d / 1 = %d.",
+		n, n, n, n+1, n, f, f, f)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Evaluate the Laplace transform \\\\(L\\\\{t^{%d}\\\\}(s)\\\\) at \\\\(s = 1\\\\).", n),
-		Answer:   fmt.Sprintf("%d", f),
-		Explanation: fmt.Sprintf("The transform of t^n is n! over s^(n+1), so at s = 1 it is simply %d! = %d. The factorial is the shape of the transform for a power, and the extra power of s in the denominator is what makes the transform decay faster for larger n.",
-			n, f),
-		Facts: map[string]string{"value": fmt.Sprintf("%d", f)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"n":      strconv.Itoa(n),
+			"s":      "1",
+			"answer": ans,
+		},
 	}
 }
 
-// pdeDiscriminantGen computes B^2 - 4AC, the sign of which classifies a second-order PDE.
+// pdeDiscriminantGen computes B^2 - 4AC for a second-order linear PDE.
 type pdeDiscriminantGen struct{}
 
 func (g *pdeDiscriminantGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := smallInt(1, 3+int(ctx.Difficulty*5))
-	b := smallInt(0, 4+int(ctx.Difficulty*5))
-	c := smallInt(1, 3+int(ctx.Difficulty*5))
+	maxA := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	a := 1 + rand.Intn(maxA)
+	maxB := mathutil.ScaleInt(ctx.Difficulty, 4, 12)
+	b := rand.Intn(2*maxB+1) - maxB
+	maxC := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	c := 1 + rand.Intn(maxC)
 	d := b*b - 4*a*c
+	ans := strconv.Itoa(d)
+
+	q := fmt.Sprintf("For the equation \\(%du_{xx} %+du_{xy} %+du_{yy} = 0\\), find the discriminant \\(B^2 - 4AC\\).", a, b, c)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. For a second-order linear PDE in two variables A u_{xx} + B u_{xy} + C u_{yy} = 0, the discriminant is defined as Δ = B^2 - 4AC.\n\nSubgoal 2: Substitute parameters. Identify coefficients A = %d, B = %d and C = %d from the equation.\n\nSubgoal 3: Evaluate and simplify. Compute Δ = (%d)^2 - 4(%d)(%d) = %d - %d = %d.",
+		a, b, c, b, a, c, b*b, 4*a*c, d)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("For the equation \\\\(%du_{xx} %+du_{xy} %+du_{yy} = 0\\\\), find the discriminant \\\\(B^2 - 4AC\\\\).", a, b, c),
-		Answer:   fmt.Sprintf("%d", d),
-		Explanation: fmt.Sprintf("The discriminant is B^2 - 4AC = %d^2 - 4(%d)(%d) = %d. Its sign says which of the three classical types the equation is, and that sign is what the analogues of the wave, heat and Laplace equations differ in.",
-			b, a, c, d),
-		Facts: map[string]string{"discriminant": fmt.Sprintf("%d", d)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"c":      strconv.Itoa(c),
+			"answer": ans,
+		},
 	}
+}
+
+func smallInt(lo, hi int) int {
+	if hi < lo {
+		hi = lo
+	}
+	return lo + rand.Intn(hi-lo+1)
 }
 
 func powInt(b, e int) int {
