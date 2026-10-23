@@ -1,24 +1,21 @@
 package statistics
 
 // The numeric statistics concepts: spread, quartiles, z-scores, the standard error and margin of
-// error, and conditional probability.
+// error and conditional probability.
 //
-// The domain's spread and inference concepts were `symbolic`, and the corpus records what that means
-// in production: the grading runtime has no SymPy, so a symbolic answer always grades incorrect.
-// These eight are `numeric` instead, which is the same produced-answer shift machine learning needed
-// and which section 4.2 of docs/content-expansion.md measures.
-//
-// Every answer is exact by construction: the data is symmetric about its mean so the variance is a
-// whole number, the quartiles use the median of each half, the z-score uses a whole number of
-// standard deviations, and the sample size is a perfect square so the standard error is whole.
+// Converted to parametric generators scaling with ctx.Difficulty using mathutil primitives
+// and structured three-subgoal cognitive derivations in explanations.
+
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func registerNumeric(reg *generator.Registry) {
@@ -31,170 +28,374 @@ func registerNumeric(reg *generator.Registry) {
 	reg.Register("stat.prob.conditional", &conditionalGen{})
 }
 
-func smallInt(lo, hi int) int {
-	if hi < lo {
-		hi = lo
+func minInt(a, b int) int {
+	if a < b {
+		return a
 	}
-	return lo + rand.Intn(hi-lo+1)
+	return b
 }
 
-// madGen asks for the mean absolute deviation, which is the average distance from the mean.
+// madGen asks for the mean absolute deviation of an integer data set.
 type madGen struct{}
 
 func (g *madGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	// only the four-value shape: its deviations are all d, so the average is exact. The five-value
-	// shape would give 6d/5, which integer division would truncate into a wrong answer.
-	m := smallInt(5, 30)
-	d := smallInt(1, 6)
-	data := []int{m - d, m - d, m + d, m + d}
-	sum := 0
-	for _, x := range data {
-		if x > m {
-			sum += x - m
-		} else {
-			sum += m - x
+	maxMu := mathutil.ScaleInt(ctx.Difficulty, 30, 150)
+	mu := 20 + rand.Intn(maxMu-19)
+	maxMad := mathutil.ScaleInt(ctx.Difficulty, 4, 25)
+	mad := 2 + rand.Intn(maxMad-1)
+
+	n := 4
+	if ctx.Difficulty >= 0.5 {
+		n = 6
+	}
+
+	var data []int
+	var expSub2, expSub3 string
+	if n == 4 {
+		delta := rand.Intn(minInt(mad, 4))
+		d1 := mad + delta
+		d2 := mad - delta
+		for d2 <= 0 {
+			mad++
+			d1 = mad + delta
+			d2 = mad - delta
 		}
+		if mu <= d1 {
+			mu = d1 + 5 + rand.Intn(10)
+		}
+		data = []int{mu - d1, mu - d2, mu + d2, mu + d1}
+		for slices.Contains(data, mad) {
+			mu += 3
+			data = []int{mu - d1, mu - d2, mu + d2, mu + d1}
+		}
+		sumDev := 2 * (d1 + d2)
+		expSub2 = fmt.Sprintf("First find the mean: \\(\\mu = (%d + %d + %d + %d)/4 = %d/4 = %d\\). Next compute each observation's absolute distance from \\(\\mu\\): \\(|%d - %d| = %d\\), \\(|%d - %d| = %d\\), \\(|%d - %d| = %d\\) and \\(|%d - %d| = %d\\).",
+			data[0], data[1], data[2], data[3], 4*mu, mu,
+			data[0], mu, d1, data[1], mu, d2, data[2], mu, d2, data[3], mu, d1)
+		expSub3 = fmt.Sprintf("Sum the absolute deviations and divide by n = 4: \\(\\text{MAD} = (%d + %d + %d + %d)/4 = %d/4 = %d\\).",
+			d1, d2, d2, d1, sumDev, mad)
+	} else {
+		delta := rand.Intn(minInt(mad, 3))
+		d1 := mad + delta
+		d2 := mad
+		d3 := mad - delta
+		for d3 <= 0 {
+			mad++
+			d1 = mad + delta
+			d2 = mad
+			d3 = mad - delta
+		}
+		if mu <= d1 {
+			mu = d1 + 5 + rand.Intn(10)
+		}
+		data = []int{mu - d1, mu - d2, mu - d3, mu + d3, mu + d2, mu + d1}
+		for slices.Contains(data, mad) {
+			mu += 3
+			data = []int{mu - d1, mu - d2, mu - d3, mu + d3, mu + d2, mu + d1}
+		}
+		sumDev := 2 * (d1 + d2 + d3)
+		expSub2 = fmt.Sprintf("First find the mean: \\(\\mu = (%d + %d + %d + %d + %d + %d)/6 = %d/6 = %d\\). Next compute each observation's absolute distance from \\(\\mu\\): \\(|%d - %d| = %d\\), \\(|%d - %d| = %d\\), \\(|%d - %d| = %d\\), \\(|%d - %d| = %d\\), \\(|%d - %d| = %d\\) and \\(|%d - %d| = %d\\).",
+			data[0], data[1], data[2], data[3], data[4], data[5], 6*mu, mu,
+			data[0], mu, d1, data[1], mu, d2, data[2], mu, d3, data[3], mu, d3, data[4], mu, d2, data[5], mu, d1)
+		expSub3 = fmt.Sprintf("Sum the absolute deviations and divide by n = 6: \\(\\text{MAD} = (%d + %d + %d + %d + %d + %d)/6 = %d/6 = %d\\).",
+			d1, d2, d3, d3, d2, d1, sumDev, mad)
 	}
-	v := sum / len(data)
+
+	ans := strconv.Itoa(mad)
+	q := fmt.Sprintf("Find the mean absolute deviation of the data set \\(\\{%s\\}\\).", joinInts(data))
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The mean absolute deviation (MAD) measures the average distance of data values from their arithmetic mean: \\(\\text{MAD} = \\frac{1}{n} \\sum_{i=1}^n |x_i - \\mu|\\), where \\(\\mu = \\frac{1}{n} \\sum_{i=1}^n x_i\\).\n\nSubgoal 2: Substitute parameters. %s\n\nSubgoal 3: Evaluate and simplify. %s", expSub2, expSub3)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Find the mean absolute deviation of the data set \\(\\{%d, %d, %d, %d\\}\\).",
-			data[0], data[1], data[2], data[3]),
-		Answer: strconv.Itoa(v),
-		Explanation: fmt.Sprintf("The mean is %d. Each value's distance from it is taken without a sign, and the average of those distances is %d. Taking absolute values rather than squares is what keeps the answer in the data's own units.",
-			m, v),
-		Facts: map[string]string{"mad": strconv.Itoa(v), "mean": strconv.Itoa(m)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"answer": ans,
+		},
 	}
 }
 
-// sortedSample returns an even-length sorted sample whose halves have whole medians.
-func sortedSample() []int {
-	n := 8 + 4*rand.Intn(2)
-	vals := make([]int, n)
-	start := smallInt(1, 10)
-	for i := range vals {
-		vals[i] = start + 2*i + 2*rand.Intn(2)
-	}
-	sort.Ints(vals)
-	return vals
-}
-
-// iqrGen asks for the interquartile range, which is the spread of the middle half.
+// iqrGen asks for the interquartile range of a sorted sample.
 type iqrGen struct{}
 
 func (g *iqrGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	vals := sortedSample()
-	n := len(vals)
-	lower := vals[:n/2]
-	upper := vals[n/2:]
-	q1 := (lower[len(lower)/2-1] + lower[len(lower)/2]) / 2
-	q3 := (upper[len(upper)/2-1] + upper[len(upper)/2]) / 2
+	n := 8
+	if ctx.Difficulty >= 0.5 {
+		n = 12
+	}
+	m := n / 2
+
+	maxStep := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	base := mathutil.ScaleInt(ctx.Difficulty, 4, 30)
+
+	var vals []int
+	var q1, q3, iqr int
+	for {
+		vals = make([]int, n)
+		cur := base + rand.Intn(10)
+		for i := 0; i < n; i++ {
+			vals[i] = cur
+			cur += 1 + rand.Intn(maxStep)
+		}
+		if (vals[m/2-1]+vals[m/2])%2 != 0 {
+			vals[m/2]++
+		}
+		if (vals[m+m/2-1]+vals[m+m/2])%2 != 0 {
+			vals[m+m/2]++
+		}
+		sort.Ints(vals)
+		q1 = (vals[m/2-1] + vals[m/2]) / 2
+		q3 = (vals[m+m/2-1] + vals[m+m/2]) / 2
+		iqr = q3 - q1
+		if iqr > 0 && !slices.Contains(vals, iqr) {
+			break
+		}
+		base += 5
+	}
+
+	lower := vals[:m]
+	upper := vals[m:]
+	ans := strconv.Itoa(iqr)
+	q := fmt.Sprintf("Find the interquartile range of the sorted data set \\(\\{%s\\}\\).", joinInts(vals))
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The interquartile range (IQR) measures the statistical dispersion of the middle half of an ordered data set: \\(\\text{IQR} = Q_3 - Q_1\\), where \\(Q_1\\) is the lower quartile and \\(Q_3\\) is the upper quartile.\n\nSubgoal 2: Substitute parameters. The ordered data set contains %d values. Divide the data into equal halves: the lower half is \\(\\{%s\\}\\) with median \\(Q_1 = (%d + %d)/2 = %d\\) and the upper half is \\(\\{%s\\}\\) with median \\(Q_3 = (%d + %d)/2 = %d\\).\n\nSubgoal 3: Evaluate and simplify. Subtract the lower quartile from the upper quartile: \\(\\text{IQR} = %d - %d = %d\\).",
+		n, joinInts(lower), vals[m/2-1], vals[m/2], q1,
+		joinInts(upper), vals[m+m/2-1], vals[m+m/2], q3,
+		q3, q1, iqr)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Find the interquartile range of the sorted data set \\(\\{%s\\}\\).", joinInts(vals)),
-		Answer:   strconv.Itoa(q3 - q1),
-		Explanation: fmt.Sprintf("The lower quartile is the median of the lower half, %d, and the upper quartile the median of the upper half, %d. Their difference, %d, is the spread of the middle half of the data and ignores the extremes.",
-			q1, q3, q3-q1),
-		Facts: map[string]string{"iqr": strconv.Itoa(q3 - q1), "q1": strconv.Itoa(q1), "q3": strconv.Itoa(q3)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"answer": ans,
+		},
 	}
 }
 
-// quartileGen asks for one quartile rather than the range.
+// quartileGen asks for either the lower or upper quartile of a sorted sample.
 type quartileGen struct{}
 
 func (g *quartileGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	vals := sortedSample()
-	n := len(vals)
-	lower := vals[:n/2]
-	upper := vals[n/2:]
-	q1 := (lower[len(lower)/2-1] + lower[len(lower)/2]) / 2
-	q3 := (upper[len(upper)/2-1] + upper[len(upper)/2]) / 2
-	askQ1 := rand.Intn(2) == 0
-	want, which, half := q3, "upper", upper
-	if askQ1 {
-		want, which, half = q1, "lower", lower
+	n := 8
+	if ctx.Difficulty >= 0.5 {
+		n = 12
 	}
+	m := n / 2
+
+	step := mathutil.ScaleInt(ctx.Difficulty, 2, 6)
+	base := mathutil.ScaleInt(ctx.Difficulty, 4, 30)
+
+	var vals []int
+	var q1, q3, want int
+	which := "lower"
+	if rand.Intn(2) == 1 {
+		which = "upper"
+	}
+
+	for {
+		vals = make([]int, n)
+		cur := (base/2)*2 + 2
+		for i := 0; i < n; i++ {
+			vals[i] = cur
+			cur += 2 * (1 + rand.Intn(step))
+		}
+		vals[m/2] = vals[m/2-1] + 2
+		vals[m+m/2] = vals[m+m/2-1] + 2
+		sort.Ints(vals)
+
+		q1 = (vals[m/2-1] + vals[m/2]) / 2
+		q3 = (vals[m+m/2-1] + vals[m+m/2]) / 2
+		if which == "lower" {
+			want = q1
+		} else {
+			want = q3
+		}
+
+		if !slices.Contains(vals, want) {
+			break
+		}
+		base += 6
+	}
+
+	lower := vals[:m]
+	upper := vals[m:]
+	half := lower
+	midA, midB := vals[m/2-1], vals[m/2]
+	if which == "upper" {
+		half = upper
+		midA, midB = vals[m+m/2-1], vals[m+m/2]
+	}
+
+	ans := strconv.Itoa(want)
+	q := fmt.Sprintf("Find the %s quartile of the sorted data set \\(\\{%s\\}\\).", which, joinInts(vals))
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. Quartiles partition an ordered data set into four equal parts. The lower quartile \\(Q_1\\) is the median of the lower half of the data and the upper quartile \\(Q_3\\) is the median of the upper half.\n\nSubgoal 2: Substitute parameters. The ordered data set contains %d values. Divide the data into two equal halves. The %s half comprises the %d values \\(\\{%s\\}\\).\n\nSubgoal 3: Evaluate and simplify. Locate the middle pair of the %s half: %d and %d. Compute their median: \\(Q = (%d + %d)/2 = %d/2 = %d\\).",
+		n, which, m, joinInts(half),
+		which, midA, midB, midA, midB, midA+midB, want)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Find the %s quartile of the sorted data set \\(\\{%s\\}\\).", which, joinInts(vals)),
-		Answer:   strconv.Itoa(want),
-		Explanation: fmt.Sprintf("Split the sorted data at its median, and take the median of the %s half: that half is \\(\\{%s\\}\\), whose middle pair averages to %d. The quartile is a median of a half, not a quarter of the range.",
-			which, joinInts(half), want),
-		Facts: map[string]string{"quartile": strconv.Itoa(want), "which": which},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"answer": ans,
+		},
 	}
 }
 
-// zscoreGen asks how many standard deviations a value lies from the mean.
+// zscoreGen asks for the z-score of an observed value.
 type zscoreGen struct{}
 
 func (g *zscoreGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mean := smallInt(20, 80)
-	sd := smallInt(2, 10)
-	k := smallInt(-3, 3)
-	if k == 0 {
-		k = 1
+	maxMu := mathutil.ScaleInt(ctx.Difficulty, 40, 150)
+	mean := 30 + rand.Intn(maxMu-29)
+	maxSd := mathutil.ScaleInt(ctx.Difficulty, 3, 15)
+	sd := 2 + rand.Intn(maxSd-1)
+
+	maxK := 3
+	if ctx.Difficulty >= 0.5 {
+		maxK = 5
 	}
+	k := 1 + rand.Intn(maxK)
+	if rand.Intn(2) == 0 {
+		k = -k
+	}
+
+	for k == sd || k == -sd || k == mean || k == -mean {
+		sd++
+	}
+
 	x := mean + k*sd
+	for x == k || x <= 0 {
+		mean += 10
+		x = mean + k*sd
+	}
+
+	ans := strconv.Itoa(k)
+	q := fmt.Sprintf("A distribution has mean %d and standard deviation %d. Find the z-score of the value %d.", mean, sd, x)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The standard score or z-score transforms an observed value \\(x\\) into standard deviation units relative to the distribution mean \\(\\mu\\): \\(z = \\frac{x - \\mu}{\\sigma}\\).\n\nSubgoal 2: Substitute parameters. Given mean \\(\\mu = %d\\), standard deviation \\(\\sigma = %d\\) and value \\(x = %d\\), substitute into the formula: \\(z = \\frac{%d - %d}{%d}\\).\n\nSubgoal 3: Evaluate and simplify. Compute the deviation in the numerator \\(%d - %d = %d\\) and divide by the standard deviation: \\(z = \\frac{%d}{%d} = %d\\).",
+		mean, sd, x, x, mean, sd,
+		x, mean, x-mean, x-mean, sd, k)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A distribution has mean %d and standard deviation %d. Find the z-score of the value %d.", mean, sd, x),
-		Answer:   strconv.Itoa(k),
-		Explanation: fmt.Sprintf("A z-score is the signed distance from the mean measured in standard deviations: (%d - %d) / %d = %d. A positive value is above the mean and a negative one below, and the size says how unusual it is.",
-			x, mean, sd, k),
-		Facts: map[string]string{"z": strconv.Itoa(k)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"mean":   strconv.Itoa(mean),
+			"sd":     strconv.Itoa(sd),
+			"x":      strconv.Itoa(x),
+			"answer": ans,
+		},
 	}
 }
 
-// standardErrorGen uses a sample size that is a perfect square, so the error is whole.
+// standardErrorGen asks for the standard error of the mean for a sample of square size.
 type standardErrorGen struct{}
 
 func (g *standardErrorGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	n := smallInt(2, 6)
-	n *= n
-	s := n * smallInt(1, 5+int(ctx.Difficulty*8))
-	root := 1
-	for root*root < n {
-		root++
+	maxR := mathutil.ScaleInt(ctx.Difficulty, 4, 12)
+	r := 2 + rand.Intn(maxR-1)
+	n := r * r
+
+	maxMult := mathutil.ScaleInt(ctx.Difficulty, 3, 20)
+	mult := 2 + rand.Intn(maxMult-1)
+	for mult == n || mult == r {
+		mult++
 	}
+
+	s := r * mult
+	ans := strconv.Itoa(mult)
+
+	q := fmt.Sprintf("A sample of size %d has a standard deviation of %d. Find the standard error of the mean.", n, s)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The standard error of the mean (SE) measures the dispersion of sample means across repeated samples of size n: \\(\\text{SE} = \\frac{\\sigma}{\\sqrt{n}}\\), where \\(\\sigma\\) is the standard deviation and \\(n\\) is the sample size.\n\nSubgoal 2: Substitute parameters. Substitute sample size \\(n = %d\\) and sample standard deviation \\(s = %d\\) into the formula: \\(\\text{SE} = \\frac{%d}{\\sqrt{%d}}\\).\n\nSubgoal 3: Evaluate and simplify. Evaluate the square root in the denominator \\(\\sqrt{%d} = %d\\) and divide: \\(\\text{SE} = \\frac{%d}{%d} = %d\\).",
+		n, s, s, n,
+		n, r, s, r, mult)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A sample of size %d has a standard deviation of %d. Find the standard error of the mean.", n, s),
-		Answer:   strconv.Itoa(s / root),
-		Explanation: fmt.Sprintf("The standard error is the standard deviation divided by the square root of the sample size: %d / sqrt(%d) = %d / %d = %d. Estimating the mean from more data is more precise, which is what the division by the root expresses.",
-			s, n, s, root, s/root),
-		Facts: map[string]string{"standard_error": strconv.Itoa(s / root), "size": strconv.Itoa(n)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"size":   strconv.Itoa(n),
+			"sd":     strconv.Itoa(s),
+			"answer": ans,
+		},
 	}
 }
 
-// marginGen multiplies a standard error by a critical value.
+// marginGen asks for the margin of error given a critical value and standard error.
 type marginGen struct{}
 
 func (g *marginGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	se := smallInt(2, 12+int(ctx.Difficulty*10))
 	z := 2
-	if rand.Intn(2) == 0 {
+	if rand.Intn(2) == 1 {
 		z = 3
 	}
+	maxSe := mathutil.ScaleInt(ctx.Difficulty, 4, 30)
+	se := 2 + rand.Intn(maxSe-1)
+	margin := z * se
+	ans := strconv.Itoa(margin)
+
+	q := fmt.Sprintf("A confidence interval uses a critical value of %d and a standard error of %d. Find the margin of error.", z, se)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The margin of error (E) determines the half-width of a confidence interval around a point estimate: \\(E = z^* \\cdot \\text{SE}\\), where \\(z^*\\) is the critical value and \\(\\text{SE}\\) is the standard error.\n\nSubgoal 2: Substitute parameters. Substitute critical value \\(z^* = %d\\) and standard error \\(\\text{SE} = %d\\) into the product: \\(E = %d \\times %d\\).\n\nSubgoal 3: Evaluate and simplify. Multiply the factors to obtain \\(E = %d\\).",
+		z, se, z, se, margin)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A confidence interval uses a critical value of %d and a standard error of %d. Find the margin of error.", z, se),
-		Answer:   strconv.Itoa(z * se),
-		Explanation: fmt.Sprintf("The margin of error is the critical value times the standard error: %d * %d = %d. The interval is then the estimate plus or minus that margin, so the margin is half its width.",
-			z, se, z*se),
-		Facts: map[string]string{"margin": strconv.Itoa(z * se), "standard_error": strconv.Itoa(se)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"z":      strconv.Itoa(z),
+			"se":     strconv.Itoa(se),
+			"answer": ans,
+		},
 	}
 }
 
-// conditionalGen asks for a conditional probability, which is a ratio of two probabilities given as
-// fractions with a common denominator.
+// conditionalGen asks for a conditional probability given joint and marginal probabilities.
 type conditionalGen struct{}
 
 func (g *conditionalGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	d := smallInt(2, 6)
-	both := smallInt(1, d-1)
-	b := both + smallInt(1, d-both)
-	// P(A|B) = P(A and B) / P(B) = both/d over b/d = both/b
-	num, den := reduceStat(both, b)
+	maxD := mathutil.ScaleInt(ctx.Difficulty, 8, 30)
+	d := 6 + rand.Intn(maxD-5)
+
+	var both, b, num, den, gcdVal int
+	for {
+		b = 2 + rand.Intn(d-2)
+		both = 1 + rand.Intn(b-1)
+		if b*b != both*d {
+			gcdVal = mathutil.GCD(both, b)
+			num = both / gcdVal
+			den = b / gcdVal
+			break
+		}
+	}
+
+	ans := fmt.Sprintf("%d/%d", num, den)
+	q := fmt.Sprintf("For two events, \\(P(A \\text{ and } B) = \\frac{%d}{%d}\\) and \\(P(B) = \\frac{%d}{%d}\\). Find \\(P(A \\mid B)\\).", both, d, b, d)
+
+	var expSub3 string
+	if gcdVal > 1 {
+		expSub3 = fmt.Sprintf("Cancel the common denominator %d to obtain \\(\\frac{%d}{%d}\\) and simplify by dividing both numerator and denominator by their greatest common divisor %d: \\(P(A \\mid B) = \\frac{%d}{%d}\\).",
+			d, both, b, gcdVal, num, den)
+	} else {
+		expSub3 = fmt.Sprintf("Cancel the common denominator %d to obtain the irreducible fraction \\(P(A \\mid B) = \\frac{%d}{%d}\\).",
+			d, num, den)
+	}
+
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The conditional probability of event A given event B is the ratio of their joint probability to the marginal probability of the conditioning event: \\(P(A \\mid B) = \\frac{P(A \\text{ and } B)}{P(B)}\\), where \\(P(B) > 0\\).\n\nSubgoal 2: Substitute parameters. Given joint probability \\(P(A \\text{ and } B) = \\frac{%d}{%d}\\) and condition probability \\(P(B) = \\frac{%d}{%d}\\), substitute them into the formula: \\(P(A \\mid B) = \\frac{%d/%d}{%d/%d}\\).\n\nSubgoal 3: Evaluate and simplify. %s",
+		both, d, b, d, both, d, b, d, expSub3)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("For two events, \\(P(A \\text{ and } B) = \\frac{%d}{%d}\\) and \\(P(B) = \\frac{%d}{%d}\\). Find \\(P(A \\mid B)\\).", both, d, b, d),
-		Answer:   fmt.Sprintf("%d/%d", num, den),
-		Explanation: fmt.Sprintf("Conditioning on B restricts attention to the cases where B happened, so the probability is the chance both happen over the chance B does: (%d/%d) / (%d/%d) = %d/%d.",
-			both, d, b, d, num, den),
-		Facts: map[string]string{"out_num": strconv.Itoa(num), "out_den": strconv.Itoa(den)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"both":   strconv.Itoa(both),
+			"b":      strconv.Itoa(b),
+			"d":      strconv.Itoa(d),
+			"answer": ans,
+		},
 	}
 }
 
@@ -205,20 +406,4 @@ func joinInts(v []int) string {
 		parts[i] = strconv.Itoa(x)
 	}
 	return strings.Join(parts, ", ")
-}
-
-// reduceStat reduces a probability fraction.
-func reduceStat(a, b int) (int, int) {
-	g := a
-	h := b
-	for h != 0 {
-		g, h = h, g%h
-	}
-	if g < 0 {
-		g = -g
-	}
-	if g == 0 {
-		return a, b
-	}
-	return a / g, b / g
 }
