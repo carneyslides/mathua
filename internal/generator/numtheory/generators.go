@@ -3,6 +3,7 @@ package numtheory
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
@@ -373,37 +374,61 @@ func (g *quadraticReciprocityGen) Generate(ctx generator.GeneratorContext) gener
 	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
+func computeMultiplicativeOrder(a, m int) (int, []int) {
+	if m <= 1 || mathutil.GCD(a, m) != 1 {
+		return 0, nil
+	}
+	powers := make([]int, 0, m)
+	cur := a % m
+	k := 1
+	powers = append(powers, cur)
+	for cur != 1 {
+		cur = (cur * a) % m
+		powers = append(powers, cur)
+		k++
+	}
+	return k, powers
+}
+
 type orderModGen struct{}
 
 func (g *orderModGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	// order of 2 mod small primes
-	entries := []struct {
-		a, m, ord, phi int
-	}{
-		{2, 5, 4, 4}, {2, 7, 3, 6}, {3, 7, 6, 6}, {2, 9, 6, 6}, {3, 8, 2, 4}, {2, 11, 10, 10},
+	var moduli []int
+	switch {
+	case ctx.Difficulty < 0.35:
+		moduli = []int{5, 7, 8, 9, 10}
+	case ctx.Difficulty < 0.70:
+		moduli = []int{7, 9, 11, 12, 13, 14, 15}
+	default:
+		moduli = []int{11, 13, 15, 16, 17, 18, 19, 20}
 	}
-	e := entries[rand.Intn(len(entries))]
-	if rand.Intn(3) == 0 {
-		// typed production: the order value itself
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the order of %d modulo %d? (smallest k with %d^k≡1 mod %d)", e.a, e.m, e.a, e.m),
-			Answer:      fmt.Sprintf("%d", e.ord),
-			Explanation: fmt.Sprintf("Powers of %d mod %d cycle with period %d.", e.a, e.m, e.ord),
+	m := moduli[rand.Intn(len(moduli))]
+
+	var coprimes []int
+	for candidate := 2; candidate < m; candidate++ {
+		if mathutil.GCD(candidate, m) == 1 {
+			coprimes = append(coprimes, candidate)
 		}
 	}
-	if scale > 3 {
-		// for harder, ask for order value; easy asks yes/no about divisibility of phi
-		return generator.Problem{
-			Question:    fmt.Sprintf("What is the order of %d modulo %d? (smallest k with %d^k≡1 mod %d)", e.a, e.m, e.a, e.m),
-			Answer:      fmt.Sprintf("%d", e.ord),
-			Explanation: fmt.Sprintf("Powers of %d mod %d cycle with period %d.", e.a, e.m, e.ord),
-		}
+	a := coprimes[rand.Intn(len(coprimes))]
+	ord, powers := computeMultiplicativeOrder(a, m)
+
+	steps := make([]string, len(powers))
+	for idx, p := range powers {
+		steps[idx] = fmt.Sprintf("%d^%d ≡ %d", a, idx+1, p)
 	}
+	stepsStr := strings.Join(steps, ", ")
+
 	return generator.Problem{
-		Question:    fmt.Sprintf("Does the order of %d mod %d divide φ(%d)=%d? (yes/no)", e.a, e.m, e.m, e.phi),
-		Answer:      "yes",
-		Explanation: "Order always divides φ(m) (Euler) or p-1 for prime.",
+		Question:    fmt.Sprintf("What is the multiplicative order of %d modulo %d?", a, m),
+		Answer:      strconv.Itoa(ord),
+		Explanation: fmt.Sprintf("Powers of %d modulo %d cycle with period %d: %s (mod %d). The smallest positive integer k such that %d^k ≡ 1 (mod %d) is %d.", a, m, ord, stepsStr, m, a, m, ord),
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"m":      strconv.Itoa(m),
+			"order":  strconv.Itoa(ord),
+			"answer": strconv.Itoa(ord),
+		},
 	}
 }
 

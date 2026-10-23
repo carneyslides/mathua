@@ -11621,7 +11621,7 @@
   },
   {
     "domain": "number_theory",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "id": "nt.basics.order_mod",
     "label": "Order modulo n",
     "mastery_threshold": {
