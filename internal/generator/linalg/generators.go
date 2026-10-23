@@ -929,44 +929,60 @@ func (g *svdGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type jordanGen struct{}
 
 func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
-	}
-	easy := []entry{
-		{"Does Jordan form exist for every complex matrix? (yes/no)", "yes", "Jordan canonical form over C."},
-		{"Is diagonalizable matrices' Jordan blocks all 1×1? (yes/no)", "yes", "No nontrivial blocks."},
-		{"Does Jordan block J_2(λ) have λ on diagonal and 1 above? (yes/no)", "yes", "[[λ,1],[0,λ]]."},
-		{"Is every real matrix diagonalizable over R? (yes/no)", "no", "Rotations have no real eigenvectors; Jordan blocks appear."},
-	}
-	hard := []entry{
-		{"Is matrix [[2,1],[0,2]] already in Jordan form? (yes/no)", "yes", "Single Jordan block for eigenvalue 2."},
-		{"Does minimal polynomial exponent equal largest Jordan block size? (yes/no)", "yes", "Block size gives exponent."},
-		{"Is number of Jordan blocks for λ equal to geometric multiplicity? (yes/no)", "yes", "Counting blocks."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: block counts and shapes (unique answers).
-		type jorEntry struct {
-			question string
-			answer   string
-			reason   string
+	switch rand.Intn(5) {
+	case 0:
+		alg := 3 + rand.Intn(3)
+		geom := 1 + rand.Intn(alg - 1)
+		eig := 1 + rand.Intn(5)
+		return generator.Problem{
+			Question: fmt.Sprintf("An eigenvalue \\(\\lambda = %d\\) of matrix \\(A\\) has algebraic multiplicity %d and geometric multiplicity \\(\\dim \\ker(A - %d I) = %d\\). How many Jordan blocks corresponding to \\(\\lambda\\) are in the Jordan canonical form of \\(A\\)?", eig, alg, eig, geom),
+			Answer:   fmt.Sprintf("%d", geom),
+			Explanation: fmt.Sprintf("The number of Jordan blocks corresponding to an eigenvalue equals its geometric multiplicity: \\(\\dim \\ker(A - \\lambda I) = %d\\).", geom),
 		}
-		jorTable := []jorEntry{
-			{"[[2,1],[0,2]] is one Jordan block. How many blocks? (enter a number)", "1", "Single block for eigenvalue 2."},
-			{"A 3x3 diagonalizable matrix: how many Jordan blocks? (enter a number)", "3", "All blocks 1×1: three of them."},
-			{"J_2(λ) is 2x2. What sits above the diagonal? (enter a number)", "1", "Ones on the superdiagonal by definition."},
+	case 1:
+		l1 := 1 + rand.Intn(4)
+		l2 := 1 + rand.Intn(4)
+		l3 := 1 + rand.Intn(4)
+		tr := 2*l1 + l2 + l3
+		return generator.Problem{
+			Question: fmt.Sprintf("A \\(4 \\times 4\\) matrix has Jordan blocks \\(J_2(%d)\\), \\(J_1(%d)\\) and \\(J_1(%d)\\). Compute the trace of the matrix.", l1, l2, l3),
+			Answer:   fmt.Sprintf("%d", tr),
+			Explanation: fmt.Sprintf("The trace of a matrix equals the sum of the diagonal entries in its Jordan normal form: \\(\\operatorname{tr}(A) = 2(%d) + %d + %d = %d + %d + %d = %d\\).",
+				l1, l2, l3, 2*l1, l2, l3, tr),
 		}
-		v := jorTable[rand.Intn(len(jorTable))]
-		return generator.Problem{Question: v.question, Answer: v.answer, Explanation: v.reason}
+	case 2:
+		l1 := 2 + rand.Intn(3)
+		l2 := 2 + rand.Intn(3)
+		detA := l1 * l1 * l2
+		return generator.Problem{
+			Question: fmt.Sprintf("A \\(3 \\times 3\\) matrix has Jordan canonical form consisting of a \\(2 \\times 2\\) block \\(J_2(%d)\\) and a \\(1 \\times 1\\) block \\(J_1(%d)\\). Find \\(\\det(A)\\).", l1, l2),
+			Answer:   fmt.Sprintf("%d", detA),
+			Explanation: fmt.Sprintf("Because Jordan normal form is triangular, the determinant is the product of all diagonal entries: \\(\\det(A) = %d^2 \\times %d = %d \\times %d = %d\\).",
+				l1, l2, l1*l1, l2, detA),
+		}
+	case 3:
+		alg := 3 + rand.Intn(3)
+		geom := 1 + rand.Intn(alg - 1)
+		defect := alg - geom
+		eig := 2 + rand.Intn(4)
+		return generator.Problem{
+			Question: fmt.Sprintf("An eigenspace for eigenvalue \\(\\lambda = %d\\) has algebraic multiplicity %d and geometric multiplicity %d. How many generalized eigenvectors that are not ordinary eigenvectors are needed to complete a Jordan chain basis for this eigenspace?", eig, alg, geom),
+			Answer:   fmt.Sprintf("%d", defect),
+			Explanation: fmt.Sprintf("The number of additional generalized eigenvectors is the defect between algebraic multiplicity and geometric multiplicity: %d - %d = %d.",
+				alg, geom, defect),
+		}
+	default:
+		e1 := 2 + rand.Intn(3)
+		e2 := 1 + rand.Intn(2)
+		l1 := 1 + rand.Intn(4)
+		l2 := l1 + 1 + rand.Intn(3)
+		return generator.Problem{
+			Question: fmt.Sprintf("A matrix has minimal polynomial \\(m(\\lambda) = (\\lambda - %d)^{%d}(\\lambda - %d)^{%d}\\). What is the size of the largest Jordan block corresponding to eigenvalue %d?", l1, e1, l2, e2, l1),
+			Answer:   fmt.Sprintf("%d", e1),
+			Explanation: fmt.Sprintf("The size of the largest Jordan block for an eigenvalue equals its multiplicity as a root of the minimal polynomial. For eigenvalue %d, the exponent in \\(m(\\lambda)\\) is %d, so the largest block has size %d.",
+				l1, e1, e1),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 // ----- subspace -----
