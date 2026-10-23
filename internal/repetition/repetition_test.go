@@ -214,6 +214,12 @@ func TestAdmit_RejectsOversizedCredit(t *testing.T) {
 	if _, _, _, err := a.Admit(-1); !errors.Is(err, ErrNegativeCredit) {
 		t.Fatalf("err = %v, want ErrNegativeCredit", err)
 	}
+
+	// Admission on an invalid account fails at initial validation
+	bad := Account{RetainedUnits: -1}
+	if _, _, _, err := bad.Admit(100); !errors.Is(err, ErrNegativeCredit) {
+		t.Errorf("admit on invalid account err = %v, want ErrNegativeCredit", err)
+	}
 }
 
 func TestValidate_RejectsAFullFractionalBalance(t *testing.T) {
@@ -267,5 +273,163 @@ func TestChainDue_ChainsAndPreservesTimeOfDay(t *testing.T) {
 	}
 	if !late[0].Equal(now.AddDate(0, 0, 1)) {
 		t.Errorf("late due = %s, want %s", late[0], now.AddDate(0, 0, 1))
+	}
+}
+
+func TestNormalizeSpeed(t *testing.T) {
+	cases := []struct {
+		in   float64
+		want float64
+	}{
+		{math.NaN(), 1.0},
+		{math.Inf(1), 1.0},
+		{math.Inf(-1), 1.0},
+		{0.0, 1.0},
+		{-1.5, 1.0},
+		{0.2, 0.5},
+		{0.5, 0.5},
+		{1.2, 1.2},
+		{2.0, 2.0},
+		{3.5, 2.0},
+	}
+	for _, tc := range cases {
+		got := NormalizeSpeed(tc.in)
+		if got != tc.want {
+			t.Errorf("NormalizeSpeed(%v) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestStepDays_Bounds(t *testing.T) {
+	// Prev interval so large that next interval exceeds MaxStepDays.
+	huge := scheduler.SM2{Interval: 40000, EFactor: 2.5, Repetitions: 5}
+	if _, err := StepDays(huge, 1.0); !errors.Is(err, ErrStepRange) {
+		t.Errorf("StepDays huge interval err = %v, want ErrStepRange", err)
+	}
+
+	// Repetitions >= 2 with zero interval results in 0, triggering MinStepDays clamp.
+	zero := scheduler.SM2{Interval: 0, EFactor: 1.3, Repetitions: 2}
+	got, err := StepDays(zero, 1.0)
+	if err != nil || got != MinStepDays {
+		t.Errorf("StepDays zero interval = %d err=%v, want %d", got, err, MinStepDays)
+	}
+}
+
+func TestChainDue_Errors(t *testing.T) {
+	now := time.Now().UTC()
+	baseline := now
+
+	// Step less than MinStepDays (1)
+	if _, err := ChainDue(baseline, now, []int{0}); !errors.Is(err, ErrStepRange) {
+		t.Errorf("ChainDue step 0 err = %v, want ErrStepRange", err)
+	}
+
+	// Step greater than MaxStepDays (36500)
+	if _, err := ChainDue(baseline, now, []int{36501}); !errors.Is(err, ErrStepRange) {
+		t.Errorf("ChainDue step 36501 err = %v, want ErrStepRange", err)
+	}
+
+	// Baseline due year exceeding 9000
+	distantFuture := time.Date(9001, 1, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := ChainDue(distantFuture, now, []int{10}); !errors.Is(err, ErrDueRange) {
+		t.Errorf("ChainDue distant future err = %v, want ErrDueRange", err)
+	}
+}
+
+func TestAccount_LifecycleAndInvariants(t *testing.T) {
+	counts := OrdinalCounts{Banked: 2, Projected: 1, Stale: 0}
+	if counts.Pending() != 2 {
+		t.Errorf("Pending() = %d, want 2", counts.Pending())
+	}
+	if counts.Total() != 3 {
+		t.Errorf("Total() = %d, want 3", counts.Total())
+	}
+
+	// NewAccount with valid state
+	acct, err := NewAccount(Micro*3, counts)
+	if err != nil {
+		t.Fatalf("NewAccount valid err = %v", err)
+	}
+	if acct.Balance() != 0 {
+		t.Errorf("Balance() = %d, want 0", acct.Balance())
+	}
+
+	// Negative retained units
+	if _, err := NewAccount(-1, counts); !errors.Is(err, ErrNegativeCredit) {
+		t.Errorf("NewAccount negative retained err = %v, want ErrNegativeCredit", err)
+	}
+
+	// Negative ordinal counts
+	if _, err := NewAccount(Micro*2, OrdinalCounts{Banked: -1}); !errors.Is(err, ErrOrdinalTotal) {
+		t.Errorf("NewAccount negative banked err = %v, want ErrOrdinalTotal", err)
+	}
+
+	// Ordinals exceeding MaxBank
+	if _, err := NewAccount(Micro*(MaxBank+1), OrdinalCounts{Banked: int(MaxBank + 1)}); !errors.Is(err, ErrBankLimit) {
+		t.Errorf("NewAccount over MaxBank err = %v, want ErrBankLimit", err)
+	}
+
+	// Balance >= Micro
+	if _, err := NewAccount(Micro*2, OrdinalCounts{Banked: 0}); !errors.Is(err, ErrBalance) {
+		t.Errorf("NewAccount balance >= Micro err = %v, want ErrBalance", err)
+	}
+
+	// Balance < 0
+	if _, err := NewAccount(0, OrdinalCounts{Banked: 1}); !errors.Is(err, ErrBalance) {
+		t.Errorf("NewAccount balance < 0 err = %v, want ErrBalance", err)
+	}
+
+	// Empty bank Project and Stale return ErrOrdinalTotal
+	empty := Account{RetainedUnits: 0, Ordinals: OrdinalCounts{Banked: 0}}
+	if _, err := empty.Project(); !errors.Is(err, ErrOrdinalTotal) {
+		t.Errorf("empty Project err = %v, want ErrOrdinalTotal", err)
+	}
+	if _, err := empty.Stale(); !errors.Is(err, ErrOrdinalTotal) {
+		t.Errorf("empty Stale err = %v, want ErrOrdinalTotal", err)
+	}
+
+	// Capacity clamped to 0 when RetainedUnits exceeds MaxBank*Micro
+	overflowAcct := Account{RetainedUnits: int64(MaxBank+1) * Micro}
+	if cap := overflowAcct.Capacity(); cap != 0 {
+		t.Errorf("Capacity() for overflow = %d, want 0", cap)
+	}
+}
+
+func TestCheckedArithmetic_Overflow(t *testing.T) {
+	// addChecked positive overflow
+	if _, err := addChecked(math.MaxInt64, 1); !errors.Is(err, ErrOverflow) {
+		t.Errorf("addChecked positive overflow err = %v, want ErrOverflow", err)
+	}
+
+	// addChecked negative overflow
+	if _, err := addChecked(math.MinInt64, -1); !errors.Is(err, ErrOverflow) {
+		t.Errorf("addChecked negative overflow err = %v, want ErrOverflow", err)
+	}
+
+	// addChecked normal subtraction
+	got, err := addChecked(10, -3)
+	if err != nil || got != 7 {
+		t.Errorf("addChecked(10, -3) = %d err=%v, want 7", got, err)
+	}
+
+	// mulChecked with zero operand
+	got, err = mulChecked(0, 100)
+	if err != nil || got != 0 {
+		t.Errorf("mulChecked(0, 100) = %d err=%v, want 0", got, err)
+	}
+	got, err = mulChecked(100, 0)
+	if err != nil || got != 0 {
+		t.Errorf("mulChecked(100, 0) = %d err=%v, want 0", got, err)
+	}
+
+	// mulChecked overflow
+	if _, err := mulChecked(math.MaxInt64, 2); !errors.Is(err, ErrOverflow) {
+		t.Errorf("mulChecked overflow err = %v, want ErrOverflow", err)
+	}
+
+	// mulChecked normal multiplication
+	got, err = mulChecked(6, 7)
+	if err != nil || got != 42 {
+		t.Errorf("mulChecked(6, 7) = %d err=%v, want 42", got, err)
 	}
 }
