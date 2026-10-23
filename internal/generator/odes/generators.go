@@ -237,55 +237,92 @@ func (g *exactGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type homogeneousGen struct{}
 
 func (g *homogeneousGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type qa struct {
-		r1, r2 int
-	}
-	pairs := []qa{
-		{1, 2}, {2, 3}, {1, -1}, {2, -2}, {3, -3},
-		{1, 3}, {2, 4}, {-1, -2}, {3, 4}, {1, -2},
-	}
-	p := pairs[rand.Intn(len(pairs))]
-	r1, r2 := p.r1, p.r2
-	s := r1 + r2
-	prod := r1 * r2
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Characteristic discriminant Delta = b^2 - 4ac for y'' + b y' + c y = 0
+		b := smallInt(2, 7)
+		c := smallInt(1, 9)
+		disc := b*b - 4*c
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the discriminant \\(\\Delta = b^2 - 4ac\\) of the characteristic equation for the differential equation \\(y'' + %d y' + %d y = 0\\)?", b, c),
+			Answer:   fmt.Sprintf("%d", disc),
+			Explanation: fmt.Sprintf(
+				"The characteristic equation is \\(r^2 + %d r + %d = 0\\). The discriminant is \\(\\Delta = b^2 - 4ac = (%d)^2 - 4(1)(%d) = %d - %d = %d\\).",
+				b, c, b, c, b*b, 4*c, disc,
+			),
+		}
 
-	charStr := "r^{2}"
-	if s > 0 {
-		charStr += fmt.Sprintf(" - %dr", s)
-	} else if s < 0 {
-		charStr += fmt.Sprintf(" + %dr", -s)
-	}
-	if prod > 0 {
-		charStr += fmt.Sprintf(" + %d", prod)
-	} else if prod < 0 {
-		charStr += fmt.Sprintf(" - %d", -prod)
-	}
-	charStr += " = 0"
+	case 1:
+		// Single repeated root value r0 for y'' - 2 r0 y' + r0^2 y = 0
+		r0 := smallInt(1, 6+int(ctx.Difficulty*2))
+		bCoeff := 2 * r0
+		cSq := r0 * r0
+		return generator.Problem{
+			Question: fmt.Sprintf("The differential equation \\(y'' - %d y' + %d y = 0\\) has a single repeated real characteristic root. What is the value of this repeated root \\(r\\)?", bCoeff, cSq),
+			Answer:   fmt.Sprintf("%d", r0),
+			Explanation: fmt.Sprintf(
+				"The characteristic equation is \\(r^2 - %d r + %d = (r - %d)^2 = 0\\), yielding repeated root %d.",
+				bCoeff, cSq, r0, r0,
+			),
+		}
 
-	eqStr := "y''"
-	if s > 0 {
-		eqStr += fmt.Sprintf(" - %dy'", s)
-	} else if s < 0 {
-		eqStr += fmt.Sprintf(" + %dy'", -s)
-	}
-	if prod > 0 {
-		eqStr += fmt.Sprintf(" + %dy", prod)
-	} else if prod < 0 {
-		eqStr += fmt.Sprintf(" - %dy", -prod)
-	}
-	eqStr += " = 0"
+	case 2:
+		// Underdamped complex conjugate angular frequency beta for y'' + 2 alpha y' + (alpha^2 + beta^2) y = 0
+		alpha := smallInt(1, 4)
+		beta := smallInt(2, 7)
+		bCoeff := 2 * alpha
+		cVal := alpha*alpha + beta*beta
+		discNeg := 4 * beta * beta
+		return generator.Problem{
+			Question: fmt.Sprintf("The underdamped differential equation \\(y'' + %d y' + %d y = 0\\) has complex characteristic roots \\(r = -\\alpha \\pm i \\beta\\). What is the oscillatory angular frequency \\(\\beta\\)?", bCoeff, cVal),
+			Answer:   fmt.Sprintf("%d", beta),
+			Explanation: fmt.Sprintf(
+				"The characteristic equation is \\(r^2 + %d r + %d = 0\\). By the quadratic formula, \\(r = \\frac{-%d \\pm \\sqrt{(%d)^2 - 4(%d)}}{2} = \\frac{-%d \\pm \\sqrt{-%d}}{2} = -%d \\pm %d i\\). Thus the angular frequency is %d.",
+				bCoeff, cVal, bCoeff, bCoeff, cVal, bCoeff, discNeg, alpha, beta, beta,
+			),
+		}
 
-	answer := fmt.Sprintf("C1*e^(%dx)+C2*e^(%dx)", r2, r1)
-	if r1 > r2 {
-		answer = fmt.Sprintf("C1*e^(%dx)+C2*e^(%dx)", r1, r2)
-	}
+	case 3:
+		// Sum of squares of distinct positive real characteristic roots r1, r2
+		r1 := smallInt(1, 4)
+		r2 := r1 + smallInt(1, 3)
+		sumR := r1 + r2
+		prodR := r1 * r2
+		sumSq := r1*r1 + r2*r2
+		return generator.Problem{
+			Question: fmt.Sprintf("The differential equation \\(y'' - %d y' + %d y = 0\\) has two distinct real characteristic roots \\(r_1\\) and \\(r_2\\). What is the sum of their squares \\(r_1^2 + r_2^2\\)?", sumR, prodR),
+			Answer:   fmt.Sprintf("%d", sumSq),
+			Explanation: fmt.Sprintf(
+				"The characteristic equation factors as \\(r^2 - %d r + %d = (r - %d)(r - %d) = 0\\), giving roots \\(r_1 = %d\\) and \\(r_2 = %d\\). The sum of their squares is \\((%d)^2 + (%d)^2 = %d + %d = %d\\).",
+				sumR, prodR, r1, r2, r1, r2, r1, r2, r1*r1, r2*r2, sumSq,
+			),
+		}
 
-	explanation := fmt.Sprintf("Characteristic equation: \\(%s\\). Roots: \\(r = %d\\) and \\(r = %d\\). The general solution is \\(y = C_{1}e^{%dx} + C_{2}e^{%dx}\\).", charStr, r1, r2, r1, r2)
-
-	return generator.Problem{
-		Question:    fmt.Sprintf("Solve: \\(%s\\)", eqStr),
-		Answer:      answer,
-		Explanation: explanation,
+	default:
+		// Harmonic oscillator amplitude A = sqrt(y0^2 + (v0/omega)^2) with Pythagorean pairs
+		type pair struct {
+			y0, k, a int
+		}
+		pairs := []pair{
+			{3, 4, 5},
+			{4, 3, 5},
+			{6, 8, 10},
+			{8, 6, 10},
+			{5, 12, 13},
+		}
+		p := pairs[rand.Intn(len(pairs))]
+		omega := smallInt(2, 4)
+		omegaSq := omega * omega
+		v0 := omega * p.k
+		return generator.Problem{
+			Question: fmt.Sprintf("The undamped oscillator \\(y'' + %d y = 0\\) satisfies initial displacement \\(y(0) = %d\\) and velocity \\(y'(0) = %d\\). What is the amplitude \\(A\\) of the resulting motion \\(y(t) = A \\cos(\\omega t - \\phi)\\)?", omegaSq, p.y0, v0),
+			Answer:   fmt.Sprintf("%d", p.a),
+			Explanation: fmt.Sprintf(
+				"The natural frequency is \\(\\omega = \\sqrt{%d} = %d\\). The solution is \\(y(t) = %d \\cos(%d t) + %d \\sin(%d t)\\). The amplitude is \\(A = \\sqrt{(%d)^2 + (%d)^2} = \\sqrt{%d + %d} = \\sqrt{%d} = %d\\).",
+				omegaSq, omega, p.y0, omega, p.k, omega, p.y0, p.k, p.y0*p.y0, p.k*p.k, p.a*p.a, p.a,
+			),
+		}
 	}
 }
 
