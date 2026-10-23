@@ -1030,24 +1030,131 @@ func (g *continuousRVGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type discreteRVGen struct{}
 
 func (g *discreteRVGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"Does the PMF give P(X = x) for each possible x? (yes/no)", "yes", "PMF gives the probability of each specific value for a discrete variable."},
-		{"For a valid PMF, what must Σ P(X=x) equal?", "1", "All probabilities must sum to 1."},
-		{"Is the PMF for discrete variables and the PDF for continuous ones? (yes/no)", "yes", "PMF gives probabilities at specific points; PDF gives density."},
-		{"Is the discrete CDF the sum of PMF values up to x? (yes/no)", "yes", "Discrete CDF sums PMF values up to x."},
-		{"Can a discrete random variable take infinitely many values?", "yes", "Discrete variables can be countably infinite (e.g., Poisson, Geometric)."},
-		{"X takes values 1 and 3 with probability 0.5 each. What is E[X]?", "2", "The mean is the probability-weighted sum: 1 times 0.5 plus 3 times 0.5."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type missingItem struct {
+			p1 int
+			p2 int
+			p3 int
+			p4 int
+		}
+		items := []missingItem{
+			{15, 25, 35, 25},
+			{20, 30, 40, 10},
+			{10, 45, 25, 20},
+			{22, 18, 30, 30},
+			{12, 28, 45, 15},
+			{35, 15, 35, 15},
+			{16, 24, 20, 40},
+			{25, 25, 30, 20},
+		}
+		it := items[rand.Intn(len(items))]
+		sum3 := it.p1 + it.p2 + it.p3
+		return generator.Problem{
+			Question: fmt.Sprintf("A discrete random variable \\(X\\) has support \\(\\{1, 2, 3, 4\\}\\). If \\(P(X = 1) = %d\\%%\\), \\(P(X = 2) = %d\\%%\\) and \\(P(X = 3) = %d\\%%\\), determine \\(P(X = 4)\\) as an integer percentage.", it.p1, it.p2, it.p3),
+			Answer:   fmt.Sprintf("%d", it.p4),
+			Explanation: fmt.Sprintf("Probabilities of a discrete distribution must sum to 100\\%%: \\(P(X = 4) = 100\\%% - (%d\\%% + %d\\%% + %d\\%%) = 100\\%% - %d\\%% = %d\\%%\\).",
+				it.p1, it.p2, it.p3, sum3, it.p4),
+		}
+	case 1:
+		type cdfItem struct {
+			p1  int
+			p2  int
+			p3  int
+			p4  int
+			k   int
+			cdf int
+		}
+		items := []cdfItem{
+			{20, 35, 25, 20, 2, 55},
+			{15, 25, 40, 20, 2, 40},
+			{30, 30, 20, 20, 3, 80},
+			{10, 40, 30, 20, 3, 80},
+			{25, 35, 15, 25, 2, 60},
+			{18, 32, 26, 24, 2, 50},
+			{12, 28, 35, 25, 3, 75},
+			{22, 38, 25, 15, 2, 60},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A discrete random variable \\(X\\) has probabilities \\(P(X = 1) = %d\\%%\\), \\(P(X = 2) = %d\\%%\\), \\(P(X = 3) = %d\\%%\\) and \\(P(X = 4) = %d\\%%\\). Compute the cumulative probability \\(F(%d) = P(X \\le %d)\\) as an integer percentage.", it.p1, it.p2, it.p3, it.p4, it.k, it.k),
+			Answer:   fmt.Sprintf("%d", it.cdf),
+			Explanation: fmt.Sprintf("The CDF is the sum of probabilities up to %d: \\(F(%d) = P(X \\le %d) = %d\\%%\\).",
+				it.k, it.k, it.k, it.cdf),
+		}
+	case 2:
+		type tailItem struct {
+			p3 int
+			p4 int
+		}
+		items := []tailItem{
+			{30, 15},
+			{25, 35},
+			{40, 20},
+			{35, 25},
+			{20, 15},
+			{50, 10},
+			{15, 25},
+			{32, 18},
+		}
+		it := items[rand.Intn(len(items))]
+		tail := it.p3 + it.p4
+		return generator.Problem{
+			Question: fmt.Sprintf("A random variable takes values in \\(\\{1, 2, 3, 4\\}\\). If \\(P(X = 3) = %d\\%%\\) and \\(P(X = 4) = %d\\%%\\), calculate \\(P(X \\ge 3)\\) as an integer percentage.", it.p3, it.p4),
+			Answer:   fmt.Sprintf("%d", tail),
+			Explanation: fmt.Sprintf("For discrete values, \\(P(X \\ge 3) = P(X = 3) + P(X = 4) = %d\\%% + %d\\%% = %d\\%%\\).",
+				it.p3, it.p4, tail),
+		}
+	case 3:
+		type weightItem struct {
+			w1      int
+			w2      int
+			w3      int
+			targetX int
+			targetW int
+			ansPct  int
+		}
+		items := []weightItem{
+			{2, 3, 5, 3, 5, 50},
+			{3, 7, 10, 2, 7, 35},
+			{4, 9, 12, 3, 12, 48},
+			{1, 3, 6, 2, 3, 30},
+			{5, 15, 30, 2, 15, 30},
+			{7, 8, 10, 1, 7, 28},
+			{2, 5, 13, 2, 5, 25},
+			{6, 14, 30, 3, 30, 60},
+		}
+		it := items[rand.Intn(len(items))]
+		totalW := it.w1 + it.w2 + it.w3
+		return generator.Problem{
+			Question: fmt.Sprintf("A discrete random variable \\(X \\in \\{1, 2, 3\\}\\) has probabilities proportional to weights \\(w_1 = %d\\), \\(w_2 = %d\\) and \\(w_3 = %d\\). Calculate \\(P(X = %d)\\) as an integer percentage.", it.w1, it.w2, it.w3, it.targetX),
+			Answer:   fmt.Sprintf("%d", it.ansPct),
+			Explanation: fmt.Sprintf("The total weight is \\(W = %d + %d + %d = %d\\). The probability is \\(P(X = %d) = \\frac{%d}{%d} = %d\\%%\\).",
+				it.w1, it.w2, it.w3, totalW, it.targetX, it.targetW, totalW, it.ansPct),
+		}
+	default:
+		type unifItem struct {
+			n   int
+			m   int
+			pct int
+		}
+		items := []unifItem{
+			{10, 3, 30},
+			{10, 7, 70},
+			{20, 9, 45},
+			{20, 13, 65},
+			{25, 11, 44},
+			{25, 16, 64},
+			{50, 21, 42},
+			{50, 37, 74},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A fair integer spinner is equally likely to land on any integer from 1 to %d. What is the probability that the result lands within a designated subset of %d distinct outcomes as an integer percentage?", it.n, it.m),
+			Answer:   fmt.Sprintf("%d", it.pct),
+			Explanation: fmt.Sprintf("In a discrete uniform distribution on %d elements, any subset of size %d has probability \\(\\frac{%d}{%d} = %d\\%%\\).",
+				it.n, it.m, it.m, it.n, it.pct),
+		}
 	}
 }
 
