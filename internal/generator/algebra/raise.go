@@ -418,26 +418,85 @@ func (g *radicalConjugateGen) Generate(ctx generator.GeneratorContext) generator
 type complexFractionGen struct{}
 
 func (g *complexFractionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return algPickMC([]algMCClaim{
-		{
-			q:           "To simplify a fraction whose numerator and denominator are themselves fractions, the usual first step is to...",
-			correct:     "multiply the numerator by the reciprocal of the denominator",
-			distractors: []string{"add the two fractions", "cross out the common letters", "subtract the two denominators"},
-			reason:      "Dividing by a fraction is the same as multiplying by its reciprocal, which clears the inner denominator.",
-		},
-		{
-			q:           "The complex fraction (a/b) divided by (c/d), with all letters nonzero, simplifies to...",
-			correct:     "a times d over the product b times c",
-			distractors: []string{"a times c over the product b times d", "b times c over the product a times d", "a times b over the product c times d"},
-			reason:      "Multiplying by the reciprocal of c/d gives a/b times d/c, which is a d over b c.",
-		},
-		{
-			q:           "To combine the numerator a/b plus c/d into a single fraction, you first...",
-			correct:     "write both terms over the common denominator b times d",
-			distractors: []string{"add the numerators and add the denominators", "multiply the two denominators and keep the first numerator", "invert both fractions"},
-			reason:      "Adding fractions requires a common denominator, and the product of the denominators always works.",
-		},
-	})
+	type cfClaim struct {
+		expr       string
+		top        string
+		numEval    string
+		numPart    string
+		reciprocal string
+		k          int
+		hasEval    bool
+	}
+
+	claims := []cfClaim{
+		// Type 1: direct fraction over fraction
+		{expr: `\frac{\frac{3}{2}}{\frac{1}{4}}`, top: `\frac{3}{2}`, numPart: `\frac{3}{2}`, reciprocal: `\frac{4}{1}`, k: 6},
+		{expr: `\frac{\frac{5}{3}}{\frac{5}{9}}`, top: `\frac{5}{3}`, numPart: `\frac{5}{3}`, reciprocal: `\frac{9}{5}`, k: 3},
+		{expr: `\frac{\frac{7}{4}}{\frac{7}{12}}`, top: `\frac{7}{4}`, numPart: `\frac{7}{4}`, reciprocal: `\frac{12}{7}`, k: 3},
+		{expr: `\frac{\frac{4}{3}}{\frac{2}{9}}`, top: `\frac{4}{3}`, numPart: `\frac{4}{3}`, reciprocal: `\frac{9}{2}`, k: 6},
+		{expr: `\frac{\frac{5}{2}}{\frac{5}{6}}`, top: `\frac{5}{2}`, numPart: `\frac{5}{2}`, reciprocal: `\frac{6}{5}`, k: 3},
+		{expr: `\frac{\frac{7}{3}}{\frac{7}{6}}`, top: `\frac{7}{3}`, numPart: `\frac{7}{3}`, reciprocal: `\frac{6}{7}`, k: 2},
+		{expr: `\frac{\frac{8}{5}}{\frac{4}{15}}`, top: `\frac{8}{5}`, numPart: `\frac{8}{5}`, reciprocal: `\frac{15}{4}`, k: 6},
+		{expr: `\frac{\frac{6}{7}}{\frac{2}{21}}`, top: `\frac{6}{7}`, numPart: `\frac{6}{7}`, reciprocal: `\frac{21}{2}`, k: 9},
+		{expr: `\frac{\frac{10}{3}}{\frac{5}{6}}`, top: `\frac{10}{3}`, numPart: `\frac{10}{3}`, reciprocal: `\frac{6}{5}`, k: 4},
+		{expr: `\frac{\frac{14}{5}}{\frac{7}{15}}`, top: `\frac{14}{5}`, numPart: `\frac{14}{5}`, reciprocal: `\frac{15}{7}`, k: 6},
+		{expr: `\frac{\frac{9}{4}}{\frac{3}{8}}`, top: `\frac{9}{4}`, numPart: `\frac{9}{4}`, reciprocal: `\frac{8}{3}`, k: 6},
+		{expr: `\frac{\frac{15}{2}}{\frac{5}{4}}`, top: `\frac{15}{2}`, numPart: `\frac{15}{2}`, reciprocal: `\frac{4}{5}`, k: 6},
+		{expr: `\frac{\frac{16}{3}}{\frac{4}{9}}`, top: `\frac{16}{3}`, numPart: `\frac{16}{3}`, reciprocal: `\frac{9}{4}`, k: 12},
+		{expr: `\frac{\frac{12}{5}}{\frac{3}{10}}`, top: `\frac{12}{5}`, numPart: `\frac{12}{5}`, reciprocal: `\frac{10}{3}`, k: 8},
+		{expr: `\frac{\frac{21}{4}}{\frac{7}{8}}`, top: `\frac{21}{4}`, numPart: `\frac{21}{4}`, reciprocal: `\frac{8}{7}`, k: 6},
+		{expr: `\frac{\frac{20}{7}}{\frac{4}{21}}`, top: `\frac{20}{7}`, numPart: `\frac{20}{7}`, reciprocal: `\frac{21}{4}`, k: 15},
+
+		// Type 2: sum or difference in numerator over fraction
+		{expr: `\frac{1 + \frac{1}{2}}{\frac{1}{4}}`, top: `1 + \frac{1}{2}`, numEval: `\frac{3}{2}`, numPart: `\frac{3}{2}`, reciprocal: `\frac{4}{1}`, k: 6, hasEval: true},
+		{expr: `\frac{1 + \frac{1}{3}}{\frac{2}{9}}`, top: `1 + \frac{1}{3}`, numEval: `\frac{4}{3}`, numPart: `\frac{4}{3}`, reciprocal: `\frac{9}{2}`, k: 6, hasEval: true},
+		{expr: `\frac{1 + \frac{2}{3}}{\frac{5}{6}}`, top: `1 + \frac{2}{3}`, numEval: `\frac{5}{3}`, numPart: `\frac{5}{3}`, reciprocal: `\frac{6}{5}`, k: 2, hasEval: true},
+		{expr: `\frac{1 - \frac{1}{4}}{\frac{3}{8}}`, top: `1 - \frac{1}{4}`, numEval: `\frac{3}{4}`, numPart: `\frac{3}{4}`, reciprocal: `\frac{8}{3}`, k: 2, hasEval: true},
+		{expr: `\frac{1 - \frac{1}{3}}{\frac{2}{9}}`, top: `1 - \frac{1}{3}`, numEval: `\frac{2}{3}`, numPart: `\frac{2}{3}`, reciprocal: `\frac{9}{2}`, k: 3, hasEval: true},
+		{expr: `\frac{1 + \frac{3}{4}}{\frac{7}{8}}`, top: `1 + \frac{3}{4}`, numEval: `\frac{7}{4}`, numPart: `\frac{7}{4}`, reciprocal: `\frac{8}{7}`, k: 2, hasEval: true},
+		{expr: `\frac{1 - \frac{2}{5}}{\frac{3}{10}}`, top: `1 - \frac{2}{5}`, numEval: `\frac{3}{5}`, numPart: `\frac{3}{5}`, reciprocal: `\frac{10}{3}`, k: 2, hasEval: true},
+		{expr: `\frac{1 + \frac{1}{5}}{\frac{3}{10}}`, top: `1 + \frac{1}{5}`, numEval: `\frac{6}{5}`, numPart: `\frac{6}{5}`, reciprocal: `\frac{10}{3}`, k: 4, hasEval: true},
+		{expr: `\frac{1 + \frac{1}{4}}{\frac{5}{12}}`, top: `1 + \frac{1}{4}`, numEval: `\frac{5}{4}`, numPart: `\frac{5}{4}`, reciprocal: `\frac{12}{5}`, k: 3, hasEval: true},
+		{expr: `\frac{1 - \frac{1}{6}}{\frac{5}{12}}`, top: `1 - \frac{1}{6}`, numEval: `\frac{5}{6}`, numPart: `\frac{5}{6}`, reciprocal: `\frac{12}{5}`, k: 2, hasEval: true},
+		{expr: `\frac{1 - \frac{1}{5}}{\frac{4}{15}}`, top: `1 - \frac{1}{5}`, numEval: `\frac{4}{5}`, numPart: `\frac{4}{5}`, reciprocal: `\frac{15}{4}`, k: 3, hasEval: true},
+		{expr: `\frac{1 + \frac{1}{6}}{\frac{7}{18}}`, top: `1 + \frac{1}{6}`, numEval: `\frac{7}{6}`, numPart: `\frac{7}{6}`, reciprocal: `\frac{18}{7}`, k: 3, hasEval: true},
+		{expr: `\frac{2 + \frac{1}{3}}{\frac{7}{6}}`, top: `2 + \frac{1}{3}`, numEval: `\frac{7}{3}`, numPart: `\frac{7}{3}`, reciprocal: `\frac{6}{7}`, k: 2, hasEval: true},
+		{expr: `\frac{2 - \frac{1}{2}}{\frac{3}{4}}`, top: `2 - \frac{1}{2}`, numEval: `\frac{3}{2}`, numPart: `\frac{3}{2}`, reciprocal: `\frac{4}{3}`, k: 2, hasEval: true},
+		{expr: `\frac{2 + \frac{2}{5}}{\frac{3}{5}}`, top: `2 + \frac{2}{5}`, numEval: `\frac{12}{5}`, numPart: `\frac{12}{5}`, reciprocal: `\frac{5}{3}`, k: 4, hasEval: true},
+		{expr: `\frac{3 - \frac{1}{3}}{\frac{4}{3}}`, top: `3 - \frac{1}{3}`, numEval: `\frac{8}{3}`, numPart: `\frac{8}{3}`, reciprocal: `\frac{3}{4}`, k: 2, hasEval: true},
+	}
+
+	c := claims[rand.Intn(len(claims))]
+	q := fmt.Sprintf("Simplify the complex fraction: \\[%s\\]", c.expr)
+	ans := strconv.Itoa(c.k)
+
+	var explanation string
+	if c.hasEval {
+		explanation = fmt.Sprintf("Simplify the numerator \\(%s = %s\\). Then multiply by the reciprocal of the denominator: \\(%s \\times %s = %d\\).",
+			c.top, c.numEval, c.numPart, c.reciprocal, c.k)
+	} else {
+		explanation = fmt.Sprintf("Multiply the numerator by the reciprocal of the denominator: \\(%s \\times %s = %d\\).",
+			c.numPart, c.reciprocal, c.k)
+	}
+
+	facts := map[string]string{
+		"expr":       c.expr,
+		"top":        c.top,
+		"num_part":   c.numPart,
+		"reciprocal": c.reciprocal,
+		"answer":     ans,
+		"k":          ans,
+	}
+	if c.hasEval {
+		facts["num_eval"] = c.numEval
+	}
+
+	return generator.Problem{
+		Question:    q,
+		Answer:      ans,
+		Explanation: explanation,
+		Facts:       facts,
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -1637,7 +1637,7 @@
     "label": "Simplifying complex fractions",
     "domain": "algebra",
     "subdomain": "algebra.rational",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "alg.rational.add_sub"
     ],

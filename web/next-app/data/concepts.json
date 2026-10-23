@@ -2310,7 +2310,7 @@
   },
   {
     "domain": "algebra",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "id": "alg.rational.complex_fraction",
     "label": "Simplifying complex fractions",
     "mastery_threshold": {
