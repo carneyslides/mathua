@@ -441,19 +441,78 @@ func (g *systemsGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 type variationParamsGen struct{}
 
 func (g *variationParamsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type qa struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Wronskian of exponential basis y1 = e^(a x), y2 = e^(b x) evaluated at x = 0
+		a := smallInt(1, 4)
+		b := a + smallInt(1, 4)
+		w0 := b - a
+		return generator.Problem{
+			Question: fmt.Sprintf("For the fundamental solutions \\(y_1(x) = e^{%d x}\\) and \\(y_2(x) = e^{%d x}\\), what is the value of the Wronskian \\(W(y_1, y_2)\\) evaluated at \\(x = 0\\)?", a, b),
+			Answer:   fmt.Sprintf("%d", w0),
+			Explanation: fmt.Sprintf(
+				"The Wronskian is \\(W(x) = y_1 y_2' - y_1' y_2 = e^{%d x}(%d e^{%d x}) - (%d e^{%d x})e^{%d x} = (%d - %d)e^{%d x} = %d e^{%d x}\\). Evaluating at \\(x = 0\\) yields %d.",
+				a, b, b, a, a, b, b, a, a+b, w0, a+b, w0,
+			),
+		}
+
+	case 1:
+		// Wronskian of trigonometric basis y1 = cos(omega x), y2 = sin(omega x)
+		omega := smallInt(2, 8+int(ctx.Difficulty*2))
+		omegaSq := omega * omega
+		return generator.Problem{
+			Question: fmt.Sprintf("For the differential equation \\(y'' + %d y = g(x)\\), the homogeneous basis is \\(y_1(x) = \\cos(%d x)\\) and \\(y_2(x) = \\sin(%d x)\\). What is the constant value of their Wronskian \\(W(y_1, y_2)\\)?", omegaSq, omega, omega),
+			Answer:   fmt.Sprintf("%d", omega),
+			Explanation: fmt.Sprintf(
+				"Computing the Wronskian yields \\(W(x) = y_1 y_2' - y_1' y_2 = \\cos(%d x)(%d \\cos(%d x)) - (-%d \\sin(%d x))\\sin(%d x) = %d(\\cos^2(%d x) + \\sin^2(%d x)) = %d\\).",
+				omega, omega, omega, omega, omega, omega, omega, omega, omega, omega,
+			),
+		}
+
+	case 2:
+		// Variation of parameters derivative u_2'(x) for y'' + omega^2 y = k sec(omega x)
+		omega := smallInt(2, 5)
+		m := smallInt(1, 6)
+		kVal := m * omega
+		omegaSq := omega * omega
+		return generator.Problem{
+			Question: fmt.Sprintf("In applying variation of parameters to \\(y'' + %d y = %d \\sec(%d x)\\) with \\(y_1 = \\cos(%d x)\\), \\(y_2 = \\sin(%d x)\\) and Wronskian \\(W = %d\\), what is the constant value of the derivative \\(u_2'(x) = \\frac{y_1(x) g(x)}{W(x)}\\)?", omegaSq, kVal, omega, omega, omega, omega),
+			Answer:   fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf(
+				"Substituting gives \\(u_2'(x) = \\frac{\\cos(%d x) \\cdot %d \\sec(%d x)}{%d} = \\frac{%d}{%d} = %d\\), because \\(\\cos(%d x)\\sec(%d x) = 1\\).",
+				omega, kVal, omega, omega, kVal, omega, m, omega, omega,
+			),
+		}
+
+	case 3:
+		// Particular solution value y_p(0) for y'' + omega^2 y = K
+		omega := smallInt(2, 5)
+		m := smallInt(1, 6)
+		omegaSq := omega * omega
+		kVal := m * omegaSq
+		return generator.Problem{
+			Question: fmt.Sprintf("For the differential equation \\(y'' + %d y = %d\\), variation of parameters gives a particular solution \\(y_p(x)\\). What is the value of \\(y_p(0)\\)?", omegaSq, kVal),
+			Answer:   fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf(
+				"The homogeneous solutions are \\(y_1 = \\cos(%d x)\\) and \\(y_2 = \\sin(%d x)\\) with Wronskian \\(W = %d\\). The particular solution is \\(y_p = \\frac{%d}{%d} = %d\\), so \\(y_p(0) = %d\\).",
+				omega, omega, omega, kVal, omegaSq, m, m,
+			),
+		}
+
+	default:
+		// Wronskian of Cauchy-Euler basis y1 = x, y2 = x^2 at x = x0
+		x0 := smallInt(2, 7)
+		ans := x0 * x0
+		return generator.Problem{
+			Question: fmt.Sprintf("For the differential equation with fundamental solutions \\(y_1(x) = x\\) and \\(y_2(x) = x^2\\) (for \\(x > 0\\)), what is the value of the Wronskian \\(W(y_1, y_2)\\) evaluated at \\(x = %d\\)?", x0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"The Wronskian is \\(W(x) = y_1 y_2' - y_1' y_2 = x(2x) - (1)(x^2) = 2x^2 - x^2 = x^2\\). Evaluating at \\(x = %d\\) yields %d.",
+				x0, ans,
+			),
+		}
 	}
-	templates := []qa{
-		{q: "For \\(y'' + y = \\sec(x)\\), the homogeneous solutions are \\(y_1=\\cos x\\), \\(y_2=\\sin x\\). What is the Wronskian \\(W\\)? (enter a number)", a: "1", e: "\\(W = y_1y_2' - y_1'y_2 = \\cos x \\cdot \\cos x - (-\\sin x)\\sin x = 1\\)."},
-		{q: "In variation of parameters, \\(y_p = u_1 y_1 + u_2 y_2\\) where \\(u_1' = -y_2 g/W\\). For \\(y''+y=1\\) with \\(W=1\\), \\(y_2=\\sin x\\), what is \\(u_1'\\)?", a: "-sin(x)", e: "\\(u_1' = -y_2 g/W = -\\sin x \\cdot 1/1 = -\\sin x\\)."},
-		{q: "Does variation of parameters require knowing the homogeneous solution? (yes/no)", a: "yes", e: "Yes, the method builds the particular solution from the homogeneous basis \\(y_1, y_2\\) and the Wronskian."},
-		{q: "For constant-coefficient ODEs, variation of parameters and undetermined coefficients give the same particular solution when both apply. Is this true? (yes/no)", a: "yes", e: "Both methods recover a particular solution; variation of parameters is more general and works even when undetermined coefficients does not."},
-	}
-	t := templates[rand.Intn(len(templates))]
-	return generator.Problem{Question: t.q, Answer: t.a, Explanation: t.e}
 }
 
 type convolutionGen struct{}
