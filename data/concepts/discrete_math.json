@@ -248,7 +248,7 @@
     "label": "Pigeonhole principle",
     "domain": "discrete_math",
     "subdomain": "discrete_math.combinatorics",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "discrete.combinatorics.combinations"
     ],
@@ -292,7 +292,7 @@
     "label": "Stars and bars",
     "domain": "discrete_math",
     "subdomain": "discrete_math.combinatorics",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "discrete.combinatorics.pigeonhole"
     ],
@@ -334,7 +334,7 @@
     "label": "Inclusion-exclusion principle",
     "domain": "discrete_math",
     "subdomain": "discrete_math.sets",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "discrete.sets.relations"
     ],
