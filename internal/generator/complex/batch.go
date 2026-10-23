@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func registerBatch(reg *generator.Registry) {
@@ -96,26 +97,33 @@ func signed(n int) string {
 type partsGen struct{}
 
 func (g *partsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := rand.Intn(17) - 8 // imaginary part of the left side
-	b := rand.Intn(17) - 8 // real part of the right side
+	span := mathutil.ScaleInt(ctx.Difficulty, 8, 30)
+	a := rand.Intn(2*span+1) - span
 	if a == 0 {
 		a = 3
 	}
+	b := rand.Intn(2*span+1) - span
 	if b == 0 {
 		b = 5
 	}
 	left := fmt.Sprintf("x %s %di", map[bool]string{true: "+", false: "-"}[a >= 0], absInt(a))
 	q := fmt.Sprintf("The complex numbers \\(%s\\) and \\(%d + yi\\) are equal. What is \\(x + y\\)?", left, b)
+	ans := strconv.Itoa(b + a)
 	p := generator.Problem{
 		Question: q,
-		Answer:   strconv.Itoa(b + a),
+		Answer:   ans,
 		Facts: map[string]string{
-			"a": strconv.Itoa(a), "b": strconv.Itoa(b),
+			"a":         strconv.Itoa(a),
+			"b":         strconv.Itoa(b),
 			"statement": fmt.Sprintf("%s = %d + yi", left, b),
-			"x":         strconv.Itoa(b), "y": strconv.Itoa(a), "value": strconv.Itoa(b + a),
+			"x":         strconv.Itoa(b),
+			"y":         strconv.Itoa(a),
+			"value":     ans,
+			"answer":    ans,
 		},
 	}
-	p.Explanation = fmt.Sprintf("Two complex numbers are equal exactly when their real parts agree and their imaginary parts agree, so x = %d and y = %d. Then x + y = %d.", b, a, b+a)
+	p.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. Two complex numbers are equal if and only if their real parts agree and their imaginary parts agree: Re(z₁) = Re(z₂) and Im(z₁) = Im(z₂).\n\nSubgoal 2: Substitute parameters. From the equality %s = %d + yi, equate the real components to obtain x = %d and the imaginary components to obtain y = %d.\n\nSubgoal 3: Evaluate and simplify. Compute the required sum: x + y = %d + (%d) = %d.",
+		left, b, b, a, b, a, b+a)
 	return p
 }
 
@@ -125,34 +133,45 @@ type powersGen struct{}
 
 func (g *powersGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	if rand.Intn(2) == 0 {
-		k := 10 + rand.Intn(90)
+		k := mathutil.ScaleInt(ctx.Difficulty, 12, 320) + rand.Intn(4)
 		answers := []string{"1", "i", "-1", "-i"}
-		ans := answers[k%4]
+		rem := k % 4
+		ans := answers[rem]
 		p := generator.Problem{
 			Question: fmt.Sprintf("What is \\(i^{%d}\\)?", k),
 			Answer:   ans,
 			Facts: map[string]string{
-				"base": "i", "exponent": strconv.Itoa(k), "value": ans,
-				"method": fmt.Sprintf("The powers of i repeat with period 4, and %d leaves remainder %d on division by 4.", k, k%4),
+				"base":     "i",
+				"exponent": strconv.Itoa(k),
+				"value":    ans,
+				"answer":   ans,
+				"method":   fmt.Sprintf("The powers of i repeat with period 4; %d leaves remainder %d on division by 4.", k, rem),
 			},
 		}
-		p.Explanation = fmt.Sprintf("The powers of i repeat with period 4: i, -1, -i, 1. Since %d leaves remainder %d on division by 4, \\(i^{%d} = %s\\).", k, k%4, k, ans)
+		p.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. The powers of the imaginary unit i repeat periodically with period 4: i⁰ = 1, i¹ = i, i² = -1 and i³ = -i, so iᵏ = i^(k mod 4).\n\nSubgoal 2: Substitute parameters. Divide the exponent %d by 4 to determine the remainder: %d = 4(%d) + %d, yielding remainder %d.\n\nSubgoal 3: Evaluate and simplify. Evaluate the periodic power: i^{%d} = i^{%d} = %s.",
+			k, k, k/4, rem, rem, k, rem, ans)
 		return p
 	}
-	a := 1 + rand.Intn(4)
-	b := 1 + rand.Intn(4)
+	maxCoeff := mathutil.ScaleInt(ctx.Difficulty, 4, 12)
+	a := 1 + rand.Intn(maxCoeff)
+	b := 1 + rand.Intn(maxCoeff)
 	re := a*a - b*b
 	im := 2 * a * b
 	ans := fmtComplex(re, im)
+	zStr := fmtComplex(a, b)
 	p := generator.Problem{
-		Question: fmt.Sprintf("What is \\((%s)^2\\)?", fmtComplex(a, b)),
+		Question: fmt.Sprintf("What is \\((%s)^2\\)?", zStr),
 		Answer:   ans,
 		Facts: map[string]string{
-			"base": fmtComplex(a, b), "exponent": "2", "value": ans,
-			"method": fmt.Sprintf("Expand the square: (a+bi)^2 = a^2 - b^2 + 2abi, so with a = %d and b = %d the real part is %d - %d and the imaginary part is %d.", a, b, a*a, b*b, im),
+			"base":     zStr,
+			"exponent": "2",
+			"value":    ans,
+			"answer":   ans,
+			"method":   fmt.Sprintf("Expand the square: (a+bi)^2 = a^2 - b^2 + 2abi, so with a = %d and b = %d the real part is %d - %d and the imaginary part is %d.", a, b, a*a, b*b, im),
 		},
 	}
-	p.Explanation = fmt.Sprintf("Square by expanding: (a+bi)^2 = a^2 - b^2 + 2abi. With a = %d and b = %d that is %d - %d + %d i = %s.", a, b, a*a, b*b, im, ans)
+	p.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. Expand the square of a complex binomial using the identity (a + bi)² = a² - b² + 2abi, derived from i² = -1.\n\nSubgoal 2: Substitute parameters. Substitute a = %d and b = %d into the expansion: (%d)² - (%d)² + 2(%d)(%d)i.\n\nSubgoal 3: Evaluate and simplify. Compute the real part %d - %d = %d and imaginary part %d to obtain %s.",
+		a, b, a, b, a, b, a*a, b*b, re, im, ans)
 	return p
 }
 
@@ -161,21 +180,30 @@ func (g *powersGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type reciprocalGen struct{}
 
 func (g *reciprocalGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := 1 + rand.Intn(4)
-	b := 1 + rand.Intn(4)
+	maxCoeff := mathutil.ScaleInt(ctx.Difficulty, 4, 10)
+	a := 1 + rand.Intn(maxCoeff)
+	b := 1 + rand.Intn(maxCoeff)
 	den := a*a + b*b
 	ans := complexFrac(a, den, -b, den)
+	zStr := fmtComplex(a, b)
+	conjStr := fmtComplex(a, -b)
 	p := generator.Problem{
-		Question: fmt.Sprintf("Write \\(\\dfrac{1}{%s}\\) in the form \\(a + bi\\).", fmtComplex(a, b)),
+		Question: fmt.Sprintf("Write \\(\\dfrac{1}{%s}\\) in the form \\(a + bi\\).", zStr),
 		Answer:   ans,
 		Facts: map[string]string{
-			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "den": strconv.Itoa(den), "z": fmtComplex(a, b),
-			"conjugate": fmtComplex(a, -b),
-			"real_num":  strconv.Itoa(a), "imag_num": strconv.Itoa(-b), "value": ans,
+			"a":         strconv.Itoa(a),
+			"b":         strconv.Itoa(b),
+			"den":       strconv.Itoa(den),
+			"z":         zStr,
+			"conjugate": conjStr,
+			"real_num":  strconv.Itoa(a),
+			"imag_num":  strconv.Itoa(-b),
+			"value":     ans,
+			"answer":    ans,
 		},
 	}
-	p.Explanation = fmt.Sprintf("Multiply above and below by the conjugate %s: the denominator becomes %d^2 + %d^2 = %d, and the numerator is %s. So \\(1/(%s) = %s\\).",
-		fmtComplex(a, -b), a, b, den, fmtComplex(a, -b), fmtComplex(a, b), ans)
+	p.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. To write 1/z in Cartesian form a + bi, multiply the numerator and denominator by the complex conjugate z̄ = a - bi: 1/z = z̄ / |z|² = (a - bi) / (a² + b²).\n\nSubgoal 2: Substitute parameters. For z = %s, conjugate is z̄ = %s and the squared modulus is |z|² = %d² + %d² = %d.\n\nSubgoal 3: Evaluate and simplify. Distribute the denominator and reduce real and imaginary fractions to lowest terms to obtain %s.",
+		zStr, conjStr, a, b, den, ans)
 	return p
 }
 
@@ -184,30 +212,52 @@ func (g *reciprocalGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type planeDistanceGen struct{}
 
 func (g *planeDistanceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type triple struct{ a, b, c int }
-	triples := []triple{{3, 4, 5}, {4, 3, 5}, {6, 8, 10}, {8, 6, 10}, {5, 12, 13}, {12, 5, 13}}
-	t := triples[rand.Intn(len(triples))]
+	maxM := mathutil.ScaleInt(ctx.Difficulty, 3, 5)
+	m := 2 + rand.Intn(maxM-1)
+	n := 1 + rand.Intn(m-1)
+	for gcdInt(m, n) > 1 || (m%2 == 1 && n%2 == 1) {
+		m = 2 + rand.Intn(maxM-1)
+		n = 1 + rand.Intn(m-1)
+	}
+	da := m*m - n*n
+	db := 2 * m * n
+	dc := m*m + n*n
+	k := 1 + rand.Intn(mathutil.ScaleInt(ctx.Difficulty, 1, 2))
+	da *= k
+	db *= k
+	dc *= k
 	if rand.Intn(2) == 0 {
-		t.a = -t.a
+		da, db = db, da
 	}
 	if rand.Intn(2) == 0 {
-		t.b = -t.b
+		da = -da
 	}
-	r1 := rand.Intn(9) - 4
-	i1 := rand.Intn(9) - 4
-	r2, i2 := r1+t.a, i1+t.b
+	if rand.Intn(2) == 0 {
+		db = -db
+	}
+	coordSpan := mathutil.ScaleInt(ctx.Difficulty, 6, 15)
+	r1 := rand.Intn(2*coordSpan+1) - coordSpan
+	i1 := rand.Intn(2*coordSpan+1) - coordSpan
+	r2, i2 := r1+da, i1+db
+	z1Str := fmtComplex(r1, i1)
+	z2Str := fmtComplex(r2, i2)
 	q := fmt.Sprintf("Find the distance in the complex plane between \\(%s\\) and \\(%s\\).",
-		fmtComplex(r1, i1), fmtComplex(r2, i2))
+		z1Str, z2Str)
+	ans := strconv.Itoa(dc)
 	p := generator.Problem{
 		Question: q,
-		Answer:   strconv.Itoa(t.c),
+		Answer:   ans,
 		Facts: map[string]string{
-			"z1": fmtComplex(r1, i1), "z2": fmtComplex(r2, i2),
-			"dx": strconv.Itoa(t.a), "dy": strconv.Itoa(t.b), "value": strconv.Itoa(t.c),
+			"z1":     z1Str,
+			"z2":     z2Str,
+			"dx":     strconv.Itoa(da),
+			"dy":     strconv.Itoa(db),
+			"value":  ans,
+			"answer": ans,
 		},
 	}
-	p.Explanation = fmt.Sprintf("The distance is the modulus of the difference: |(%s) - (%s)| = |%s| = sqrt(%d^2 + %d^2) = %d.",
-		fmtComplex(r2, i2), fmtComplex(r1, i1), fmtComplex(t.a, t.b), t.a, t.b, t.c)
+	p.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. The distance between two complex points z₁ = x₁ + y₁i and z₂ = x₂ + y₂i is the modulus of their difference: d = |z₂ - z₁| = √((x₂ - x₁)² + (y₂ - y₁)²).\n\nSubgoal 2: Substitute parameters. Substitute the coordinates to compute coordinate differences: Δx = %d - (%d) = %d and Δy = %d - (%d) = %d.\n\nSubgoal 3: Evaluate and simplify. Evaluate the Euclidean norm: √((%d)² + (%d)²) = √(%d) = %d.",
+		r2, r1, da, i2, i1, db, da, db, da*da+db*db, dc)
 	return p
 }
 
@@ -266,19 +316,31 @@ func (g *lociGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type argArithmeticGen struct{}
 
 func (g *argArithmeticGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a1 := 10 * rand.Intn(36)
-	a2 := 10 * rand.Intn(36)
+	step := 30
+	if ctx.Difficulty > 0.6 {
+		step = 5
+	} else if ctx.Difficulty > 0.3 {
+		step = 15
+	}
+	numSteps := 360 / step
+	a1 := step * rand.Intn(numSteps)
+	a2 := step * rand.Intn(numSteps)
 	sum := (a1 + a2) % 360
 	q := fmt.Sprintf("The complex number z has argument %d\u00b0 and w has argument %d\u00b0. Give the argument of \\(zw\\) in degrees, in the interval \\([0, 360)\\).", a1, a2)
+	ans := strconv.Itoa(sum)
 	p := generator.Problem{
 		Question: q,
-		Answer:   strconv.Itoa(sum),
+		Answer:   ans,
 		Facts: map[string]string{
-			"a1": strconv.Itoa(a1), "a2": strconv.Itoa(a2),
-			"sum": strconv.Itoa(a1 + a2), "value": strconv.Itoa(sum),
+			"a1":     strconv.Itoa(a1),
+			"a2":     strconv.Itoa(a2),
+			"sum":    strconv.Itoa(a1 + a2),
+			"value":  ans,
+			"answer": ans,
 		},
 	}
-	p.Explanation = fmt.Sprintf("Multiplying multiplies the moduli and adds the arguments: arg(zw) = arg z + arg w = %d\u00b0 + %d\u00b0 = %d\u00b0, which reduces to %d\u00b0 modulo 360.", a1, a2, a1+a2, sum)
+	p.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. When multiplying two complex numbers z and w, their moduli multiply and their arguments add modulo 360°: arg(zw) ≡ arg(z) + arg(w) (mod 360°).\n\nSubgoal 2: Substitute parameters. Substitute the given arguments arg(z) = %d° and arg(w) = %d° to find their raw sum: %d° + %d° = %d°.\n\nSubgoal 3: Evaluate and simplify. Reduce modulo 360° into the standard interval [0, 360)°: %d mod 360 = %d.",
+		a1, a2, a1, a2, a1+a2, a1+a2, sum)
 	return p
 }
 
@@ -287,28 +349,42 @@ func (g *argArithmeticGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type complexEquationsGen struct{}
 
 func (g *complexEquationsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := 1 + rand.Intn(3)
-	b := 1 + rand.Intn(3)
+	coeffMax := mathutil.ScaleInt(ctx.Difficulty, 3, 6)
+	rootMax := mathutil.ScaleInt(ctx.Difficulty, 3, 7)
+	a := 1 + rand.Intn(coeffMax)
+	b := 1 + rand.Intn(coeffMax)
 	if rand.Intn(2) == 0 {
 		b = -b
 	}
 	// Choose the answer first so the coefficient equation is exact.
-	pr := rand.Intn(5) - 2
-	pi := rand.Intn(5) - 2
+	pr := rand.Intn(2*rootMax+1) - rootMax
+	pi := rand.Intn(2*rootMax+1) - rootMax
 	c := a*pr - b*pi
 	d := a*pi + b*pr
 	ans := fmtComplex(pr, pi)
-	q := fmt.Sprintf("Solve \\((%s)z = %s\\) for the complex number z.", fmtComplex(a, b), fmtComplex(c, d))
+	lhsStr := fmtComplex(a, b)
+	rhsStr := fmtComplex(c, d)
+	conjStr := fmtComplex(a, -b)
+	den := a*a + b*b
+	q := fmt.Sprintf("Solve \\((%s)z = %s\\) for the complex number z.", lhsStr, rhsStr)
 	p := generator.Problem{
 		Question: q,
 		Answer:   ans,
 		Facts: map[string]string{
-			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "c": strconv.Itoa(c), "d": strconv.Itoa(d),
-			"lhs": fmtComplex(a, b), "rhs": fmtComplex(c, d),
-			"re": strconv.Itoa(pr), "im": strconv.Itoa(pi), "value": ans,
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"c":      strconv.Itoa(c),
+			"d":      strconv.Itoa(d),
+			"lhs":    lhsStr,
+			"rhs":    rhsStr,
+			"re":     strconv.Itoa(pr),
+			"im":     strconv.Itoa(pi),
+			"value":  ans,
+			"answer": ans,
 		},
 	}
-	p.Explanation = fmt.Sprintf("Divide both sides by %s, which means multiplying by its conjugate %s over %d: z = %s.", fmtComplex(a, b), fmtComplex(a, -b), a*a+b*b, ans)
+	p.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. To solve the linear complex equation (a + bi)z = c + di, divide both sides by (a + bi) by multiplying numerator and denominator by the complex conjugate (a - bi): z = (c + di)(a - bi) / (a² + b²).\n\nSubgoal 2: Substitute parameters. With a + bi = %s and c + di = %s, conjugate is %s and squared modulus is %d² + (%d)² = %d.\n\nSubgoal 3: Evaluate and simplify. Expand numerator (%s)(%s) = %d + (%d)i and divide by %d to obtain z = %s.",
+		lhsStr, rhsStr, conjStr, a, b, den, rhsStr, conjStr, den*pr, den*pi, den, ans)
 	return p
 }
 
@@ -390,7 +466,8 @@ func (g *hyperbolicGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type complexSeriesGen struct{}
 
 func (g *complexSeriesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	k := 2 + rand.Intn(3) // ratio i/k, modulus 1/k < 1
+	maxK := mathutil.ScaleInt(ctx.Difficulty, 4, 8)
+	k := 2 + rand.Intn(maxK-1) // ratio i/k, modulus 1/k < 1
 	den := k*k + 1
 	reN := k * k
 	imN := k
@@ -401,11 +478,17 @@ func (g *complexSeriesGen) Generate(ctx generator.GeneratorContext) generator.Pr
 		Question: q,
 		Answer:   ans,
 		Facts: map[string]string{
-			"k": strconv.Itoa(k), "ratio": r, "den": strconv.Itoa(den),
-			"real_num": strconv.Itoa(reN), "imag_num": strconv.Itoa(imN), "value": ans,
+			"k":        strconv.Itoa(k),
+			"ratio":    r,
+			"den":      strconv.Itoa(den),
+			"real_num": strconv.Itoa(reN),
+			"imag_num": strconv.Itoa(imN),
+			"value":    ans,
+			"answer":   ans,
 		},
 	}
-	p.Explanation = fmt.Sprintf("The modulus is 1/%d < 1, so the geometric series converges to 1/(1 - r) = 1/(1 - i/%d). Multiplying by the conjugate of the denominator gives %s.", k, k, ans)
+	p.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. An infinite geometric series 1 + r + r² + ⋯ with complex common ratio |r| < 1 converges to S = 1 / (1 - r).\n\nSubgoal 2: Substitute parameters. For ratio r = %s, modulus is |r| = 1/%d < 1, so S = 1 / (1 - i/%d) = %d / (%d - i).\n\nSubgoal 3: Evaluate and simplify. Multiply numerator and denominator by conjugate (%d + i): S = %d(%d + i) / (%d² + 1²) = (%d + %di)/%d = %s.",
+		r, k, k, k, k, k, k, k, k, reN, imN, den, ans)
 	return p
 }
 
@@ -414,13 +497,14 @@ func (g *complexSeriesGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type mobiusFixedGen struct{}
 
 func (g *mobiusFixedGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	c := 1 + rand.Intn(2)
-	rootA := rand.Intn(7) - 3
-	rootB := rand.Intn(7) - 3
+	span := mathutil.ScaleInt(ctx.Difficulty, 3, 7)
+	c := 1 + rand.Intn(mathutil.ScaleInt(ctx.Difficulty, 1, 2))
+	rootA := rand.Intn(2*span+1) - span
+	rootB := rand.Intn(2*span+1) - span
 	for rootB == rootA {
-		rootB = rand.Intn(7) - 3
+		rootB = rand.Intn(2*span+1) - span
 	}
-	a := rand.Intn(7) - 3
+	a := rand.Intn(2*span+1) - span
 	b := -c * rootA * rootB // fixes the constant term of cz^2 + (d-a)z - b = 0
 	d := a - c*(rootA+rootB)
 	for a*d-b*c == 0 { // degenerate maps are not Mobius transformations
@@ -438,13 +522,19 @@ func (g *mobiusFixedGen) Generate(ctx generator.GeneratorContext) generator.Prob
 		Question: question,
 		Answer:   ans,
 		Facts: map[string]string{
-			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "c": strconv.Itoa(c), "d": strconv.Itoa(d),
-			"fz":    fmt.Sprintf("(%dz %s)/(%dz %s)", a, signed(b), c, signed(d)),
-			"root1": strconv.Itoa(lo), "root2": strconv.Itoa(hi), "value": ans,
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"c":      strconv.Itoa(c),
+			"d":      strconv.Itoa(d),
+			"fz":     fmt.Sprintf("(%dz %s)/(%dz %s)", a, signed(b), c, signed(d)),
+			"root1":  strconv.Itoa(lo),
+			"root2":  strconv.Itoa(hi),
+			"value":  ans,
+			"answer": ans,
 		},
 	}
-	pb.Explanation = fmt.Sprintf("Clearing the denominator gives %dz^2 %sz %s = 0, whose roots are %d and %d. The larger real part is %d.",
-		c, signed(d-a), signed(-b), lo, hi, hi)
+	pb.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. A fixed point of the Möbius transformation f(z) = (az + b)/(cz + d) satisfies z = f(z), which cross-multiplies to cz² + (d - a)z - b = 0.\n\nSubgoal 2: Substitute parameters. Substitute coefficients a = %d, b = %d, c = %d and d = %d to form %dz² %sz %s = 0, whose roots are z₁ = %d and z₂ = %d.\n\nSubgoal 3: Evaluate and simplify. Compare the real roots: the larger fixed point is %d.",
+		a, b, c, d, c, signed(d-a), signed(-b), lo, hi, hi)
 	return pb
 }
 
@@ -453,11 +543,12 @@ func (g *mobiusFixedGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type simpleResidueGen struct{}
 
 func (g *simpleResidueGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := 1 + rand.Intn(4)
-	p := rand.Intn(5) - 2
-	q := 1 + rand.Intn(4)
-	u := rand.Intn(7) - 3
-	v := rand.Intn(7) - 3
+	span := mathutil.ScaleInt(ctx.Difficulty, 3, 7)
+	a := 1 + rand.Intn(mathutil.ScaleInt(ctx.Difficulty, 3, 6))
+	p := rand.Intn(2*span+1) - span
+	q := 1 + rand.Intn(span)
+	u := rand.Intn(2*span+1) - span
+	v := rand.Intn(2*span+1) - span
 	z0 := fmtComplex(p, q)
 	re := a*p + u
 	im := a*q + v
@@ -468,13 +559,18 @@ func (g *simpleResidueGen) Generate(ctx generator.GeneratorContext) generator.Pr
 		Question: q2,
 		Answer:   ans,
 		Facts: map[string]string{
-			"a": strconv.Itoa(a), "z0": z0, "constant": fmtSignedComplex(u, v),
-			"fz":   fmt.Sprintf("(%dz %s)/(z - (%s))", a, fmtSignedComplex(u, v), z0),
-			"real": strconv.Itoa(re), "imag": strconv.Itoa(im), "value": ans,
+			"a":        strconv.Itoa(a),
+			"z0":       z0,
+			"constant": fmtSignedComplex(u, v),
+			"fz":       fmt.Sprintf("(%dz %s)/(z - (%s))", a, fmtSignedComplex(u, v), z0),
+			"real":     strconv.Itoa(re),
+			"imag":     strconv.Itoa(im),
+			"value":    ans,
+			"answer":   ans,
 		},
 	}
-	pb.Explanation = fmt.Sprintf("The pole is simple, so the residue is \\(\\lim_{z \\to %s} (z - %s) f(z)\\), which is just %d(%s) %s = %s.",
-		z0, z0, a, z0, fmtSignedComplex(u, v), ans)
+	pb.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. At a simple pole z₀, the residue of f(z) = g(z)/(z - z₀) is given by Res(f, z₀) = lim_{z → z₀} (z - z₀)f(z) = g(z₀).\n\nSubgoal 2: Substitute parameters. Here g(z) = %dz %s where the pole is located at z₀ = %s.\n\nSubgoal 3: Evaluate and simplify. Evaluate the numerator at z₀: %d(%s) %s = %s.",
+		a, fmtSignedComplex(u, v), z0, a, z0, fmtSignedComplex(u, v), ans)
 	return pb
 }
 
@@ -491,11 +587,14 @@ func fmtSignedComplex(r, i int) string {
 type crossRatioGen struct{}
 
 func (g *crossRatioGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	// Four distinct real points, which makes the cross-ratio real.
-	z1 := rand.Intn(3)
-	z2 := z1 + 2 + rand.Intn(3)
-	z3 := z2 + 1 + rand.Intn(3)
-	z4 := z3 + 1 + rand.Intn(4)
+	span := mathutil.ScaleInt(ctx.Difficulty, 2, 6)
+	z1 := rand.Intn(span) - span/2
+	gap1 := 1 + rand.Intn(span)
+	gap2 := 1 + rand.Intn(span)
+	gap3 := 1 + rand.Intn(span)
+	z2 := z1 + gap1
+	z3 := z2 + gap2
+	z4 := z3 + gap3
 	num := (z3 - z1) * (z4 - z2)
 	den := (z3 - z2) * (z4 - z1)
 	ans := fracStr(num, den)
@@ -505,12 +604,18 @@ func (g *crossRatioGen) Generate(ctx generator.GeneratorContext) generator.Probl
 		Question: q,
 		Answer:   ans,
 		Facts: map[string]string{
-			"z1": strconv.Itoa(z1), "z2": strconv.Itoa(z2), "z3": strconv.Itoa(z3), "z4": strconv.Itoa(z4),
-			"numerator": strconv.Itoa(num), "denominator": strconv.Itoa(den), "value": ans,
+			"z1":          strconv.Itoa(z1),
+			"z2":          strconv.Itoa(z2),
+			"z3":          strconv.Itoa(z3),
+			"z4":          strconv.Itoa(z4),
+			"numerator":   strconv.Itoa(num),
+			"denominator": strconv.Itoa(den),
+			"value":       ans,
+			"answer":      ans,
 		},
 	}
-	p.Explanation = fmt.Sprintf("Substitute the four points: (%d - %d)(%d - %d) = %d over (%d - %d)(%d - %d) = %d, which is %s. The value is real, as it must be for four points on a line.",
-		z3, z1, z4, z2, num, z3, z2, z4, z1, den, ans)
+	p.Explanation = fmt.Sprintf("Subgoal 1: State governing formula. The cross-ratio (z₁, z₂; z₃, z₄) is defined as (z₃ - z₁)(z₄ - z₂) / ((z₃ - z₂)(z₄ - z₁)).\n\nSubgoal 2: Substitute parameters. Substitute the given points: numerator is (%d - %d)(%d - %d) = (%d)(%d) = %d while denominator is (%d - %d)(%d - %d) = (%d)(%d) = %d.\n\nSubgoal 3: Evaluate and simplify. Divide terms and reduce fraction to lowest terms: %d/%d = %s.",
+		z3, z1, z4, z2, z3-z1, z4-z2, num, z3, z2, z4, z1, z3-z2, z4-z1, den, num, den, ans)
 	return p
 }
 
