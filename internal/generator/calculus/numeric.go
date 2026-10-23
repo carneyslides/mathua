@@ -1,22 +1,19 @@
 package calculus
 
-// The numeric calculus concepts the domain was still missing: the value of a convergent geometric
-// series, the limit of a rational sequence, a recursive sequence's term, the mass of a lamina, a
-// definite integral by substitution, the mass from a variable density, a higher-order derivative at a
-// point, and a directional derivative in a given direction.
+// The numeric calculus concepts: the limit of a rational sequence, a recursive sequence's term,
+// the sum of an arithmetic sequence, the mass of a lamina with uniform density, a definite integral
+// by substitution, the mass from a linear density and a higher-order derivative at a point.
 //
-// The domain's series, sequences and multivariable concepts are almost all `symbolic`, and the
-// corpus records what that means in production: the grading runtime has no SymPy, so a symbolic
-// answer always grades incorrect. These eight are `numeric` instead.
-//
-// Every answer is an integer by construction: the geometric ratio is chosen so the sum is whole, the
-// sequence's leading coefficients divide, the substitution integrand is an exact derivative, the
-// derivative is a falling factorial times a whole power, and the direction is given unnormalised.
+// Converted to parametric generators scaling with ctx.Difficulty using mathutil primitives
+// and structured three-subgoal cognitive derivations in explanations.
+
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func registerNumeric(reg *generator.Registry) {
@@ -33,8 +30,7 @@ func registerNumeric(reg *generator.Registry) {
 type sequenceLimitGen struct{}
 
 // squaredPoly writes q n^2 + l n + c without the leading 1 or a zero term, so a
-// denominator of 1n^2 + 2n + 6 reads as n^2 + 2n + 6 (reports 186 and 181 both
-// showed the stray coefficient).
+// denominator of 1n^2 + 2n + 6 reads as n^2 + 2n + 6.
 func squaredPoly(q, l, c int) string {
 	out := fmt.Sprintf("%dn^2", q)
 	if q == 1 {
@@ -59,128 +55,218 @@ func squaredPoly(q, l, c int) string {
 }
 
 func (g *sequenceLimitGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	ratio := 1 + rand.Intn(3+int(ctx.Difficulty*3))
-	d := 1 + rand.Intn(2+int(ctx.Difficulty*3))
+	maxRatio := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	ratio := 1 + rand.Intn(maxRatio)
+	maxD := mathutil.ScaleInt(ctx.Difficulty, 2, 6)
+	d := 1 + rand.Intn(maxD)
+	for (ratio*d)%10 == 1 && ratio*d > 1 {
+		ratio++
+	}
 	a := ratio * d
-	b, c := rand.Intn(9), rand.Intn(9)
-	e, f := rand.Intn(9), rand.Intn(9)
+	b, c := rand.Intn(10), rand.Intn(10)
+	e, f := rand.Intn(10), rand.Intn(10)
+	ans := strconv.Itoa(ratio)
+
+	q := fmt.Sprintf("Find \\(\\lim_{n \\to \\infty} \\frac{%s}{%s}\\).", squaredPoly(a, b, c), squaredPoly(d, e, f))
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. For a rational sequence a_n = P(n)/Q(n) where numerator and denominator have the same degree 2, the limit as n approaches infinity equals the ratio of leading coefficients: lim_{n → ∞} a_n = a_2 / b_2.\n\nSubgoal 2: Substitute parameters. Identify leading quadratic coefficients: the numerator %s has leading coefficient %d and the denominator %s has leading coefficient %d.\n\nSubgoal 3: Evaluate and simplify. Divide leading coefficients: lim_{n → ∞} a_n = %d / %d = %d.",
+		squaredPoly(a, b, c), a, squaredPoly(d, e, f), d, a, d, ratio)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Find \\\\(\\\\lim_{n \\\\to \\\\infty} \\\\frac{%s}{%s}\\\\).", squaredPoly(a, b, c), squaredPoly(d, e, f)),
-		Answer:   fmt.Sprintf("%d", ratio),
-		Explanation: fmt.Sprintf("For a ratio of polynomials at infinity only the highest powers matter, so the limit is the ratio of the leading coefficients: %d/%d = %d. The lower terms are negligible because the squared terms grow fastest.",
-			a, d, ratio),
-		Facts: map[string]string{"limit": fmt.Sprintf("%d", ratio)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"answer": ans,
+		},
 	}
 }
 
-// recursiveValueGen iterates an affine recurrence a fixed number of steps.
+// recursiveValueGen iterates an affine recurrence relation.
 type recursiveValueGen struct{}
 
 func (g *recursiveValueGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	start := 1 + rand.Intn(6+int(ctx.Difficulty*6))
-	r := 2 + rand.Intn(2+int(ctx.Difficulty*2))
-	c := 1 + rand.Intn(5+int(ctx.Difficulty*5))
-	steps := 2 + rand.Intn(3+int(ctx.Difficulty*3))
+	maxStart := mathutil.ScaleInt(ctx.Difficulty, 4, 12)
+	start := 1 + rand.Intn(maxStart)
+	maxR := mathutil.ScaleInt(ctx.Difficulty, 2, 4)
+	r := 2 + rand.Intn(maxR)
+	maxC := mathutil.ScaleInt(ctx.Difficulty, 3, 8)
+	c := 1 + rand.Intn(maxC)
+	maxSteps := mathutil.ScaleInt(ctx.Difficulty, 2, 4)
+	steps := 2 + rand.Intn(maxSteps)
+	target := steps + 1
+
 	v := start
 	for i := 0; i < steps; i++ {
 		v = r*v + c
 	}
+	ans := strconv.Itoa(v)
+
+	q := fmt.Sprintf("A sequence is defined by \\(a_1 = %d\\) and \\(a_{n+1} = %da_n %+d\\). Find \\(a_{%d}\\).", start, r, c, target)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. An affine recurrence relation a_{n+1} = r·a_n + c is solved by iteratively generating terms starting from initial term a_1.\n\nSubgoal 2: Substitute parameters. Begin with a_1 = %d and apply the recursive step a_{n+1} = %da_n %+d across %d iterations to reach term index %d.\n\nSubgoal 3: Evaluate and simplify. Evaluating the recurrence successive times yields a_%d = %d.",
+		start, r, c, steps, target, target, v)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A sequence is defined by \\\\(a_1 = %d\\\\) and \\\\(a_{n+1} = %da_n + %d\\\\). Find \\\\(a_{%d}\\\\).", start, r, c, steps+1),
-		Answer:   fmt.Sprintf("%d", v),
-		Explanation: fmt.Sprintf("Apply the recurrence %d times: each term is %d times the one before plus %d, which gives %d. A recursive sequence is defined by what each term does to its predecessor, so the only way to reach a term is through the ones before it.",
-			steps, r, c, v),
-		Facts: map[string]string{"value": fmt.Sprintf("%d", v)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"start":  strconv.Itoa(start),
+			"r":      strconv.Itoa(r),
+			"target": strconv.Itoa(target),
+			"answer": ans,
+		},
 	}
 }
 
-// massLaminaGen multiplies a constant density by an area.
+// arithmeticSumGen evaluates the sum of an arithmetic sequence.
+type arithmeticSumGen struct{}
+
+func (g *arithmeticSumGen) Generate(ctx generator.GeneratorContext) generator.Problem {
+	maxA := mathutil.ScaleInt(ctx.Difficulty, 5, 20)
+	a := rand.Intn(2*maxA+1) - maxA
+	maxD := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	d := 1 + rand.Intn(maxD)
+	maxNHalf := mathutil.ScaleInt(ctx.Difficulty, 3, 8)
+	nHalf := 1 + rand.Intn(maxNHalf)
+	n := 2 * nHalf // even so n/2 is whole
+	sum := n * (2*a + (n-1)*d) / 2
+	ans := strconv.Itoa(sum)
+
+	q := fmt.Sprintf("Find the sum of the arithmetic sequence with first term %d, common difference %d and %d terms.", a, d, n)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The sum of the first n terms of an arithmetic progression is given by S_n = (n/2)·[2a + (n - 1)d].\n\nSubgoal 2: Substitute parameters. Substitute initial term a = %d, common difference d = %d and term count n = %d into the summation formula: S_%d = (%d/2)·[2(%d) + (%d - 1)(%d)].\n\nSubgoal 3: Evaluate and simplify. Evaluate inside brackets: 2(%d) + (%d)(%d) = %d + %d = %d. Multiplying by n/2 = %d gives S_%d = %d · %d = %d.",
+		a, d, n, n, n, a, n, d, a, n-1, d, 2*a, (n-1)*d, 2*a+(n-1)*d, nHalf, n, nHalf, 2*a+(n-1)*d, sum)
+
+	return generator.Problem{
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"first_term": strconv.Itoa(a),
+			"difference": strconv.Itoa(d),
+			"terms":      strconv.Itoa(n),
+			"answer":     ans,
+		},
+	}
+}
+
+// massLaminaGen calculates the mass of a rectangular lamina with uniform density.
 type massLaminaGen struct{}
 
 func (g *massLaminaGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	rho := 1 + rand.Intn(4+int(ctx.Difficulty*6))
-	w := 2 + rand.Intn(5+int(ctx.Difficulty*6))
-	h := 2 + rand.Intn(5+int(ctx.Difficulty*6))
+	maxRho := mathutil.ScaleInt(ctx.Difficulty, 4, 12)
+	rho := 1 + rand.Intn(maxRho)
+	maxW := mathutil.ScaleInt(ctx.Difficulty, 4, 15)
+	w := 2 + rand.Intn(maxW)
+	maxH := mathutil.ScaleInt(ctx.Difficulty, 4, 15)
+	h := 2 + rand.Intn(maxH)
+	mass := rho * w * h
+	ans := strconv.Itoa(mass)
+
+	q := fmt.Sprintf("A rectangular lamina is %d units by %d units and has uniform density %d per unit area. Find its mass.", w, h, rho)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. For a planar lamina with uniform area density ρ over region R, total mass equals M = ρ · Area(R) = ρ · (width · height).\n\nSubgoal 2: Substitute parameters. Substitute width %d, height %d and density %d into the total mass formula.\n\nSubgoal 3: Evaluate and simplify. Compute area %d · %d = %d and multiply by density: M = %d · %d = %d units.",
+		w, h, rho, w, h, w*h, rho, w*h, mass)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A rectangular lamina is %d units by %d units and has uniform density %d per unit area. Find its mass.", w, h, rho),
-		Answer:   fmt.Sprintf("%d", rho*w*h),
-		Explanation: fmt.Sprintf("With a uniform density the mass is the density times the area: %d * (%d * %d) = %d. When the density varies, the same idea becomes an integral of the density over the region, which is what the double integral computes.",
-			rho, w, h, rho*w*h),
-		Facts: map[string]string{"mass": fmt.Sprintf("%d", rho*w*h)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"width":   strconv.Itoa(w),
+			"height":  strconv.Itoa(h),
+			"density": strconv.Itoa(rho),
+			"answer":  ans,
+		},
 	}
 }
 
-// substitutionValueGen integrates an exact derivative over a symmetric interval.
+// substitutionValueGen evaluates a definite integral using u-substitution.
 type substitutionValueGen struct{}
 
 func (g *substitutionValueGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := 2 * (1 + rand.Intn(3+int(ctx.Difficulty*3))) // even, so the endpoint substitution is whole
-	// integral from 0 to a of 2x (x^2 + 1) dx = ((a^2+1)^2 - 1)/2
-	v := ((a*a+1)*(a*a+1) - 1) / 2
+	maxA := mathutil.ScaleInt(ctx.Difficulty, 3, 8)
+	aHalf := 1 + rand.Intn(maxA)
+	a := 2 * aHalf // even so ((a^2+1)^2 - 1)/2 is whole
+	uTop := a*a + 1
+	v := (uTop*uTop - 1) / 2
+	ans := strconv.Itoa(v)
+
+	q := fmt.Sprintf("Evaluate \\(\\int_0^{%d} 2x(x^2 + 1)\\,dx\\).", a)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. By u-substitution, an integral ∫_α^β g'(x) f(g(x)) dx transforms into ∫_{g(α)}^{g(β)} f(u) du using substitution u = g(x) and differential du = g'(x) dx.\n\nSubgoal 2: Substitute parameters. Let u = x^2 + 1 so du = 2x dx. When x = 0, u = 0^2 + 1 = 1; when x = %d, u = (%d)^2 + 1 = %d. The integral becomes ∫_1^{%d} u du.\n\nSubgoal 3: Evaluate and simplify. Integrate to obtain [u^2 / 2]_1^{%d} = (%d^2 - 1^2) / 2 = (%d - 1) / 2 = %d.",
+		a, a, uTop, uTop, uTop, uTop, uTop*uTop, v)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Evaluate \\\\(\\\\int_0^{%d} 2x(x^2 + 1)\\\\,dx\\\\).", a),
-		Answer:   fmt.Sprintf("%d", v),
-		Explanation: fmt.Sprintf("Let u = x^2 + 1, so du = 2x dx, which is exactly what multiplies the bracket: the integral becomes the integral of u du from 1 to %d. That evaluates to (u^2)/2 between those limits, giving %d. Substitution is the chain rule read backwards, which is why the 2x has to be present for it to work.",
-			a*a+1, v),
-		Facts: map[string]string{"value": fmt.Sprintf("%d", v)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"answer": ans,
+		},
 	}
 }
 
-// massDensityGen integrates a linear density along a rod.
+// massDensityGen integrates a linear density function along a one-dimensional rod.
 type massDensityGen struct{}
 
 func (g *massDensityGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	k := 2 * (1 + rand.Intn(3+int(ctx.Difficulty*4))) // even, so kL^2/2 is whole for any L
-	l := 1 + rand.Intn(5+int(ctx.Difficulty*6))
-	v := k * l * l / 2
+	maxK := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	kHalf := 1 + rand.Intn(maxK)
+	k := 2 * kHalf // even so k L^2 / 2 is whole
+	maxL := mathutil.ScaleInt(ctx.Difficulty, 4, 15)
+	l := 1 + rand.Intn(maxL)
+	v := kHalf * l * l
+	ans := strconv.Itoa(v)
+
+	q := fmt.Sprintf("A rod of length %d has linear density \\(\\rho(x) = %dx\\) at a distance \\(x\\) from one end. Find its mass.", l, k)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The total mass of a straight rod of length L with variable linear density ρ(x) is given by M = ∫_0^L ρ(x) dx.\n\nSubgoal 2: Substitute parameters. Insert linear density function ρ(x) = %dx and upper integration limit L = %d: M = ∫_0^{%d} %dx dx.\n\nSubgoal 3: Evaluate and simplify. Find the antiderivative and evaluate at limits: M = [%d x^2 / 2]_0^{%d} = %d(%d)^2 = %d(%d) = %d.",
+		k, l, l, k, k, l, kHalf, l, kHalf, l*l, v)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A rod of length %d has linear density \\\\(\\\\rho(x) = %dx\\\\) at a distance \\\\(x\\\\) from one end. Find its mass.", l, k),
-		Answer:   fmt.Sprintf("%d", v),
-		Explanation: fmt.Sprintf("Mass is the integral of density over the length: the integral of %dx from 0 to %d is %d*%d^2/2 = %d. A varying density is why the mass is an integral rather than a multiplication, even though the units are the same.",
-			k, l, k, l, v),
-		Facts: map[string]string{"mass": fmt.Sprintf("%d", v)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"length": strconv.Itoa(l),
+			"k":      strconv.Itoa(k),
+			"answer": ans,
+		},
 	}
 }
 
-// higherOrderValueGen evaluates a falling factorial times a whole power.
+// higherOrderValueGen evaluates a higher-order derivative of a monomial power function at a point.
 type higherOrderValueGen struct{}
 
 func (g *higherOrderValueGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	n := 2 + rand.Intn(3+int(ctx.Difficulty*3))
+	maxN := mathutil.ScaleInt(ctx.Difficulty, 3, 6)
+	n := 3 + rand.Intn(maxN-2)
 	k := 1 + rand.Intn(n-1)
-	a := 1 + rand.Intn(2+int(ctx.Difficulty*2))
-	// n!/(n-k)! * a^(n-k)
+	maxA := mathutil.ScaleInt(ctx.Difficulty, 2, 4)
+	a := 1 + rand.Intn(maxA)
+
 	coef := 1
 	for i := 0; i < k; i++ {
-		coef *= n - i
+		coef *= (n - i)
 	}
 	pw := 1
 	for i := 0; i < n-k; i++ {
 		pw *= a
 	}
 	v := coef * pw
-	return generator.Problem{
-		Question: fmt.Sprintf("For \\\\(f(x) = x^{%d}\\\\), find \\\\(f^{(%d)}(%d)\\\\).", n, k, a),
-		Answer:   fmt.Sprintf("%d", v),
-		Explanation: fmt.Sprintf("Each derivative brings down the current power and reduces it: the k-th derivative of x^n is n!/(n-k)! times x^(n-k), so here it is %d times %d^%d = %d. The power rule applied %d times is the whole computation.",
-			coef, a, n-k, v, k),
-		Facts: map[string]string{"value": fmt.Sprintf("%d", v)},
-	}
-}
+	ans := strconv.Itoa(v)
 
-// arithmeticSumGen adds an arithmetic sequence, with an even number of terms so the half is whole.
-type arithmeticSumGen struct{}
+	q := fmt.Sprintf("For \\(f(x) = x^{%d}\\), find \\(f^{(%d)}(%d)\\).", n, k, a)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. Repeated differentiation using the power rule gives the k-th derivative of f(x) = x^n as f^{(k)}(x) = [n! / (n - k)!] · x^{n - k} for order 1 ≤ k ≤ n.\n\nSubgoal 2: Substitute parameters. For degree n = %d and derivative order k = %d, falling factorial coefficient is %d! / (%d - %d)! = %d. The derivative is f^{(%d)}(x) = %d x^{%d}.\n\nSubgoal 3: Evaluate and simplify. Evaluate derivative at x = %d: f^{(%d)}(%d) = %d · (%d)^{%d} = %d · %d = %d.",
+		n, k, n, n, k, coef, k, coef, n-k, a, k, a, coef, a, n-k, coef, pw, v)
 
-func (g *arithmeticSumGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := -3 + rand.Intn(8+int(ctx.Difficulty*6))      // the first term
-	d := 1 + rand.Intn(4+int(ctx.Difficulty*5))       // the common difference
-	n := 2 * (1 + rand.Intn(3+int(ctx.Difficulty*5))) // an even number of terms
-	sum := n * (2*a + (n-1)*d) / 2
 	return generator.Problem{
-		Question: fmt.Sprintf("Find the sum of the arithmetic sequence with first term %d, common difference %d, and %d terms.", a, d, n),
-		Answer:   fmt.Sprintf("%d", sum),
-		Explanation: fmt.Sprintf("An arithmetic sequence sums by pairing the first term with the last: the last term is %d, the average of the pair is (%d + %d)/2 = %d, and %d terms at that average give %d. The pairing is Gauss's method, and it needs the number of terms for the average to be well defined.",
-			a+(n-1)*d, a, a+(n-1)*d, (2*a+(n-1)*d)/2, n, sum),
-		Facts: map[string]string{"sum": fmt.Sprintf("%d", sum), "terms": fmt.Sprintf("%d", n)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"n":      strconv.Itoa(n),
+			"k":      strconv.Itoa(k),
+			"a":      strconv.Itoa(a),
+			"answer": ans,
+		},
 	}
 }
