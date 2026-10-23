@@ -230,7 +230,7 @@
   "label": "Variance and covariance of random variables",
   "domain": "statistics",
   "subdomain": "statistics.advanced",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "stat.adv.variance"
   ],

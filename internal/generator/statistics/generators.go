@@ -475,24 +475,126 @@ func (g *countingGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type covarianceGen struct{}
 
 func (g *covarianceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"Do two variables that tend to increase together have positive covariance? (yes/no)", "yes", "Positive covariance means the variables tend to increase together."},
-		{"Do two variables that move in opposite directions have positive covariance? (yes/no)", "no", "Negative covariance means one tends to increase while the other decreases."},
-		{"What does covariance near zero indicate?", "no linear relationship", "Zero or near-zero covariance suggests no linear relationship between variables."},
-		{"Is covariance scale-dependent or scale-invariant?", "scale-dependent", "Covariance depends on the units of measurement; it is not standardized."},
-		{"For a sample of size 11, what is the denominator of the sample covariance?", "10", "Sample covariance divides by (n-1) = 10, while population covariance divides by n."},
-		{"Is correlation equal to covariance divided by the product of the standard deviations? (yes/no)", "yes", "Pearson correlation standardizes covariance by dividing by the product of standard deviations."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type covDefItem struct {
+			ex  int
+			ey  int
+			exy int
+			cov int
+		}
+		items := []covDefItem{
+			{5, 6, 42, 12},
+			{4, 7, 38, 10},
+			{8, 5, 55, 15},
+			{6, 9, 68, 14},
+			{3, 10, 48, 18},
+			{7, 8, 76, 20},
+			{9, 4, 52, 16},
+			{10, 5, 75, 25},
+		}
+		it := items[rand.Intn(len(items))]
+		prod := it.ex * it.ey
+		return generator.Problem{
+			Question: fmt.Sprintf("Random variables \\(X\\) and \\(Y\\) satisfy \\(E[X] = %d\\), \\(E[Y] = %d\\) and \\(E[XY] = %d\\). Calculate the covariance \\(\\operatorname{Cov}(X, Y)\\).", it.ex, it.ey, it.exy),
+			Answer:   fmt.Sprintf("%d", it.cov),
+			Explanation: fmt.Sprintf("By definition, \\(\\operatorname{Cov}(X, Y) = E[XY] - E[X]E[Y] = %d - (%d \\cdot %d) = %d - %d = %d\\).",
+				it.exy, it.ex, it.ey, it.exy, prod, it.cov),
+		}
+	case 1:
+		type varSumItem struct {
+			vx  int
+			vy  int
+			cov int
+			v   int
+		}
+		items := []varSumItem{
+			{15, 20, 6, 47},
+			{18, 24, 5, 52},
+			{25, 30, 8, 71},
+			{12, 16, 4, 36},
+			{32, 28, 10, 80},
+			{40, 35, 12, 99},
+			{22, 18, 7, 54},
+			{50, 45, 15, 125},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X\\) and \\(Y\\) have variances \\(\\operatorname{Var}(X) = %d\\) and \\(\\operatorname{Var}(Y) = %d\\), with \\(\\operatorname{Cov}(X, Y) = %d\\). Determine \\(\\operatorname{Var}(X + Y)\\).", it.vx, it.vy, it.cov),
+			Answer:   fmt.Sprintf("%d", it.v),
+			Explanation: fmt.Sprintf("The variance of a sum is \\(\\operatorname{Var}(X + Y) = \\operatorname{Var}(X) + \\operatorname{Var}(Y) + 2\\operatorname{Cov}(X, Y) = %d + %d + 2(%d) = %d\\).",
+				it.vx, it.vy, it.cov, it.v),
+		}
+	case 2:
+		type varDiffItem struct {
+			vx  int
+			vy  int
+			cov int
+			v   int
+		}
+		items := []varDiffItem{
+			{20, 15, 4, 27},
+			{30, 25, 6, 43},
+			{40, 35, 10, 55},
+			{28, 22, 5, 40},
+			{50, 30, 12, 56},
+			{45, 40, 15, 55},
+			{36, 24, 8, 44},
+			{60, 50, 20, 70},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Given \\(\\operatorname{Var}(X) = %d\\), \\(\\operatorname{Var}(Y) = %d\\) and \\(\\operatorname{Cov}(X, Y) = %d\\), compute \\(\\operatorname{Var}(X - Y)\\).", it.vx, it.vy, it.cov),
+			Answer:   fmt.Sprintf("%d", it.v),
+			Explanation: fmt.Sprintf("The variance of a difference is \\(\\operatorname{Var}(X - Y) = \\operatorname{Var}(X) + \\operatorname{Var}(Y) - 2\\operatorname{Cov}(X, Y) = %d + %d - 2(%d) = %d\\).",
+				it.vx, it.vy, it.cov, it.v),
+		}
+	case 3:
+		type scaleItem struct {
+			cov int
+			a   int
+			b   int
+			ans int
+		}
+		items := []scaleItem{
+			{4, 3, 2, 24},
+			{5, 2, 4, 40},
+			{6, 3, 3, 54},
+			{7, 4, 2, 56},
+			{8, 2, 5, 80},
+			{3, 5, 4, 60},
+			{9, 2, 3, 54},
+			{10, 3, 4, 120},
+		}
+		it := items[rand.Intn(len(items))]
+		ab := it.a * it.b
+		return generator.Problem{
+			Question: fmt.Sprintf("If \\(\\operatorname{Cov}(X, Y) = %d\\), calculate \\(\\operatorname{Cov}(%dX, %dY)\\).", it.cov, it.a, it.b),
+			Answer:   fmt.Sprintf("%d", it.ans),
+			Explanation: fmt.Sprintf("By the bilinear property of covariance, \\(\\operatorname{Cov}(%dX, %dY) = (%d \\cdot %d)\\operatorname{Cov}(X, Y) = %d \\cdot %d = %d\\).",
+				it.a, it.b, it.a, it.b, ab, it.cov, it.ans),
+		}
+	default:
+		type selfCovItem struct {
+			v int
+		}
+		items := []selfCovItem{
+			{9},
+			{16},
+			{25},
+			{36},
+			{49},
+			{64},
+			{81},
+			{100},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A random variable \\(X\\) has variance \\(\\operatorname{Var}(X) = %d\\). What is the covariance \\(\\operatorname{Cov}(X, X)\\)?", it.v),
+			Answer:   fmt.Sprintf("%d", it.v),
+			Explanation: fmt.Sprintf("The covariance of any random variable with itself equals its variance: \\(\\operatorname{Cov}(X, X) = \\operatorname{Var}(X) = %d\\).",
+				it.v),
+		}
 	}
 }
 
