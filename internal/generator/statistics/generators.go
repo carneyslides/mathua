@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
-	"github.com/chuma-beep/mathua/internal/grader"
 	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
@@ -830,50 +829,123 @@ func (g *poissonGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 
 type studentTGen struct{}
 
-// The answers here are "yes", "no", "standard Normal" and plain numbers, and the
-// concept is declared symbolic, whose hint says "Answer in simplest form" — so a
-// learner was asked a yes/no question and told to simplify. Text is the honest
-// hint, and the grader has to accept words because SymPy cannot.
-func (g *studentTGen) AnswerFormat() generator.AnswerFormat {
-	return generator.AnswerFormat{Hint: "Answer with the word or number the question asks for", InputMode: "text"}
-}
-
-func (g *studentTGen) Grade(expected, userAnswer string) grader.Result {
-	e := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(expected))), " ")
-	a := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(userAnswer))), " ")
-	if a == "" {
-		return grader.Result{Correct: false, Score: 0, Feedback: "Type the answer"}
-	}
-	if e == a {
-		return grader.Result{Correct: true, Score: 1}
-	}
-	if ef, errE := strconv.ParseFloat(e, 64); errE == nil {
-		if af, errA := strconv.ParseFloat(a, 64); errA == nil && af == ef {
-			return grader.Result{Correct: true, Score: 1}
-		}
-	}
-	return grader.Result{Correct: false, Score: 0, Feedback: "Incorrect"}
-}
-
 func (g *studentTGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"Is Student's t defined by its degrees of freedom? (yes/no)", "yes", "t(ν) is parameterized by degrees of freedom ν."},
-		{"As ν → ∞, the t distribution approaches ____.", "standard Normal", "As degrees of freedom increase, t approaches N(0,1)."},
-		{"Compared to Normal, does Student's t have heavier tails? (yes/no)", "yes", "The t distribution has heavier tails than Normal, especially for small ν."},
-		{"What is the mean of t(ν) for ν > 1?", "0", "The t distribution is symmetric about 0 with mean 0 (for ν > 1)."},
-		{"Is the t distribution used instead of Normal when sigma is unknown? (yes/no)", "yes", "t is used when the population standard deviation is unknown."},
-		{"The t(nu) variance is finite when nu exceeds which integer? (enter a number)", "2", "Var[t(ν)] = ν/(ν-2) for ν > 2."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type oneSampleItem struct {
+			n int
+		}
+		items := []oneSampleItem{
+			{15},
+			{20},
+			{25},
+			{30},
+			{36},
+			{45},
+			{50},
+			{60},
+		}
+		it := items[rand.Intn(len(items))]
+		df := it.n - 1
+		return generator.Problem{
+			Question: fmt.Sprintf("A researcher conducts a one-sample t-test using a random sample of \\(n = %d\\) observations. How many degrees of freedom \\(\\nu\\) does the corresponding Student's t-distribution have?", it.n),
+			Answer:   fmt.Sprintf("%d", df),
+			Explanation: fmt.Sprintf("For a single sample of size \\(n\\), the degrees of freedom are \\(\\nu = n - 1 = %d - 1 = %d\\).",
+				it.n, df),
+		}
+	case 1:
+		type twoSampleItem struct {
+			n1 int
+			n2 int
+		}
+		items := []twoSampleItem{
+			{15, 20},
+			{12, 18},
+			{25, 25},
+			{16, 24},
+			{30, 20},
+			{14, 21},
+			{22, 18},
+			{35, 25},
+		}
+		it := items[rand.Intn(len(items))]
+		df := it.n1 + it.n2 - 2
+		return generator.Problem{
+			Question: fmt.Sprintf("An independent two-sample t-test compares two treatment groups with sample sizes \\(n_1 = %d\\) and \\(n_2 = %d\\). Assuming pooled variance, calculate the total degrees of freedom \\(\\nu\\).", it.n1, it.n2),
+			Answer:   fmt.Sprintf("%d", df),
+			Explanation: fmt.Sprintf("Under pooled variance, the degrees of freedom are \\(\\nu = n_1 + n_2 - 2 = %d + %d - 2 = %d\\).",
+				it.n1, it.n2, df),
+		}
+	case 2:
+		type meanItem struct {
+			nu int
+		}
+		items := []meanItem{
+			{3},
+			{5},
+			{8},
+			{12},
+			{15},
+			{20},
+			{28},
+			{35},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(T \\sim t(%d)\\) follow a Student's t-distribution with \\(\\nu = %d\\) degrees of freedom. What is the expected value \\(E[T]\\)?", it.nu, it.nu),
+			Answer:   "0",
+			Explanation: fmt.Sprintf("Because the Student's t-distribution is symmetric about zero and \\(\\nu = %d > 1\\), the expected value is \\(E[T] = 0\\).",
+				it.nu),
+		}
+	case 3:
+		type tStatItem struct {
+			n    int
+			xbar int
+			mu0  int
+			s    int
+			t    int
+		}
+		items := []tStatItem{
+			{16, 58, 50, 8, 4},
+			{25, 115, 100, 15, 5},
+			{36, 84, 75, 18, 3},
+			{16, 46, 40, 12, 2},
+			{64, 72, 60, 32, 3},
+			{25, 130, 110, 20, 5},
+			{36, 95, 85, 12, 5},
+			{16, 66, 54, 16, 3},
+		}
+		it := items[rand.Intn(len(items))]
+		diff := it.xbar - it.mu0
+		se := diff / it.t
+		return generator.Problem{
+			Question: fmt.Sprintf("A sample of size \\(n = %d\\) has sample mean \\(\\bar{x} = %d\\) and sample standard deviation \\(s = %d\\). Test the hypothesis \\(H_0: \\mu = %d\\) by calculating the sample t-statistic \\(t\\).", it.n, it.xbar, it.s, it.mu0),
+			Answer:   fmt.Sprintf("%d", it.t),
+			Explanation: fmt.Sprintf("The sample standard error is \\(SE = \\frac{s}{\\sqrt{n}} = \\frac{%d}{\\sqrt{%d}} = %d\\). The test statistic is \\(t = \\frac{\\bar{x} - \\mu_0}{SE} = \\frac{%d - %d}{%d} = %d\\).",
+				it.s, it.n, se, it.xbar, it.mu0, se, it.t),
+		}
+	default:
+		type pairedItem struct {
+			n int
+		}
+		items := []pairedItem{
+			{18},
+			{25},
+			{32},
+			{40},
+			{50},
+			{15},
+			{28},
+			{45},
+		}
+		it := items[rand.Intn(len(items))]
+		df := it.n - 1
+		return generator.Problem{
+			Question: fmt.Sprintf("A paired-samples experiment measures before-and-after responses from \\(n = %d\\) participants. What are the degrees of freedom \\(\\nu\\) for the paired t-test?", it.n),
+			Answer:   fmt.Sprintf("%d", df),
+			Explanation: fmt.Sprintf("A paired t-test reduces the problem to %d difference scores, yielding degrees of freedom \\(\\nu = n - 1 = %d - 1 = %d\\).",
+				it.n, it.n, df),
+		}
 	}
 }
 
