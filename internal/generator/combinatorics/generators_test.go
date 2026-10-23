@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/grader"
 )
 
 func fuzzGen(t *testing.T, gen generator.Generator) {
@@ -325,4 +326,191 @@ func TestPoolDiversity(t *testing.T) {
 			t.Errorf("concept %s produced only %d distinct answer(s) across 150 samples", id, len(answers))
 		}
 	}
+}
+
+func fuzzNumericGen(t *testing.T, gen generator.Generator) {
+	t.Helper()
+	gr := grader.NewRouter()
+	for i := 0; i < 100; i++ {
+		d := rand.Float64()
+		p := gen.Generate(generator.GeneratorContext{Difficulty: d})
+		if p.Question == "" || p.Answer == "" || p.Explanation == "" {
+			t.Fatalf("empty field at difficulty=%.2f: q=%q a=%q e=%q", d, p.Question, p.Answer, p.Explanation)
+		}
+		if _, err := strconv.Atoi(p.Answer); err != nil {
+			t.Fatalf("answer %q is not an integer", p.Answer)
+		}
+		res := gr.Grade(grader.GradingNumeric, p.Answer, p.Answer)
+		if !res.Correct {
+			t.Fatalf("self-grade failed for question %q with answer %q: %s", p.Question, p.Answer, res.Feedback)
+		}
+	}
+}
+
+func TestCountingPrincipleGen(t *testing.T) { fuzzNumericGen(t, &countingPrincipleGen{}) }
+func TestFactorialGen(t *testing.T)         { fuzzNumericGen(t, &factorialGen{}) }
+func TestMultinomialGen(t *testing.T)       { fuzzNumericGen(t, &multinomialGen{}) }
+func TestCircularGen(t *testing.T)          { fuzzNumericGen(t, &circularGen{}) }
+func TestDerangementGen(t *testing.T)       { fuzzNumericGen(t, &derangementGen{}) }
+func TestCatalanGen(t *testing.T)           { fuzzNumericGen(t, &catalanGen{}) }
+func TestVandermondeGen(t *testing.T)       { fuzzNumericGen(t, &vandermondeGen{}) }
+func TestDoubleCountingGen(t *testing.T)    { fuzzNumericGen(t, &doubleCountingGen{}) }
+func TestSurjectionGen(t *testing.T)        { fuzzNumericGen(t, &surjectionGen{}) }
+func TestStirlingSecondGen(t *testing.T)    { fuzzNumericGen(t, &stirlingSecondGen{}) }
+func TestBellGen(t *testing.T)              { fuzzNumericGen(t, &bellGen{}) }
+func TestIntegerPartitionGen(t *testing.T)  { fuzzNumericGen(t, &integerPartitionGen{}) }
+func TestLatticePathGen(t *testing.T)       { fuzzNumericGen(t, &latticePathGen{}) }
+func TestCompositionGen(t *testing.T)       { fuzzNumericGen(t, &compositionGen{}) }
+
+func TestFuzz(t *testing.T) {
+	reg := generator.NewRegistry()
+	Register(reg)
+	gr := grader.NewRouter()
+
+	for _, id := range reg.Concepts() {
+		gen, err := reg.Get(id)
+		if err != nil {
+			t.Fatalf("missing generator for registered concept %s: %v", id, err)
+		}
+		t.Run(id, func(t *testing.T) {
+			for i := 0; i < 100; i++ {
+				d := rand.Float64()
+				p := gen.Generate(generator.GeneratorContext{Difficulty: d})
+				if p.Question == "" || p.Answer == "" || p.Explanation == "" {
+					t.Fatalf("empty field at difficulty=%.2f: q=%q a=%q", d, p.Question, p.Answer)
+				}
+				val, err := strconv.Atoi(p.Answer)
+				if err != nil {
+					t.Fatalf("answer %q is not an integer", p.Answer)
+				}
+				if val < 0 {
+					t.Fatalf("combinatorics answer %d is negative", val)
+				}
+				res := gr.Grade(grader.GradingNumeric, p.Answer, p.Answer)
+				if !res.Correct {
+					t.Fatalf("self-grade failed for answer %q", p.Answer)
+				}
+			}
+		})
+	}
+}
+
+func TestDifficultyScaling(t *testing.T) {
+	reg := generator.NewRegistry()
+	Register(reg)
+
+	for _, id := range reg.Concepts() {
+		gen, _ := reg.Get(id)
+		pLow := gen.Generate(generator.GeneratorContext{Difficulty: 0.0})
+		pHigh := gen.Generate(generator.GeneratorContext{Difficulty: 1.0})
+		if pLow.Question == "" || pHigh.Question == "" {
+			t.Fatalf("empty question at boundary difficulty for %s", id)
+		}
+		if pLow.Answer == "" || pHigh.Answer == "" {
+			t.Fatalf("empty answer at boundary difficulty for %s", id)
+		}
+	}
+}
+
+func TestCombinatoricsMathHelpers(t *testing.T) {
+	t.Run("fact", func(t *testing.T) {
+		expected := []int{1, 1, 2, 6, 24, 120, 720}
+		for n, want := range expected {
+			if got := fact(n); got != want {
+				t.Errorf("fact(%d) = %d, want %d", n, got, want)
+			}
+		}
+	})
+
+	t.Run("derangements", func(t *testing.T) {
+		expected := []int{1, 0, 1, 2, 9, 44, 265}
+		for n, want := range expected {
+			if got := derangements(n); got != want {
+				t.Errorf("derangements(%d) = %d, want %d", n, got, want)
+			}
+		}
+	})
+
+	t.Run("catalan", func(t *testing.T) {
+		expected := []int{1, 1, 2, 5, 14, 42, 132}
+		for n, want := range expected {
+			if got := catalan(n); got != want {
+				t.Errorf("catalan(%d) = %d, want %d", n, got, want)
+			}
+		}
+	})
+
+	t.Run("choose", func(t *testing.T) {
+		cases := []struct {
+			n, r, want int
+		}{
+			{5, 0, 1},
+			{5, 1, 5},
+			{5, 2, 10},
+			{5, 3, 10},
+			{5, 5, 1},
+			{5, -1, 0},
+			{3, 5, 0},
+		}
+		for _, c := range cases {
+			if got := choose(c.n, c.r); got != c.want {
+				t.Errorf("choose(%d, %d) = %d, want %d", c.n, c.r, got, c.want)
+			}
+		}
+	})
+
+	t.Run("stirling2", func(t *testing.T) {
+		if got := stirling2(4, 2); got != 7 {
+			t.Errorf("stirling2(4, 2) = %d, want 7", got)
+		}
+		if got := stirling2(5, 3); got != 25 {
+			t.Errorf("stirling2(5, 3) = %d, want 25", got)
+		}
+		if got := stirling2(5, 0); got != 0 {
+			t.Errorf("stirling2(5, 0) = %d, want 0", got)
+		}
+	})
+
+	t.Run("ontoCountMatchesStirlingTheorem", func(t *testing.T) {
+		// Theorem: ontoCount(m, n) == n! * S(m, n)
+		for m := 2; m <= 6; m++ {
+			for n := 1; n <= m; n++ {
+				want := fact(n) * stirling2(m, n)
+				got := ontoCount(m, n)
+				if got != want {
+					t.Errorf("ontoCount(%d, %d) = %d, want %d (%d! * S(%d,%d))", m, n, got, want, n, m, n)
+				}
+			}
+		}
+	})
+
+	t.Run("composition", func(t *testing.T) {
+		for n := 3; n <= 10; n++ {
+			for k := 1; k <= n; k++ {
+				parts := composition(n, k)
+				if len(parts) != k {
+					t.Fatalf("composition(%d, %d) returned %d parts, want %d", n, k, len(parts), k)
+				}
+				sum := 0
+				for _, p := range parts {
+					if p < 1 {
+						t.Fatalf("composition(%d, %d) contained non-positive part %d", n, k, p)
+					}
+					sum += p
+				}
+				if sum != n {
+					t.Fatalf("composition(%d, %d) parts sum to %d, want %d", n, k, sum, n)
+				}
+			}
+		}
+	})
+
+	t.Run("productChain", func(t *testing.T) {
+		if got := productChain(1); got != "1" {
+			t.Errorf("productChain(1) = %q, want \"1\"", got)
+		}
+		if got := productChain(4); got != "1 x 2 x 3 x 4" {
+			t.Errorf("productChain(4) = %q, want \"1 x 2 x 3 x 4\"", got)
+		}
+	})
 }
