@@ -733,24 +733,102 @@ func (g *gammaDistGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type geometricDistGen struct{}
 
 func (g *geometricDistGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"What does a Geometric(p) distribution model?", "number of trials until first success", "Geometric: the number of Bernoulli trials needed to get the first success."},
-		{"What is the expected value of Geometric(p)?", "1/p", "E[X] = 1/p for Geometric(p)."},
-		{"For a Geometric(p=0.5) variable, what is the variance?", "2", "Var[X] = (1-p)/p^2 = 0.5/0.25 for p = 0.5."},
-		{"What is P(X=k) for Geometric(p)?", "(1-p)^(k-1) p", "Geometric PMF: P(X=k) = (1-p)^(k-1)p for k = 1, 2, ..."},
-		{"Does the Geometric distribution have the memoryless property?", "yes", "Like the exponential (its continuous analogue), the geometric is memoryless."},
-		{"Does Geometric count trials to the first success while Binomial counts successes in n trials? (yes/no)", "yes", "Both involve Bernoulli trials but count different things."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type item struct {
+			p   float64
+			exp int
+		}
+		items := []item{
+			{0.50, 2},
+			{0.25, 4},
+			{0.20, 5},
+			{0.10, 10},
+			{0.05, 20},
+			{0.04, 25},
+			{0.02, 50},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X\\) follow a geometric distribution with success probability \\(p = %.2f\\), counting trials until the first success. Find the expected value \\(E[X]\\).", it.p),
+			Answer:   fmt.Sprintf("%d", it.exp),
+			Explanation: fmt.Sprintf("The expected value of a geometric random variable is \\(E[X] = \\frac{1}{p} = \\frac{1}{%.2f} = %d\\).",
+				it.p, it.exp),
+		}
+	case 1:
+		mList := []int{2, 3, 4, 5, 6, 10}
+		m := mList[rand.Intn(len(mList))]
+		v := m * (m - 1)
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Geometric}(p)\\) with success probability \\(p = \\frac{1}{%d}\\). Compute the variance \\(\\operatorname{Var}(X)\\).", m),
+			Answer:   fmt.Sprintf("%d", v),
+			Explanation: fmt.Sprintf("The variance of a geometric distribution is \\(\\operatorname{Var}(X) = \\frac{1-p}{p^2} = \\frac{1 - 1/%d}{(1/%d)^2} = \\frac{%d/%d}{1/%d} = %d \\times %d = %d\\).",
+				m, m, m-1, m, m*m, m-1, m, v),
+		}
+	case 2:
+		type cdfItem struct {
+			p   float64
+			k   int
+			pct int
+		}
+		items := []cdfItem{
+			{0.50, 1, 50},
+			{0.50, 2, 75},
+			{0.20, 1, 20},
+			{0.20, 2, 36},
+			{0.10, 1, 10},
+			{0.10, 2, 19},
+			{0.60, 2, 84},
+			{0.70, 2, 91},
+			{0.80, 2, 96},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("In independent Bernoulli trials each having success probability \\(p = %.2f\\), what is the probability (expressed as an integer percentage from 0 to 100) that the first success occurs on or before trial \\(k = %d\\)?", it.p, it.k),
+			Answer:   fmt.Sprintf("%d", it.pct),
+			Explanation: fmt.Sprintf("The cumulative probability is \\(P(X \\le %d) = 1 - (1-p)^{%d} = 1 - (%.2f)^{%d} = 1 - %.2f = %.2f\\), which equals %d percent.",
+				it.k, it.k, 1-it.p, it.k, float64(100-it.pct)/100.0, float64(it.pct)/100.0, it.pct),
+		}
+	case 3:
+		type ratioItem struct {
+			p float64
+			r int
+		}
+		items := []ratioItem{
+			{0.50, 2},
+			{0.75, 4},
+			{0.80, 5},
+			{0.90, 10},
+			{0.95, 20},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Geometric}(p)\\) with success probability \\(p = %.2f\\). Compute the probability ratio \\(\\frac{P(X = 1)}{P(X = 2)}\\).", it.p),
+			Answer:   fmt.Sprintf("%d", it.r),
+			Explanation: fmt.Sprintf("For a geometric distribution, \\(P(X = 1) = p\\) and \\(P(X = 2) = (1-p)p\\). The ratio is \\(\\frac{P(X = 1)}{P(X = 2)} = \\frac{1}{1-p} = \\frac{1}{1 - %.2f} = \\frac{1}{%.2f} = %d\\).",
+				it.p, 1-it.p, it.r),
+		}
+	default:
+		type memItem struct {
+			p float64
+			s int
+			e int
+		}
+		items := []memItem{
+			{0.20, 5, 5},
+			{0.25, 4, 4},
+			{0.10, 8, 10},
+			{0.50, 3, 2},
+			{0.05, 12, 20},
+			{0.04, 15, 25},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A geometric random variable \\(X\\) has success probability \\(p = %.2f\\). Given that the first %d trials resulted in failure, what is the expected number of additional trials needed until the first success?", it.p, it.s),
+			Answer:   fmt.Sprintf("%d", it.e),
+			Explanation: fmt.Sprintf("By the memoryless property of the geometric distribution, prior failures do not affect future trials: \\(E[X - %d \\mid X > %d] = E[X] = \\frac{1}{p} = \\frac{1}{%.2f} = %d\\).",
+				it.s, it.s, it.p, it.e),
+		}
 	}
 }
 
