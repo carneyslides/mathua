@@ -613,24 +613,80 @@ func (g *bernoulliGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type betaGen struct{}
 
 func (g *betaGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"What is the support of the Beta distribution?", "[0, 1]", "The Beta distribution is defined on the interval [0, 1]."},
-		{"What parameters define the Beta distribution?", "α (alpha) and β (beta)", "Beta(α,β) is parameterized by two shape parameters α > 0 and β > 0."},
-		{"What is Beta(1,1) equivalent to?", "Uniform(0,1)", "Beta(1,1) = Uniform(0,1) (a flat prior in Bayesian statistics)."},
-		{"The Beta distribution is the conjugate prior for which likelihood?", "Bernoulli/Binomial", "Beta is conjugate to Bernoulli and Binomial likelihoods."},
-		{"What is the mean of Beta(α,β)?", "α/(α+β)", "Mean of Beta(α,β) = α/(α+β)."},
-		{"The Beta distribution generalizes which simpler distribution?", "Uniform", "Beta(1,1) = Uniform, and other parameter choices create various shapes on [0,1]."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type meanParam struct {
+			a, b, pct int
+		}
+		params := []meanParam{
+			{3, 7, 30},
+			{1, 3, 25},
+			{7, 13, 35},
+			{3, 2, 60},
+			{9, 16, 36},
+			{1, 1, 50},
+			{4, 1, 80},
+		}
+		p := params[rand.Intn(len(params))]
+		return generator.Problem{
+			Question: fmt.Sprintf("For a random variable \\(X \\sim \\operatorname{Beta}(\\alpha = %d, \\beta = %d)\\), compute the expected value \\(E[X]\\) expressed as an integer percentage from 0 to 100.", p.a, p.b),
+			Answer:   fmt.Sprintf("%d", p.pct),
+			Explanation: fmt.Sprintf("The mean of a Beta distribution is \\(E[X] = \\frac{\\alpha}{\\alpha + \\beta} = \\frac{%d}{%d} = %.2f\\), which corresponds to %d percent.",
+				p.a, p.a+p.b, float64(p.pct)/100.0, p.pct),
+		}
+	case 1:
+		type modeParam struct {
+			a, b, pct int
+		}
+		params := []modeParam{
+			{4, 8, 30},
+			{2, 4, 25},
+			{3, 4, 40},
+			{8, 14, 35},
+			{5, 2, 80},
+			{3, 3, 50},
+		}
+		p := params[rand.Intn(len(params))]
+		num := p.a - 1
+		denom := p.a + p.b - 2
+		return generator.Problem{
+			Question: fmt.Sprintf("For a random variable \\(X \\sim \\operatorname{Beta}(\\alpha = %d, \\beta = %d)\\) with \\(\\alpha, \\beta > 1\\), compute the mode of the distribution expressed as an integer percentage from 0 to 100.", p.a, p.b),
+			Answer:   fmt.Sprintf("%d", p.pct),
+			Explanation: fmt.Sprintf("The mode of a Beta distribution with parameters greater than 1 is \\(\\operatorname{Mode} = \\frac{\\alpha - 1}{\\alpha + \\beta - 2} = \\frac{%d}{%d} = %.2f\\), which equals %d percent.",
+				num, denom, float64(p.pct)/100.0, p.pct),
+		}
+	case 2:
+		a0 := 1 + rand.Intn(6)
+		b0 := 1 + rand.Intn(6)
+		s := 2 + rand.Intn(10)
+		f := 2 + rand.Intn(10)
+		aPost := a0 + s
+		return generator.Problem{
+			Question: fmt.Sprintf("A Bayesian prior is modeled as \\(\\operatorname{Beta}(\\alpha = %d, \\beta = %d)\\). An experiment observes %d successes and %d failures in independent Bernoulli trials. What is the updated parameter \\(\\alpha_{\\text{post}}\\) of the posterior Beta distribution?", a0, b0, s, f),
+			Answer:   fmt.Sprintf("%d", aPost),
+			Explanation: fmt.Sprintf("Because the Beta prior is conjugate to the Bernoulli likelihood, the posterior parameter adds the observed successes: \\(\\alpha_{\\text{post}} = \\alpha_0 + s = %d + %d = %d\\).",
+				a0, s, aPost),
+		}
+	case 3:
+		a := 2 + rand.Intn(8)
+		b := 2 + rand.Intn(8)
+		total := a + b
+		return generator.Problem{
+			Question: fmt.Sprintf("In Bayesian statistics with a \\(\\operatorname{Beta}(\\alpha = %d, \\beta = %d)\\) prior, compute the effective prior pseudo-sample size \\(\\alpha + \\beta\\).", a, b),
+			Answer:   fmt.Sprintf("%d", total),
+			Explanation: fmt.Sprintf("The sum of the shape parameters represents the effective prior sample size: \\(\\alpha + \\beta = %d + %d = %d\\).",
+				a, b, total),
+		}
+	default:
+		k := 2 + rand.Intn(6)
+		b := 1 + rand.Intn(5)
+		a := k * b
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Beta}(\\alpha = %d, \\beta = %d)\\). Find the ratio of expected values \\(\\frac{E[X]}{E[1 - X]}\\).", a, b),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("Because \\(E[X] = \\frac{\\alpha}{\\alpha + \\beta}\\) and \\(E[1 - X] = \\frac{\\beta}{\\alpha + \\beta}\\), their ratio is \\(\\frac{E[X]}{E[1 - X]} = \\frac{\\alpha}{\\beta} = \\frac{%d}{%d} = %d\\).",
+				a, b, k),
+		}
 	}
 }
 
