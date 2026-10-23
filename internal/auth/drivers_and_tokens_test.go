@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestValidateEmail(t *testing.T) {
+func TestValidateEmailAcceptsSubdomains(t *testing.T) {
 	cases := []struct {
 		email string
 		valid bool
@@ -70,7 +70,7 @@ func TestGuestToken_ValidationAndExpiry(t *testing.T) {
 	}
 }
 
-func TestCheckPassword(t *testing.T) {
+func TestCheckPasswordRejectsAnEmptyPassword(t *testing.T) {
 	svc := newTestService(t)
 
 	// Create user with password

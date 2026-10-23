@@ -411,3 +411,174 @@ func TestEngine_SupplementalDiagnostic_NamedPath(t *testing.T) {
 	}
 	s.Unlock()
 }
+
+func TestSession_EncodeDecodeRoundtrip(t *testing.T) {
+	d := testDAG(t)
+	r := mustRegistry(t)
+	e := NewEngine(d, r)
+	s := e.Start()
+	s.ID = "session-test-1"
+	s.StudentID = "student-123"
+
+	// Ask and answer first two questions
+	p, cid, err := e.NextQuestion(s)
+	if err != nil || p == nil || cid == "" {
+		t.Fatalf("NextQuestion: p=%v cid=%s err=%v", p, cid, err)
+	}
+	e.RecordAnswer(s, cid, true, false)
+
+	p2, cid2, err := e.NextQuestion(s)
+	if err != nil || p2 == nil || cid2 == "" {
+		t.Fatalf("NextQuestion 2: p=%v cid=%s err=%v", p2, cid2, err)
+	}
+	e.RecordAnswer(s, cid2, false, false)
+
+	// Encode to JSON
+	data, err := s.Encode()
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	// Decode back to session
+	restored, err := e.Decode(data)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+
+	if restored.ID != s.ID {
+		t.Errorf("ID = %q, want %q", restored.ID, s.ID)
+	}
+	if restored.StudentID != s.StudentID {
+		t.Errorf("StudentID = %q, want %q", restored.StudentID, s.StudentID)
+	}
+	if restored.State != s.State {
+		t.Errorf("State = %q, want %q", restored.State, s.State)
+	}
+	if len(restored.Attempts) != len(s.Attempts) {
+		t.Errorf("len(Attempts) = %d, want %d", len(restored.Attempts), len(s.Attempts))
+	}
+	if len(restored.order) != len(s.order) {
+		t.Errorf("len(order) = %d, want %d", len(restored.order), len(s.order))
+	}
+	if restored.beliefs[cid] != s.beliefs[cid] {
+		t.Errorf("belief[%s] = %f, want %f", cid, restored.beliefs[cid], s.beliefs[cid])
+	}
+	if restored.confidence[cid] != s.confidence[cid] {
+		t.Errorf("confidence[%s] = %f, want %f", cid, restored.confidence[cid], s.confidence[cid])
+	}
+}
+
+func TestSession_DecodeValidationAndHelpers(t *testing.T) {
+	d := testDAG(t)
+	r := mustRegistry(t)
+	e := NewEngine(d, r)
+
+	// Invalid JSON
+	if _, err := e.Decode([]byte("not-json")); err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+
+	// Missing ID
+	if _, err := e.Decode([]byte(`{"order":["c0"]}`)); err == nil {
+		t.Error("expected error for missing ID")
+	}
+
+	// Concepts not known to DAG
+	if _, err := e.Decode([]byte(`{"id":"s1","order":["unknown-concept-xyz"]}`)); err == nil {
+		t.Error("expected error when no concepts survive")
+	}
+
+	// Empty state defaults to StateProbing
+	validBytes := []byte(`{"id":"s2","order":["` + d.Order()[0].ID + `"]}`)
+	sess, err := e.Decode(validBytes)
+	if err != nil {
+		t.Fatalf("Decode valid minimal: %v", err)
+	}
+	if sess.State != StateProbing {
+		t.Errorf("default state = %q, want %q", sess.State, StateProbing)
+	}
+
+	// orZero, orZeroInt, orFalse helpers with nil inputs
+	if m := orZero(nil); m == nil || len(m) != 0 {
+		t.Errorf("orZero(nil) = %v, want empty map", m)
+	}
+	if m := orZeroInt(nil); m == nil || len(m) != 0 {
+		t.Errorf("orZeroInt(nil) = %v, want empty map", m)
+	}
+	if m := orFalse(nil); m == nil || len(m) != 0 {
+		t.Errorf("orFalse(nil) = %v, want empty map", m)
+	}
+}
+
+func TestEngine_SettleCurrent(t *testing.T) {
+	d := testDAG(t)
+	r := mustRegistry(t)
+	e := NewEngine(d, r)
+	s := e.Start()
+
+	// When no question pending, returns ""
+	if settled := e.SettleCurrent(s); settled != "" {
+		t.Errorf("expected empty string when no question pending, got %q", settled)
+	}
+
+	// Ask a question
+	p, cid, err := e.NextQuestion(s)
+	if err != nil || p == nil || cid == "" {
+		t.Fatalf("NextQuestion: p=%v cid=%s err=%v", p, cid, err)
+	}
+
+	// Settle it
+	settled := e.SettleCurrent(s)
+	if settled != cid {
+		t.Errorf("SettleCurrent = %q, want %q", settled, cid)
+	}
+	if !s.doneSet[cid] {
+		t.Errorf("expected doneSet[%s] to be true", cid)
+	}
+}
+
+func TestEngine_RecordDontKnow(t *testing.T) {
+	d := testDAG(t)
+	r := mustRegistry(t)
+	e := NewEngine(d, r)
+	s := e.Start()
+
+	_, cid, err := e.NextQuestion(s)
+	if err != nil || cid == "" {
+		t.Fatalf("NextQuestion: err=%v", err)
+	}
+
+	initialBelief := s.beliefs[cid]
+	e.RecordDontKnow(s, cid, 5.0, 10.0)
+
+	if s.beliefs[cid] >= initialBelief {
+		t.Errorf("expected belief to drop after dont-know, got %f >= %f", s.beliefs[cid], initialBelief)
+	}
+	if len(s.Attempts) != 1 || s.Attempts[0].Correct {
+		t.Errorf("expected 1 incorrect attempt recorded, got %+v", s.Attempts)
+	}
+}
+
+func TestEngine_FrontierEstimate_And_KnowledgeConfidence(t *testing.T) {
+	d := testDAG(t)
+	r := mustRegistry(t)
+	e := NewEngine(d, r)
+	s := e.Start()
+
+	// Initial frontier estimate should be -1 (all beliefs 0.5 < threshold 0.75)
+	if idx := e.FrontierEstimate(s); idx != -1 {
+		t.Errorf("initial FrontierEstimate = %d, want -1", idx)
+	}
+
+	// Elevate belief of third concept above threshold
+	s.beliefs[s.order[2].ID] = 0.85
+	if idx := e.FrontierEstimate(s); idx != 2 {
+		t.Errorf("FrontierEstimate = %d, want 2", idx)
+	}
+
+	// KnowledgeConfidence returns copy
+	conf := e.KnowledgeConfidence(s)
+	if len(conf) != len(s.confidence) {
+		t.Errorf("len(KnowledgeConfidence) = %d, want %d", len(conf), len(s.confidence))
+	}
+}

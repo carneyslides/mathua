@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -248,4 +249,82 @@ func TestChainStatsCountOutcomes(t *testing.T) {
 			t.Errorf("nil chain snapshot = %+v, want zero", got)
 		}
 	})
+}
+
+func TestStats_LineAndNilReceiver(t *testing.T) {
+	snap := Snapshot{
+		Requests:  10,
+		Successes: 8,
+		Failovers: 2,
+		Denials:   1,
+		Fallbacks: 1,
+	}
+	expected := "ai counters: requests=10 successes=8 failovers=2 denials=1 fallbacks=1"
+	if snap.Line() != expected {
+		t.Errorf("Line() = %q, want %q", snap.Line(), expected)
+	}
+
+	var nilStats *Stats
+	nilStats.Denied() // must not panic
+	if s := nilStats.Snapshot(); s != (Snapshot{}) {
+		t.Errorf("nil Stats Snapshot = %+v, want zero", s)
+	}
+}
+
+func TestProviderError_FormattingAndUnwrap(t *testing.T) {
+	inner := errors.New("timeout connecting")
+	e := NewTransient(504, 3*time.Second, inner)
+	if e.Unwrap() != inner {
+		t.Errorf("Unwrap = %v, want %v", e.Unwrap(), inner)
+	}
+	if !IsTransient(e) {
+		t.Error("expected IsTransient true")
+	}
+	formatted := e.Error()
+	if !strings.Contains(formatted, "kind=0") || !strings.Contains(formatted, "status=504") || !strings.Contains(formatted, "timeout connecting") {
+		t.Errorf("Error() = %q", formatted)
+	}
+
+	// Without inner error
+	eNoErr := &Error{Kind: ErrPermanent, Status: 403}
+	if !strings.Contains(eNoErr.Error(), "status=403") {
+		t.Errorf("Error() = %q", eNoErr.Error())
+	}
+	if IsTransient(eNoErr) {
+		t.Error("expected IsTransient false for ErrPermanent")
+	}
+
+	var nilErr *Error
+	if nilErr.Error() != "<nil>" {
+		t.Errorf("nil Error() = %q, want '<nil>'", nilErr.Error())
+	}
+
+	// Unknown error type defaults to transient
+	if !IsTransient(errors.New("other error")) {
+		t.Error("expected arbitrary error to be treated as transient")
+	}
+}
+
+func TestStub_CapabilitiesAndLastRequest(t *testing.T) {
+	st := &Stub{
+		IDValue: "stub-test",
+		Caps: Capabilities{
+			Streaming: true,
+			JSON:      true,
+		},
+		Reply: "hello",
+	}
+	if !st.Capabilities().Streaming || !st.Capabilities().JSON {
+		t.Errorf("Capabilities = %+v", st.Capabilities())
+	}
+
+	ctx := context.Background()
+	req := Request{Model: "gpt-4", Messages: []Message{{Role: "user", Content: "hi"}}}
+	resp, err := st.Chat(ctx, req)
+	if err != nil || resp.Text != "hello" {
+		t.Fatalf("Chat: resp=%+v err=%v", resp, err)
+	}
+	if st.LastRequest().Model != "gpt-4" {
+		t.Errorf("LastRequest model = %q, want gpt-4", st.LastRequest().Model)
+	}
 }
