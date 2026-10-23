@@ -592,47 +592,77 @@ func (g *rk4Gen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type stabilityGen struct{}
 
 func (g *stabilityGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Real equilibria count for x' = mu - x^2
+		mus := []int{-3, -2, -1, 1, 2, 4}
+		mu := mus[rand.Intn(len(mus))]
+		count := 0
+		reason := fmt.Sprintf("Because %d < 0, no real solution exists and there are 0 real equilibria.", mu)
+		if mu > 0 {
+			count = 2
+			reason = fmt.Sprintf("Because %d > 0, there are 2 real equilibria at \\(\\pm\\sqrt{%d}\\).", mu, mu)
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("For the autonomous differential equation \\(x' = %d - x^2\\), how many real equilibrium points exist?", mu),
+			Answer:   fmt.Sprintf("%d", count),
+			Explanation: fmt.Sprintf(
+				"Setting \\(x' = 0\\) gives \\(x^2 = %d\\). %s",
+				mu, reason,
+			),
+		}
+
+	case 1:
+		// Value of non-zero equilibrium point
+		a := smallInt(2, 6+int(ctx.Difficulty*4))
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the non-zero equilibrium point \\(x^*\\) of the flow equation \\(x' = %dx - x^2\\).", a),
+			Answer:   fmt.Sprintf("%d", a),
+			Explanation: fmt.Sprintf(
+				"Setting \\(x' = x(%d - x) = 0\\) yields equilibria at \\(x = 0\\) and \\(x = %d\\). The non-zero equilibrium is %d.",
+				a, a, a,
+			),
+		}
+
+	case 2:
+		// Linearized derivative at stable equilibrium
+		a := smallInt(2, 6+int(ctx.Difficulty*4))
+		return generator.Problem{
+			Question: fmt.Sprintf("For the flow \\(x' = %dx - x^2\\), evaluate the derivative \\(f'(x^*)\\) at the stable equilibrium \\(x^* = %d\\).", a, a),
+			Answer:   fmt.Sprintf("%d", -a),
+			Explanation: fmt.Sprintf(
+				"The flow function is \\(f(x) = %dx - x^2\\) with derivative \\(f'(x) = %d - 2x\\). At \\(x^* = %d\\), \\(f'(%d) = %d - 2(%d) = %d\\). The negative derivative confirms asymptotic stability.",
+				a, a, a, a, a, a, -a,
+			),
+		}
+
+	case 3:
+		// Number of asymptotically stable equilibria
+		a := smallInt(2, 6+int(ctx.Difficulty*4))
+		return generator.Problem{
+			Question: fmt.Sprintf("How many asymptotically stable equilibrium points does the differential equation \\(x' = %dx - x^2\\) possess?", a),
+			Answer:   "1",
+			Explanation: fmt.Sprintf(
+				"The equilibria are \\(x = 0\\) and \\(x = %d\\). The derivative \\(f'(x) = %d - 2x\\) gives \\(f'(0) = %d > 0\\) (unstable) and \\(f'(%d) = -%d < 0\\) (stable), so exactly 1 equilibrium is asymptotically stable.",
+				a, a, a, a, a,
+			),
+		}
+
+	default:
+		// 2D linear system trace
+		p := smallInt(1, 5)
+		q := smallInt(1, 5)
+		tr := -(p + q)
+		return generator.Problem{
+			Question: fmt.Sprintf("For the 2D linear system \\(x' = -%dx\\) and \\(y' = -%dy\\) governing decay to the origin, what is the trace of the system matrix \\(A\\)?", p, q),
+			Answer:   fmt.Sprintf("%d", tr),
+			Explanation: fmt.Sprintf(
+				"The system matrix is diagonal with eigenvalues \\(\\lambda_1 = -%d\\) and \\(\\lambda_2 = -%d\\). The trace is the sum of the eigenvalues: \\(\\operatorname{tr}(A) = -%d + (-%d) = %d\\).",
+				p, q, p, q, tr,
+			),
+		}
 	}
-	easy := []entry{
-		{"For x'=-x, is equilibrium 0 stable? (yes/no)", "yes", "Solution e^{-t}x0 →0, asymptotically stable."},
-		{"For x'=x, is 0 unstable? (yes/no)", "yes", "Solutions e^{t}x0 diverge from 0."},
-	}
-	// Parameterized production: equilibria count of x' = mu - x^2.
-	mus := []int{-2, -1, 1, 2, 4}
-	mu := mus[rand.Intn(len(mus))]
-	count, reason := "2", "mu > 0 gives two equilibria at ±sqrt(mu)."
-	if mu < 0 {
-		count, reason = "0", "mu < 0 gives no (real) equilibria."
-	}
-	easy = append(easy, entry{
-		q: fmt.Sprintf("For x' = %d - x^2, how many equilibria are there? (enter a number)", mu),
-		a: count,
-		e: reason,
-	})
-	// Parameterized production: decay ratio for x' = a*x.
-	as := []int{-2, -3}
-	a := as[rand.Intn(len(as))]
-	easy = append(easy, entry{
-		q: fmt.Sprintf("For x' = %dx, what is x(1)/x(0)? (type like e^(-2))", a),
-		a: fmt.Sprintf("e^(%d)", a),
-		e: fmt.Sprintf("Solution x(t) = x(0)e^{%dt}, so x(1)/x(0) = e^{%d}.", a, a),
-	})
-	hard := []entry{
-		{"Does Lyapunov's indirect method use Jacobian eigenvalues at equilibrium? (yes/no)", "yes", "Linearization stability via eigenvalues."},
-		{"Is centre (pure imaginary eigenvalues) stable but not asymptotically? (yes/no)", "yes", "Orbits are closed, not approaching nor diverging."},
-		{"Does asymptotically stable imply stable? (yes/no)", "yes", "Asymptotic is stronger."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type characteristicsGen struct{}

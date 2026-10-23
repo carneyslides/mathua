@@ -194,7 +194,7 @@
     "label": "Stability of equilibria",
     "domain": "differential_equations",
     "subdomain": "differential_equations.stability",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "ode.systems.linear_phase"
     ],
