@@ -661,24 +661,68 @@ func (g *binomialDistGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type chiSquareGen struct{}
 
 func (g *chiSquareGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"What is the mean of χ²(k)?", "k", "The mean of a χ² distribution with k degrees of freedom is k."},
-		{"What is the variance of χ²(k)?", "2k", "The variance of χ²(k) is 2k."},
-		{"The χ² distribution is the sum of squared independent ____ random variables.", "standard normal", "If Z_i ∼ N(0,1) i.i.d., then ΣZ_i² ∼ χ²(k)."},
-		{"What parameter determines the shape of a χ² distribution?", "degrees of freedom (k)", "The degrees of freedom parameter k controls the shape."},
-		{"Does a chi-square random variable take negative values? (yes/no)", "no", "Chi-square takes only non-negative values (support x >= 0)."},
-		{"The χ² distribution is used in which common statistical test?", "goodness of fit", "The χ² test is used for goodness of fit and independence tests."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		kValues := []int{3, 5, 7, 9, 11, 13, 15, 20}
+		k := kValues[rand.Intn(len(kValues))]
+		v := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\chi^2(%d)\\) follow a chi-square distribution with %d degrees of freedom. Calculate the variance \\(\\operatorname{Var}(X)\\).", k, k),
+			Answer:   fmt.Sprintf("%d", v),
+			Explanation: fmt.Sprintf("The variance of a chi-square distribution with \\(k\\) degrees of freedom is \\(\\operatorname{Var}(X) = 2k = 2 \\times %d = %d\\).",
+				k, v),
+		}
+	case 1:
+		type sdItem struct {
+			k  int
+			v  int
+			sd int
+		}
+		items := []sdItem{
+			{2, 4, 2},
+			{8, 16, 4},
+			{18, 36, 6},
+			{32, 64, 8},
+			{50, 100, 10},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A random variable \\(X\\) follows a chi-square distribution with %d degrees of freedom: \\(X \\sim \\chi^2(%d)\\). Find the standard deviation \\(\\sigma\\).", it.k, it.k),
+			Answer:   fmt.Sprintf("%d", it.sd),
+			Explanation: fmt.Sprintf("For a chi-square distribution, the variance is \\(\\operatorname{Var}(X) = 2k = 2 \\times %d = %d\\). The standard deviation is \\(\\sigma = \\sqrt{2k} = \\sqrt{%d} = %d\\).",
+				it.k, it.v, it.v, it.sd),
+		}
+	case 2:
+		k1List := []int{4, 6, 8, 10, 12}
+		k2List := []int{5, 7, 9, 11, 15}
+		k1 := k1List[rand.Intn(len(k1List))]
+		k2 := k2List[rand.Intn(len(k2List))]
+		sumK := k1 + k2
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X_1 \\sim \\chi^2(%d)\\) and \\(X_2 \\sim \\chi^2(%d)\\) be independent chi-square random variables. Find the expected value of their sum \\(E[X_1 + X_2]\\).", k1, k2),
+			Answer:   fmt.Sprintf("%d", sumK),
+			Explanation: fmt.Sprintf("By independence and linearity of expectation, \\(E[X_1 + X_2] = E[X_1] + E[X_2] = k_1 + k_2 = %d + %d = %d\\).",
+				k1, k2, sumK),
+		}
+	case 3:
+		kValues := []int{4, 6, 8, 10, 12, 16, 25}
+		k := kValues[rand.Intn(len(kValues))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(Z_1, Z_2, \\dots, Z_{%d}\\) be independent standard normal random variables. What is the degrees of freedom parameter \\(k\\) of the variable \\(W = \\sum_{i=1}^{%d} Z_i^2\\)?", k, k),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("The sum of \\(k\\) independent squared standard normal variables follows a chi-square distribution \\(\\chi^2(k)\\). Here %d variables are summed, so \\(k = %d\\).",
+				k, k),
+		}
+	default:
+		kValues := []int{3, 4, 5, 6, 7, 8, 10}
+		k := kValues[rand.Intn(len(kValues))]
+		m2 := k*k + 2*k
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\chi^2(%d)\\). Calculate the second moment \\(E[X^2]\\).", k),
+			Answer:   fmt.Sprintf("%d", m2),
+			Explanation: fmt.Sprintf("Using the variance formula \\(\\operatorname{Var}(X) = E[X^2] - (E[X])^2\\), we find \\(E[X^2] = \\operatorname{Var}(X) + (E[X])^2 = 2(%d) + (%d)^2 = %d + %d = %d\\).",
+				k, k, 2*k, k*k, m2),
+		}
 	}
 }
 
