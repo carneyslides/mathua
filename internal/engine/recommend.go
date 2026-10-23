@@ -134,6 +134,33 @@ func (e *Engine) RecommendNext(studentID string, exclude []string) (scheduler.Re
 			}
 		}
 	}
+	remQueue := append([]string(nil), e.remedialQueue[studentID]...)
+	for _, as := range e.sessions {
+		if as.studentID == studentID && as.halted {
+			for _, cid := range as.remedialQueue {
+				c := e.dag.Concept(as.conceptID)
+				if c == nil {
+					c = e.dag.Concept(as.lastConceptID)
+				}
+				if c != nil {
+					for _, kp := range c.KeyPrerequisites {
+						if kp == cid {
+							found := false
+							for _, existing := range remQueue {
+								if existing == cid {
+									found = true
+									break
+								}
+							}
+							if !found {
+								remQueue = append(remQueue, cid)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 	e.mu.Unlock()
 
 	// The server's record that placement happened. This is the authoritative
@@ -155,6 +182,8 @@ func (e *Engine) RecommendNext(studentID string, exclude []string) (scheduler.Re
 		AttemptedDays:       len(attemptedDays),
 		ExcludeConceptIds:   exclude,
 		DiagnosticCompleted: diagnosticCompleted,
+		KeyPrerequisites:    remQueue,
+		RemedialConcepts:    remQueue,
 	}), nil
 }
 

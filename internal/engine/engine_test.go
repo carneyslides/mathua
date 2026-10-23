@@ -512,6 +512,299 @@ func TestEngine_Halt_AfterTwoConsecutiveMisses(t *testing.T) {
 	}
 }
 
+func TestEngine_Halt_KeyPrerequisites_TargetedRemediation(t *testing.T) {
+	d, err := concepts.Build([]concepts.Concept{
+		{
+			ID: "a", Label: "Concept A", Domain: "d",
+			GradingType: "numeric", Prerequisites: []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 2, AvgTimeSeconds: 60},
+		},
+		{
+			ID: "b", Label: "Concept B", Domain: "d",
+			GradingType: "numeric", Prerequisites: []string{"a"},
+			KeyPrerequisites: []string{"a"},
+			Variants: []concepts.Variant{
+				{Difficulty: 0.3, TimeThresh: 60.0, Label: "b-easy"},
+			},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 2, AvgTimeSeconds: 60},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build DAG: %v", err)
+	}
+	store, err := storage.NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+	reg := generator.NewRegistry()
+	reg.Register("a", &testGen{answer: "42"})
+	reg.Register("b", &testGen{answer: "99"})
+	e := New(store, d, reg, nil, nil)
+	st, _ := e.CreateStudent("targeted")
+	sess, _ := e.repo.CreateSession(st.ID)
+
+	// Step 1: Mark prerequisite concept a mastered so concept b is unlocked.
+	now := time.Now().UTC()
+	if err := e.repo.UpsertProgress(&storage.ConceptProgress{
+		StudentID:     st.ID,
+		ConceptID:     "a",
+		Status:        string(mastery.StatusMastered),
+		Streak:        3,
+		LastAttempted: &now,
+		LastReviewed:  &now,
+	}); err != nil {
+		t.Fatalf("upsert progress: %v", err)
+	}
+
+	// Step 2: Now concept b is served.
+	q1, err := e.NextQuestion(sess.ID, st.ID)
+	if err != nil || q1 == nil {
+		t.Fatalf("step 2 next: %v", err)
+	}
+	if q1.ConceptID != "b" {
+		t.Fatalf("expected concept b, got %s", q1.ConceptID)
+	}
+
+	// First miss on concept b.
+	res1, err := e.SubmitAnswer(sess.ID, st.ID, q1.AttemptID, "wrong", 5.0)
+	if err != nil {
+		t.Fatalf("submit miss 1: %v", err)
+	}
+	if res1.Halted {
+		t.Error("expected no halt after first miss")
+	}
+	if res1.XP != 0 {
+		t.Errorf("expected 0 XP on miss, got %d", res1.XP)
+	}
+
+	// Second question served on concept b.
+	q2, err := e.NextQuestion(sess.ID, st.ID)
+	if err != nil || q2 == nil {
+		t.Fatalf("step 2 next 2: %v", err)
+	}
+	if q2.ConceptID != "b" {
+		t.Fatalf("expected concept b, got %s", q2.ConceptID)
+	}
+
+	// Second consecutive miss on concept b triggers 2-fail halt.
+	res2, err := e.SubmitAnswer(sess.ID, st.ID, q2.AttemptID, "wrong", 5.0)
+	if err != nil {
+		t.Fatalf("submit miss 2: %v", err)
+	}
+	if !res2.Halted {
+		t.Error("expected halt after two consecutive misses")
+	}
+	if res2.XP != 0 {
+		t.Errorf("expected 0 XP on halt, got %d", res2.XP)
+	}
+	// Verify remedial queue contains key prerequisite a then b.
+	if len(res2.Remedial) != 2 || res2.Remedial[0] != "a" || res2.Remedial[1] != "b" {
+		t.Fatalf("expected remedial [a b], got %v", res2.Remedial)
+	}
+	// Verify student-level remedial queue is populated.
+	rem := e.RemedialQueue(st.ID)
+	if len(rem) != 1 || rem[0] != "a" {
+		t.Fatalf("expected engine remedial queue [a], got %v", rem)
+	}
+
+	// Step 3: Verify learner task shelf shows targeted key prerequisite at the front.
+	rec, err := e.RecommendNext(st.ID, nil)
+	if err != nil {
+		t.Fatalf("recommend next: %v", err)
+	}
+	if rec.Primary == nil || rec.Primary.ConceptID != "a" {
+		t.Fatalf("expected primary recommendation to be key prerequisite a, got %+v", rec.Primary)
+	}
+	if rec.Primary.Badge != "Remediation" {
+		t.Errorf("expected badge Remediation, got %s", rec.Primary.Badge)
+	}
+	if rec.Primary.CTA != "Review prerequisite →" {
+		t.Errorf("expected cta 'Review prerequisite →', got %s", rec.Primary.CTA)
+	}
+
+	// Step 4: NextQuestion serves key prerequisite a.
+	qRemPrereq, err := e.NextQuestion(sess.ID, st.ID)
+	if err != nil || qRemPrereq == nil {
+		t.Fatalf("next remedial prereq: %v", err)
+	}
+	if qRemPrereq.ConceptID != "a" {
+		t.Fatalf("expected remedial key prerequisite a, got %s", qRemPrereq.ConceptID)
+	}
+
+	// Submit correct answer for key prerequisite a.
+	resRemPrereq, err := e.SubmitAnswer(sess.ID, st.ID, qRemPrereq.AttemptID, "42", 5.0)
+	if err != nil || !resRemPrereq.Correct {
+		t.Fatalf("submit remedial prereq: %v", err)
+	}
+
+	// Key prerequisite is now drained from student remedial queue.
+	if len(e.RemedialQueue(st.ID)) != 0 {
+		t.Errorf("expected empty remedial queue after key prereq success, got %v", e.RemedialQueue(st.ID))
+	}
+
+	// Step 5: NextQuestion serves concept b at easier variant.
+	qRemConcept, err := e.NextQuestion(sess.ID, st.ID)
+	if err != nil || qRemConcept == nil {
+		t.Fatalf("next remedial concept: %v", err)
+	}
+	if qRemConcept.ConceptID != "b" {
+		t.Fatalf("expected remedial concept b, got %s", qRemConcept.ConceptID)
+	}
+
+	// Submit correct answer for concept b.
+	resRemConcept, err := e.SubmitAnswer(sess.ID, st.ID, qRemConcept.AttemptID, "99", 5.0)
+	if err != nil || !resRemConcept.Correct {
+		t.Fatalf("submit remedial concept: %v", err)
+	}
+
+	// Session halt is cleared.
+	e.mu.Lock()
+	halted := e.sessions[sess.ID].halted
+	e.mu.Unlock()
+	if halted {
+		t.Error("expected halt cleared after completing remedial sequence")
+	}
+
+	// Normal completion path resumes.
+	qResume, err := e.NextQuestion(sess.ID, st.ID)
+	if err != nil || qResume == nil {
+		t.Fatal("expected scheduling to resume normally")
+	}
+}
+
+func TestEngine_Halt_DistinctConceptMissesDoNotHalt(t *testing.T) {
+	d, err := concepts.Build([]concepts.Concept{
+		{
+			ID: "a", Label: "Concept A", Domain: "d",
+			GradingType: "numeric", Prerequisites: []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 60},
+		},
+		{
+			ID: "b", Label: "Concept B", Domain: "d",
+			GradingType: "numeric", Prerequisites: []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 60},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build DAG: %v", err)
+	}
+	store, err := storage.NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+	reg := generator.NewRegistry()
+	reg.Register("a", &testGen{answer: "42"})
+	reg.Register("b", &testGen{answer: "99"})
+	e := New(store, d, reg, nil, nil)
+	st, _ := e.CreateStudent("interleaved")
+	sess, _ := e.repo.CreateSession(st.ID)
+
+	// Question 1 is missed.
+	q1, _ := e.NextQuestion(sess.ID, st.ID)
+	res1, _ := e.SubmitAnswer(sess.ID, st.ID, q1.AttemptID, "wrong", 5.0)
+	if res1.Halted {
+		t.Error("unexpected halt on first miss")
+	}
+
+	// Serve the other concept next so misses are across distinct concepts.
+	otherConcept := "b"
+	otherAnswer := "99"
+	if q1.ConceptID == "b" {
+		otherConcept = "a"
+		otherAnswer = "42"
+	}
+
+	e.mu.Lock()
+	as := e.sessions[sess.ID]
+	as.conceptID = otherConcept
+	as.attemptID = newAttemptID()
+	as.expectedAnswer = otherAnswer
+	as.answered = false
+	e.mu.Unlock()
+
+	// Question on the second concept is missed. Since this is only 1 miss on this concept, no halt occurs.
+	res2, err := e.SubmitAnswer(sess.ID, st.ID, as.attemptID, "wrong", 5.0)
+	if err != nil {
+		t.Fatalf("submit miss on second concept: %v", err)
+	}
+	if res2.Halted {
+		t.Error("expected no halt when misses occur across different concepts")
+	}
+}
+
+func TestEngine_Halt_StudyPath_KeyPrerequisites(t *testing.T) {
+	d, err := concepts.Build([]concepts.Concept{
+		{
+			ID: "a", Label: "Concept A", Domain: "d",
+			GradingType: "numeric", Prerequisites: []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 2, AvgTimeSeconds: 60},
+		},
+		{
+			ID: "b", Label: "Concept B", Domain: "d",
+			GradingType: "numeric", Prerequisites: []string{"a"},
+			KeyPrerequisites: []string{"a"},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 2, AvgTimeSeconds: 60},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build DAG: %v", err)
+	}
+	store, err := storage.NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+	reg := generator.NewRegistry()
+	reg.Register("a", &testGen{answer: "42"})
+	reg.Register("b", &testGen{answer: "99"})
+	e := New(store, d, reg, nil, nil)
+	st, _ := e.CreateStudent("study-halt")
+
+	e.SetStudyAnchor(st.ID, "b", "99")
+
+	// Miss 1 on concept b
+	res1, err := e.SubmitStudyAnswer(st.ID, "b", "wrong", 5.0, "")
+	if err != nil {
+		t.Fatalf("miss 1: %v", err)
+	}
+	if res1.Halted {
+		t.Error("expected no halt on first study miss")
+	}
+
+	e.SetStudyAnchor(st.ID, "b", "99")
+
+	// Miss 2 on concept b triggers 2-fail halt
+	res2, err := e.SubmitStudyAnswer(st.ID, "b", "wrong", 5.0, "")
+	if err != nil {
+		t.Fatalf("miss 2: %v", err)
+	}
+	if !res2.Halted {
+		t.Error("expected halt on second study miss")
+	}
+	if res2.XP != 0 {
+		t.Errorf("expected 0 XP on halt, got %d", res2.XP)
+	}
+	if len(res2.Remedial) != 2 || res2.Remedial[0] != "a" || res2.Remedial[1] != "b" {
+		t.Errorf("expected remedial [a b], got %v", res2.Remedial)
+	}
+	rem := e.RemedialQueue(st.ID)
+	if len(rem) != 1 || rem[0] != "a" {
+		t.Errorf("expected engine remedial queue [a], got %v", rem)
+	}
+
+	// Correct answer on prerequisite drains the remedial queue
+	e.SetStudyAnchor(st.ID, "a", "42")
+	res3, err := e.SubmitStudyAnswer(st.ID, "a", "42", 5.0, "")
+	if err != nil || !res3.Correct {
+		t.Fatalf("correct remedial submit: %v", err)
+	}
+	if len(e.RemedialQueue(st.ID)) != 0 {
+		t.Errorf("expected empty remedial queue, got %v", e.RemedialQueue(st.ID))
+	}
+}
+
 func TestEngine_NegativeXP_AfterSecondRush(t *testing.T) {
 	e := testEngine(t)
 	st, _ := e.CreateStudent("rusher")

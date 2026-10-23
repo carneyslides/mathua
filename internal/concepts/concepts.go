@@ -73,6 +73,21 @@ func (d *DAG) PrereqsOf(id string) []*Concept {
 	return nil
 }
 
+// KeyPrereqsOf returns the key prerequisites declared for a concept.
+func (d *DAG) KeyPrereqsOf(id string) []*Concept {
+	c := d.concepts[id]
+	if c == nil || len(c.KeyPrerequisites) == 0 {
+		return nil
+	}
+	out := make([]*Concept, 0, len(c.KeyPrerequisites))
+	for _, pid := range c.KeyPrerequisites {
+		if p := d.concepts[pid]; p != nil {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 func (d *DAG) DependentsOf(id string) []*Concept {
 	if deps, ok := d.dependentsOf[id]; ok {
 		out := make([]*Concept, len(deps))

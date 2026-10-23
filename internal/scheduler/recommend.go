@@ -129,6 +129,14 @@ type RecommendInput struct {
 	// ExcludeConceptIds drops concepts already shown — the finished concept must not be offered
 	// back as the next thing to learn.
 	ExcludeConceptIds []string
+
+	// KeyPrerequisites are explicit key prerequisite concepts targeted for remediation.
+	// When present, they inject at the front of the learner task shelf.
+	KeyPrerequisites []string
+	// RemedialConcepts are explicit remedial concepts scheduled at the front of the task shelf.
+	RemedialConcepts []string
+	// HaltedConceptID is an optional halted concept identifier whose KeyPrerequisites are targeted.
+	HaltedConceptID string
 }
 
 // RecommendCaps bound the set. Five is the number of cards the existing shelf shows, so the
@@ -176,7 +184,66 @@ func (s *Scheduler) Recommend(in RecommendInput) RecommendationResponse {
 		return resp
 	}
 
+	var remedialRecs []Recommendation
+	remedialSeen := make(map[string]bool)
+
+	var targetRemedials []string
+	if in.HaltedConceptID != "" {
+		if c := s.dag.Concept(in.HaltedConceptID); c != nil && len(c.KeyPrerequisites) > 0 {
+			for _, kp := range c.KeyPrerequisites {
+				if !remedialSeen[kp] {
+					remedialSeen[kp] = true
+					targetRemedials = append(targetRemedials, kp)
+				}
+			}
+		}
+	}
+	for _, kp := range in.KeyPrerequisites {
+		if !remedialSeen[kp] {
+			remedialSeen[kp] = true
+			targetRemedials = append(targetRemedials, kp)
+		}
+	}
+	for _, kp := range in.RemedialConcepts {
+		if !remedialSeen[kp] {
+			remedialSeen[kp] = true
+			targetRemedials = append(targetRemedials, kp)
+		}
+	}
+
+	excludeMap := make(map[string]bool, len(in.ExcludeConceptIds))
+	for _, id := range in.ExcludeConceptIds {
+		excludeMap[id] = true
+	}
+
+	for _, cid := range targetRemedials {
+		if excludeMap[cid] {
+			continue
+		}
+		c := s.dag.Concept(cid)
+		if c == nil {
+			continue
+		}
+		// Priority 200 ensures targeted remediation outranks regular tasks.
+		r := s.render(c, KindPractice, ReasonPrerequisite, 200.0)
+		r.bucket = bucketRemediation
+		remedialRecs = append(remedialRecs, r)
+	}
+
 	picked := s.selectTasks(in, now)
+
+	if len(remedialRecs) > 0 {
+		var remaining []Recommendation
+		for _, p := range picked {
+			if !remedialSeen[p.ConceptID] {
+				remaining = append(remaining, p)
+			}
+		}
+		picked = append(remedialRecs, remaining...)
+		if len(picked) > MaxRecommendations {
+			picked = picked[:MaxRecommendations]
+		}
+	}
 
 	// The XP gate is a task, not a banner. It becomes the head when it is the most valuable
 	// thing available, and an alternative otherwise — the point of surfacing it here is that a
@@ -192,9 +259,9 @@ func (s *Scheduler) Recommend(in RecommendInput) RecommendationResponse {
 			CTA:      "Take the check →",
 			Priority: 100,
 		}
-		// A due retrieval check outranks the quiz: it is worth more to the learner, and the
-		// quiz is still surfaced. Only when nothing is due does the quiz lead.
-		if len(picked) > 0 && picked[0].Kind == KindReview {
+		// A due retrieval check or targeted remediation outranks the quiz.
+		// Only when nothing is due does the quiz lead.
+		if len(picked) > 0 && (picked[0].Kind == KindReview || picked[0].Reason == ReasonPrerequisite) {
 			resp.Alternatives = append(resp.Alternatives, mc)
 		} else {
 			picked = append([]Recommendation{mc}, picked...)
