@@ -1623,7 +1623,7 @@
     "label": "Rationalizing with conjugates",
     "domain": "algebra",
     "subdomain": "algebra.radicals",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "alg.radical.rationalize"
     ],

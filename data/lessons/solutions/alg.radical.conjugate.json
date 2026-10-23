@@ -1,0 +1,19 @@
+{
+  "concept": "alg.radical.conjugate",
+  "setup": "Multiply the conjugate pair \\((\\sqrt{[[a]]} + \\sqrt{[[b]]})(\\sqrt{[[a]]} - \\sqrt{[[b]]})\\).",
+  "steps": [
+    {
+      "fact": "a",
+      "say": "Use the difference of squares identity \\((u + v)(u - v) = u^2 - v^2\\) on \\(u = \\sqrt{[[a]]}\\) and \\(v = \\sqrt{[[b]]}\\)."
+    },
+    {
+      "fact": "b",
+      "say": "Evaluate each squared radical: \\((\\sqrt{[[a]]})^2 = [[a]]\\) and \\((\\sqrt{[[b]]})^2 = [[b]]\\)."
+    },
+    {
+      "fact": "answer",
+      "say": "Subtract the two values: \\([[a]] - [[b]] = [[answer]]\\)."
+    }
+  ],
+  "answer": "The product is \\([[answer]]\\)."
+}

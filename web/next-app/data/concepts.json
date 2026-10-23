@@ -2296,7 +2296,7 @@
   },
   {
     "domain": "algebra",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "id": "alg.radical.conjugate",
     "label": "Rationalizing with conjugates",
     "mastery_threshold": {

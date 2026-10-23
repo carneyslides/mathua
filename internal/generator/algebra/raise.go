@@ -377,29 +377,38 @@ func (g *radicalOpsGen) Generate(ctx generator.GeneratorContext) generator.Probl
 // Rationalizing with conjugates (multiple choice)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Rationalizing with conjugates (numeric)
+// ---------------------------------------------------------------------------
+
 type radicalConjugateGen struct{}
 
 func (g *radicalConjugateGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return algPickMC([]algMCClaim{
-		{
-			q:           "To rationalize a fraction whose denominator is the square root of a plus the square root of b, multiply numerator and denominator by...",
-			correct:     "the square root of a minus the square root of b",
-			distractors: []string{"the square root of a plus the square root of b", "the product of the square root of a and the square root of b", "a minus b"},
-			reason:      "The conjugate is the same expression with the middle sign reversed, and their product clears the radicals.",
+	scale := int(1 + ctx.Difficulty*4)
+	a := rand.Intn(scale*6) + 3
+	b := rand.Intn(a-1) + 1
+	if a == b {
+		a++
+	}
+
+	ans := a - b
+	ansStr := strconv.Itoa(ans)
+	aStr := strconv.Itoa(a)
+	bStr := strconv.Itoa(b)
+
+	return generator.Problem{
+		Question: fmt.Sprintf("Evaluate the product \\((\\sqrt{%d} + \\sqrt{%d})(\\sqrt{%d} - \\sqrt{%d})\\).", a, b, a, b),
+		Answer:   ansStr,
+		Explanation: fmt.Sprintf(
+			"Use the difference of squares identity: \\((\\sqrt{%d} + \\sqrt{%d})(\\sqrt{%d} - \\sqrt{%d}) = (\\sqrt{%d})^2 - (\\sqrt{%d})^2 = %d - %d = %d\\).",
+			a, b, a, b, a, b, a, b, ans,
+		),
+		Facts: map[string]string{
+			"a":      aStr,
+			"b":      bStr,
+			"answer": ansStr,
 		},
-		{
-			q:           "Multiplying the square root of 5 plus the square root of 2 by its conjugate gives...",
-			correct:     "3",
-			distractors: []string{"7", "3 plus twice the square root of 10", "the square root of 7"},
-			reason:      "The product is (5 - 2) by the difference of squares identity, which is 3.",
-		},
-		{
-			q:           "The conjugate of x plus the square root of y is...",
-			correct:     "x minus the square root of y",
-			distractors: []string{"-x plus the square root of y", "x plus the square root of y", "the square root of y minus x"},
-			reason:      "Only the sign between the two terms changes when forming a conjugate.",
-		},
-	})
+	}
 }
 
 // ---------------------------------------------------------------------------
