@@ -4,7 +4,7 @@
     "label": "What is a differential equation",
     "domain": "differential_equations",
     "subdomain": "differential_equations.basics",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "calc.deriv.concept",
       "calc.integral.indefinite"

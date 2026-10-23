@@ -40,37 +40,91 @@ func Register(reg *generator.Registry) {
 type conceptGen struct{}
 
 func (g *conceptGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Order of differential equation y^(n) + a y' + b y = 0
+		n := smallInt(1, 5+int(ctx.Difficulty*3))
+		a := smallInt(2, 6)
+		b := smallInt(1, 9)
+		derivStr := "y'"
+		switch n {
+		case 1:
+			derivStr = "y'"
+		case 2:
+			derivStr = "y''"
+		case 3:
+			derivStr = "y'''"
+		default:
+			derivStr = fmt.Sprintf("y^{(%d)}", n)
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the order of the differential equation \\(%s + %dy' + %dy = 0\\)?", derivStr, a, b),
+			Answer:   fmt.Sprintf("%d", n),
+			Explanation: fmt.Sprintf(
+				"The order of a differential equation is the order of the highest derivative appearing in the equation. Here the highest derivative is \\(%s\\), so the order is %d.",
+				derivStr, n,
+			),
+		}
+
+	case 1:
+		// Degree (exponent of highest derivative)
+		n := smallInt(1, 3)
+		deg := smallInt(2, 5)
+		a := smallInt(2, 6)
+		derivStr := "y'"
+		if n == 2 {
+			derivStr = "y''"
+		} else if n == 3 {
+			derivStr = "y'''"
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the degree (the power of the highest-order derivative) of the differential equation \\((%s)^{%d} + %dy = 0\\)?", derivStr, deg, a),
+			Answer:   fmt.Sprintf("%d", deg),
+			Explanation: fmt.Sprintf(
+				"The degree of a differential equation is the exponent of the highest-order derivative when written in polynomial form. The highest-order derivative is \\(%s\\) raised to power %d, giving degree %d.",
+				derivStr, deg, deg,
+			),
+		}
+
+	case 2:
+		// Number of essential arbitrary constants in n-th order ODE general solution
+		n := smallInt(1, 6+int(ctx.Difficulty*3))
+		return generator.Problem{
+			Question: fmt.Sprintf("How many essential arbitrary constants appear in the general solution of a linear ordinary differential equation of order %d?", n),
+			Answer:   fmt.Sprintf("%d", n),
+			Explanation: fmt.Sprintf(
+				"An ordinary differential equation of order %d requires %d successive integrations to solve, introducing exactly %d essential arbitrary constants in its general solution.",
+				n, n, n,
+			),
+		}
+
+	case 3:
+		// Order in Leibniz notation d^k y / dx^k
+		k := smallInt(2, 6)
+		c := smallInt(2, 8)
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the order of the differential equation \\(\\frac{d^{%d}y}{dx^{%d}} + %dy = 0\\)?", k, k, c),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf(
+				"In Leibniz notation, \\(\\frac{d^{%d}y}{dx^{%d}}\\) denotes the %d-th derivative of \\(y\\) with respect to \\(x\\). Therefore the equation has order %d.",
+				k, k, k, k,
+			),
+		}
+
+	default:
+		// State-space system dimension
+		n := smallInt(2, 6)
+		a := smallInt(2, 7)
+		return generator.Problem{
+			Question: fmt.Sprintf("Converting the scalar %d-th order differential equation \\(y^{(%d)} + %dy = 0\\) into an equivalent system of first-order differential equations produces a state vector of what dimension?", n, n, a),
+			Answer:   fmt.Sprintf("%d", n),
+			Explanation: fmt.Sprintf(
+				"Defining state variables \\(x_1 = y, x_2 = y', \\dots, x_%d = y^{(%d)}\\) converts the %d-th order scalar ODE into a first-order system with a state vector of dimension %d.",
+				n, n-1, n, n,
+			),
+		}
 	}
-	easy := []entry{
-		{q: "Is \\(y' = 2x\\) a differential equation? (yes/no)", a: "yes", e: "The equation contains a derivative \\(y'\\), so it is a differential equation."},
-		{q: "Is \\(x^{2} + y^{2} = 5\\) a differential equation? (yes/no)", a: "no", e: "The equation contains no derivatives, so it is not a differential equation."},
-		{q: "Does the equation \\(x^{3} - y^{3} = 10\\) contain a derivative? (yes/no)", a: "no", e: "The equation contains no derivative terms."},
-	}
-	orders := []struct{ q, a, e string }{
-		{"What is the order of \\(y' + 2y = 0\\)? (enter a number)", "1", "The highest derivative is \\(y'\\), first order."},
-		{"What is the order of \\(y'' + y = 0\\)? (enter a number)", "2", "The highest derivative is \\(y''\\), second order."},
-		{"What is the order of \\(y''' + 2y'' - y' + y = 0\\)? (enter a number)", "3", "The highest derivative is \\(y'''\\), third order."},
-		{"What is the order of \\(dy/dx = 3x^{2}\\)? (enter a number)", "1", "Only a first derivative appears."},
-		{"What is the order of \\(d^{2}y/dx^{2} + y = 0\\)? (enter a number)", "2", "The highest derivative is second order."},
-	}
-	o := orders[rand.Intn(len(orders))]
-	easy = append(easy, entry{q: o.q, a: o.a, e: o.e})
-	hard := []entry{
-		{q: "Is \\(\\sin(x) + \\cos(y) = 1\\) a differential equation? (yes/no)", a: "no", e: "The equation contains no derivatives, so it is not a differential equation."},
-		{q: "Is \\(3x + 2y = 7\\) a differential equation? (yes/no)", a: "no", e: "The equation contains no derivatives, so it is not a differential equation."},
-		{q: "Does \\(y' = 2x\\) have order 1? (yes/no)", a: "yes", e: "Only the first derivative appears."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type separableGen struct{}
