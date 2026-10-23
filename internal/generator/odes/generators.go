@@ -675,35 +675,76 @@ func (g *characteristicsGen) Generate(ctx generator.GeneratorContext) generator.
 type fourierGen struct{}
 
 func (g *fourierGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Algebraic multiplier evaluation at specific angular frequency omega
+		k := smallInt(12, 30)
+		w := smallInt(1, 4)
+		pw := k - w*w
+		return generator.Problem{
+			Question: fmt.Sprintf("Applying the Fourier transform to \\(y'' + %dy = f(t)\\) produces the algebraic relation \\(P(\\omega) \\hat{y}(\\omega) = \\hat{f}(\\omega)\\), where \\(P(\\omega) = %d - \\omega^2\\). Evaluate \\(P(%d)\\).", k, k, w),
+			Answer:   fmt.Sprintf("%d", pw),
+			Explanation: fmt.Sprintf(
+				"The Fourier transform replaces \\(\\frac{d^2}{dt^2}\\) with \\((i\\omega)^2 = -\\omega^2\\). Therefore \\(P(\\omega) = %d - \\omega^2\\). At \\(\\omega = %d\\), \\(P(%d) = %d - %d^2 = %d - %d = %d\\).",
+				k, w, w, k, w, k, w*w, pw,
+			),
+		}
+
+	case 1:
+		// Squared transfer denominator for first-order system y' + a*y = f(t)
+		a := smallInt(2, 6)
+		w := smallInt(1, 8)
+		denom := w*w + a*a
+		return generator.Problem{
+			Question: fmt.Sprintf("For the relaxation system \\(y' + %dy = f(t)\\), the squared denominator of the frequency response function is \\(D(\\omega) = \\omega^2 + %d^2\\). Evaluate \\(D(%d)\\).", a, a, w),
+			Answer:   fmt.Sprintf("%d", denom),
+			Explanation: fmt.Sprintf(
+				"The Fourier transform of the operator is \\(i\\omega + %d\\). The squared denominator is \\(|i\\omega + %d|^2 = \\omega^2 + %d^2 = \\omega^2 + %d\\). Evaluating at \\(\\omega = %d\\) gives \\(%d^2 + %d = %d + %d = %d\\).",
+				a, a, a, a*a, w, w, a*a, w*w, a*a, denom,
+			),
+		}
+
+	case 2:
+		// Resonant frequency of undamped oscillator
+		w0 := smallInt(2, 9)
+		k := w0 * w0
+		return generator.Problem{
+			Question: fmt.Sprintf("At what positive angular frequency \\(\\omega > 0\\) does the undamped oscillator \\(y'' + %dy = f(t)\\) experience resonance?", k),
+			Answer:   fmt.Sprintf("%d", w0),
+			Explanation: fmt.Sprintf(
+				"The Fourier transform gives \\((-\\omega^2 + %d)\\hat{y}(\\omega) = \\hat{f}(\\omega)\\). Resonance occurs when the transfer denominator vanishes: \\(\\omega^2 = %d\\), giving \\(\\omega = %d\\).",
+				k, k, w0,
+			),
+		}
+
+	case 3:
+		// Fourth-order operator frequency factor
+		c := smallInt(1, 20)
+		w := smallInt(1, 3)
+		w4 := w * w * w * w
+		ans := w4 + c
+		return generator.Problem{
+			Question: fmt.Sprintf("For the fourth-order differential equation \\(y^{(4)} + %dy = f(t)\\), the Fourier transform yields \\((\\omega^4 + %d)\\hat{y}(\\omega) = \\hat{f}(\\omega)\\). Evaluate \\(\\omega^4 + %d\\) at \\(\\omega = %d\\).", c, c, c, w),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Because \\((i\\omega)^4 = i^4 \\omega^4 = \\omega^4\\), the operator multiplier is \\(\\omega^4 + %d\\). Substituting \\(\\omega = %d\\) gives \\(%d^4 + %d = %d + %d = %d\\).",
+				c, w, w, c, w4, c, ans,
+			),
+		}
+
+	default:
+		// Plancherel total energy
+		energy := smallInt(5, 50)
+		return generator.Problem{
+			Question: fmt.Sprintf("A signal \\(y(t)\\) has total time-domain energy \\(\\int_{-\\infty}^\\infty |y(t)|^2 dt = %d\\). What is the total spectral energy \\(\\frac{1}{2\\pi}\\int_{-\\infty}^\\infty |\\hat{y}(\\omega)|^2 d\\omega\\)?", energy),
+			Answer:   fmt.Sprintf("%d", energy),
+			Explanation: fmt.Sprintf(
+				"By Plancherel's theorem for the Fourier transform, the total energy in the time domain is identical to the total energy in the frequency domain: \\(\\frac{1}{2\\pi}\\int_{-\\infty}^\\infty |\\hat{y}(\\omega)|^2 d\\omega = \\int_{-\\infty}^\\infty |y(t)|^2 dt = %d\\).",
+				energy,
+			),
+		}
 	}
-	easy := []entry{
-		{"Does Fourier transform convert differentiation to multiplication by iω? (yes/no)", "yes", "F{d/dx}=iω."},
-		{"Is Fourier transform of convolution a product? (yes/no)", "yes", "Like Laplace, F{f*g}=F{f}·F{g}."},
-	}
-	// Parameterized production: frequency factor for y'' + k*y = f.
-	ks := []int{1, 4, 9}
-	k := ks[rand.Intn(len(ks))]
-	easy = append(easy, entry{
-		q: fmt.Sprintf("For y'' + %dy = f(t), Fourier gives (-w^2+%d)Y = F. What is the factor multiplying Y? (type like -w^2+4)", k, k),
-		a: fmt.Sprintf("-w^2+%d", k),
-		e: fmt.Sprintf("F{y''} = -w^2 Y and F{%dy} = %dY, so the factor is -w^2+%d.", k, k, k),
-	})
-	hard := []entry{
-		{"Does Fourier solve ODEs with constant coefficients by algebra in frequency domain? (yes/no)", "yes", "Transform, solve algebraic equation, invert."},
-		{"Are Fourier and Laplace both integral transforms for ODEs? (yes/no)", "yes", "Both convert differential to algebraic."},
-		{"Does inverse Fourier require contour integration? (yes/no)", "yes", "Inversion integral over real line."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type bifurcationGen struct{}
