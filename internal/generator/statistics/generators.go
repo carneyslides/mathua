@@ -904,26 +904,115 @@ func (g *uniformDistGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type zTableGen struct{}
 
 func (g *zTableGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"What z-score corresponds to the 50th percentile of N(0,1)?", "0", "The median of standard Normal is 0."},
-		{"What z-score approximately corresponds to the 97.5th percentile?", "1.96", "P(Z < 1.96) ≈ 0.975, used for 95% confidence intervals."},
-		{"What is the z-score for a 95% confidence interval?", "1.96", "95% CI uses z = 1.96 (approximately 2)."},
-		{"Does a z-score measure how many SD a value is from the mean? (yes/no)", "yes", "z = (x - mean)/SD measures standard deviations from the mean."},
-		{"About what proportion of data falls within z = +-1? Answer as a decimal.", "0.68", "About 0.68 of data falls within 1 standard deviation of the mean."},
-		{"About what proportion of data falls within z = +-2? Answer as a decimal.", "0.95", "About 0.95 of data falls within 2 standard deviations of the mean."},
-		{"About what proportion of data falls within z = +-3? Answer as a decimal.", "0.997", "About 0.997 of data falls within 3 standard deviations of the mean."},
-		{"A z-score of -2 means the value is ____.", "2 SD below the mean", "Negative z: below mean; positive z: above mean."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type zScoreItem struct {
+			x     int
+			mu    int
+			sigma int
+			z     int
+		}
+		items := []zScoreItem{
+			{85, 70, 5, 3},
+			{116, 100, 8, 2},
+			{42, 50, 4, -2},
+			{135, 120, 5, 3},
+			{65, 80, 5, -3},
+			{148, 100, 12, 4},
+			{76, 70, 3, 2},
+			{55, 65, 5, -2},
+		}
+		it := items[rand.Intn(len(items))]
+		diff := it.x - it.mu
+		return generator.Problem{
+			Question: fmt.Sprintf("A normally distributed population has mean \\(\\mu = %d\\) and standard deviation \\(\\sigma = %d\\). Calculate the z-score for an observed value \\(x = %d\\).", it.mu, it.sigma, it.x),
+			Answer:   fmt.Sprintf("%d", it.z),
+			Explanation: fmt.Sprintf("The z-score standardizes the observation: \\(z = \\frac{x - \\mu}{\\sigma} = \\frac{%d - %d}{%d} = \\frac{%d}{%d} = %d\\).",
+				it.x, it.mu, it.sigma, diff, it.sigma, it.z),
+		}
+	case 1:
+		type rawItem struct {
+			mu    int
+			sigma int
+			z     int
+			x     int
+		}
+		items := []rawItem{
+			{100, 15, 2, 130},
+			{75, 8, 3, 99},
+			{50, 6, -2, 38},
+			{80, 10, 3, 110},
+			{120, 12, 2, 144},
+			{60, 5, -3, 45},
+			{90, 7, 4, 118},
+			{70, 9, -2, 52},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A test has normal distribution with mean \\(\\mu = %d\\) and standard deviation \\(\\sigma = %d\\). Find the raw score \\(x\\) corresponding to \\(z = %d\\).", it.mu, it.sigma, it.z),
+			Answer:   fmt.Sprintf("%d", it.x),
+			Explanation: fmt.Sprintf("Unstandardizing the score gives \\(x = \\mu + z\\sigma = %d + (%d \\cdot %d) = %d + %d = %d\\).",
+				it.mu, it.z, it.sigma, it.mu, it.z*it.sigma, it.x),
+		}
+	case 2:
+		type empItem struct {
+			mu    int
+			sigma int
+			k     int
+			pct   int
+		}
+		items := []empItem{
+			{100, 15, 1, 68},
+			{50, 5, 2, 95},
+			{70, 10, 1, 68},
+			{120, 20, 2, 95},
+			{80, 8, 1, 68},
+			{90, 12, 2, 95},
+			{60, 6, 1, 68},
+			{110, 14, 2, 95},
+		}
+		it := items[rand.Intn(len(items))]
+		low := it.mu - it.k*it.sigma
+		high := it.mu + it.k*it.sigma
+		return generator.Problem{
+			Question: fmt.Sprintf("A variable follows a normal distribution with mean \\(\\mu = %d\\) and standard deviation \\(\\sigma = %d\\). According to the empirical rule, what integer percentage of observations lies between %d and %d?", it.mu, it.sigma, low, high),
+			Answer:   fmt.Sprintf("%d", it.pct),
+			Explanation: fmt.Sprintf("The interval \\([%d, %d]\\) corresponds to \\(\\mu \\pm %d\\sigma\\). By the empirical rule, approximately %d\\%% of data falls within %d standard deviations of the mean.",
+				low, high, it.k, it.pct, it.k),
+		}
+	case 3:
+		type centItem struct {
+			query string
+		}
+		items := []centItem{
+			{"mean"},
+			{"median"},
+			{"mode"},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("For a standard normal distribution \\(Z \\sim \\mathcal{N}(0, 1)\\), what is the %s value?", it.query),
+			Answer:   "0",
+			Explanation: fmt.Sprintf("By symmetry and definition of the standard normal distribution, the %s is exactly \\(z = 0\\).",
+				it.query),
+		}
+	default:
+		type stdNormItem struct {
+			property string
+			val      int
+			symbol   string
+		}
+		items := []stdNormItem{
+			{"variance", 1, "\\sigma^2"},
+			{"standard deviation", 1, "\\sigma"},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the %s of the standard normal distribution \\(Z \\sim \\mathcal{N}(0, 1)\\)?", it.property),
+			Answer:   fmt.Sprintf("%d", it.val),
+			Explanation: fmt.Sprintf("By definition of the standard normal distribution, the %s is \\(%s = %d\\).",
+				it.property, it.symbol, it.val),
+		}
 	}
 }
 
