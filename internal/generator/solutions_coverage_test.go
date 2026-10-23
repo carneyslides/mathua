@@ -40,7 +40,6 @@ var generatorExplained = map[string]string{
 	"trig.func.arctangent":            "table-driven: fixed question, fixed answer",
 	"trig.graph.cos":                  "table-driven: fixed question, fixed answer",
 	"trig.graph.inverse":              "table-driven: fixed question, fixed answer",
-	"trig.graph.period":               "table-driven: fixed question, fixed answer",
 	"trig.graph.reciprocal":           "table-driven: fixed question, fixed answer",
 	"trig.graph.sin":                  "table-driven: fixed question, fixed answer",
 	"trig.graph.tan":                  "table-driven: fixed question, fixed answer",

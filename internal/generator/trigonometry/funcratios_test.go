@@ -159,3 +159,33 @@ func TestRatioAnswersRecomputeFromFacts(t *testing.T) {
 		}
 	}
 }
+
+func TestPeriodGraphRecomputesFromFacts(t *testing.T) {
+	types := ratioShippedTypes(t)
+	if types["trig.graph.period"] != "numeric" {
+		t.Fatalf("trig.graph.period corpus grading_type = %q, want numeric", types["trig.graph.period"])
+	}
+
+	reg := ratioRegistry(t)
+	for i := 0; i < 100; i++ {
+		p, err := reg.GenerateContext("trig.graph.period", generator.GeneratorContext{Difficulty: 0.5})
+		if err != nil {
+			t.Fatalf("generate: %v", err)
+		}
+		b, err := strconv.Atoi(p.Facts["B"])
+		if err != nil || b <= 0 {
+			t.Fatalf("invalid fact B: %q", p.Facts["B"])
+		}
+		want := 360 / b
+		ans, err := strconv.Atoi(p.Answer)
+		if err != nil {
+			t.Fatalf("invalid answer: %q", p.Answer)
+		}
+		if ans != want {
+			t.Fatalf("sample %d: B=%d answer=%d want %d", i, b, ans, want)
+		}
+		if p.Facts["answer"] != p.Answer {
+			t.Fatalf("fact answer %q != p.Answer %q", p.Facts["answer"], p.Answer)
+		}
+	}
+}

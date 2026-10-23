@@ -1,0 +1,15 @@
+{
+  "concept": "trig.graph.period",
+  "setup": "The function is \\(y = [[A]] \\[[fn]]([[B]]x)\\).",
+  "steps": [
+    {
+      "fact": "B",
+      "say": "The standard \\([[fn]]\\) function has a base period of \\([[base_period]]^\\circ\\), and the coefficient \\(B = [[B]]\\) inside the argument compresses the horizontal period by a factor of \\([[B]]\\)."
+    },
+    {
+      "fact": "answer",
+      "say": "Dividing the base period by \\([[B]]\\) gives \\([[base_period]]^\\circ / [[B]] = [[answer]]^\\circ\\)."
+    }
+  ],
+  "answer": "So the period of the graph is \\([[answer]]^\\circ\\)."
+}
