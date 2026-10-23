@@ -54,7 +54,10 @@ func EligibilityOf(snapshots map[string]*ConceptSnapshot, now time.Time, c *conc
 			missing = append(missing, pid)
 			continue
 		}
-		if !ps.Placement {
+		if ps.IsProvisional && ps.Status == mastery.StatusLearning {
+			met = false
+			missing = append(missing, pid)
+		} else if !ps.Placement {
 			pstatus := mastery.EffectiveStatus(ps.Status, daysSince(ps.LastReviewed), mastery.DecayDays)
 			if pstatus != mastery.StatusMastered && pstatus != "DECAYING" {
 				met = false

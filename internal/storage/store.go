@@ -71,6 +71,10 @@ type ConceptProgress struct {
 	// counts toward mastery, XP, the quiz gate or review. Placement is not
 	// evidence (ADR-008, ADR-050).
 	PlacementSeeded bool `json:"placement_seeded,omitempty"`
+	// IsProvisional marks conditional completion from diagnostic placement.
+	// When a learner struggles on a dependent concept, provisional prerequisites
+	// demote to LEARNING and schedule for remedial review.
+	IsProvisional bool `json:"is_provisional,omitempty"`
 }
 
 type Session struct {

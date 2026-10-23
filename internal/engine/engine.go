@@ -1230,6 +1230,7 @@ func (e *Engine) SubmitAnswer(sessionID, studentID, attemptID, answer string, el
 	halted := false
 	var remedial []string
 	if !gr.Correct {
+		demoted, _ := e.CheckProvisionalFallback(studentID, sessionFields.conceptID)
 		if as.missConceptID != sessionFields.conceptID {
 			as.missConceptID = sessionFields.conceptID
 			as.consecutiveMisses = 1
@@ -1262,6 +1263,25 @@ func (e *Engine) SubmitAnswer(sessionID, studentID, attemptID, answer string, el
 			}
 			as.remedialQueue = append(as.remedialQueue, sessionFields.conceptID)
 			remedial = append(remedial, sessionFields.conceptID)
+		}
+		if len(demoted) > 0 {
+			halted = true
+			as.halted = true
+			var mergedRemedial []string
+			seenRemedial := make(map[string]bool)
+			for _, id := range demoted {
+				if !seenRemedial[id] {
+					seenRemedial[id] = true
+					mergedRemedial = append(mergedRemedial, id)
+				}
+			}
+			for _, id := range remedial {
+				if !seenRemedial[id] {
+					seenRemedial[id] = true
+					mergedRemedial = append(mergedRemedial, id)
+				}
+			}
+			remedial = mergedRemedial
 		}
 	} else {
 		as.consecutiveMisses = 0
@@ -1507,6 +1527,13 @@ func (e *Engine) submitAnswerWithTask(studentID, conceptID, answer, expected str
 	missKey := studentID + "|" + conceptID
 	halted := false
 	var remedial []string
+	var demoted []string
+	if !gr.Correct {
+		demoted, _ = e.CheckProvisionalFallback(studentID, conceptID)
+		if len(demoted) > 0 {
+			halted = true
+		}
+	}
 	e.mu.Lock()
 	if !gr.Correct {
 		e.studyMisses[missKey]++
@@ -1536,11 +1563,13 @@ func (e *Engine) submitAnswerWithTask(studentID, conceptID, answer, expected str
 				xp = xppolicy.RushPenalty
 			}
 		}
-		// Batch 1: immediate remedial enqueue on quiz miss — missed concept
+		// Immediate remedial enqueue on quiz miss — missed concept
 		// plus its key prerequisites surface first in Study after the quiz.
 		if taskType == TaskQuiz {
 			e.enqueueQuizRemedialLocked(studentID, conceptID)
 			remedial = append([]string(nil), e.quizRemedial[studentID]...)
+		} else if len(demoted) > 0 {
+			remedial = append([]string(nil), demoted...)
 		}
 	} else {
 		delete(e.studyMisses, missKey)
@@ -2106,6 +2135,14 @@ func (e *Engine) ApplyGoalResults(studentID string, session *diagnostic.Session)
 	if err := e.repo.UpsertProgressBatch(batch); err != nil {
 		return fmt.Errorf("save diagnostic progress: %w", err)
 	}
+	if e.diag != nil {
+		report := e.diag.Report(session)
+		if report != nil && len(report.ConditionallyCompleted) > 0 {
+			if err := e.ApplyDiagnosticReport(studentID, report); err != nil {
+				return err
+			}
+		}
+	}
 	// Set active path to the diagnostic's concept set for focused practice
 	if len(session.Attempts) > 0 {
 		e.mu.Lock()
@@ -2117,6 +2154,155 @@ func (e *Engine) ApplyGoalResults(studentID string, session *diagnostic.Session)
 		e.mu.Unlock()
 	}
 	return nil
+}
+
+// ApplyDiagnosticReport marks conditionally completed concepts from the diagnostic
+// report as provisional. When a learner struggles on a dependent concept,
+// provisional prerequisites demote to LEARNING and schedule for remedial review.
+func (e *Engine) ApplyDiagnosticReport(studentID string, report *diagnostic.DiagnosticReport) error {
+	if report == nil || len(report.ConditionallyCompleted) == 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	seen := make(map[string]bool, len(report.ConditionallyCompleted))
+	for _, raw := range report.ConditionallyCompleted {
+		cid := e.resolveConceptID(raw)
+		if cid == "" || seen[cid] {
+			continue
+		}
+		seen[cid] = true
+
+		existing, err := e.repo.GetProgress(studentID, cid)
+		if err != nil {
+			return fmt.Errorf("load provisional progress %s: %w", cid, err)
+		}
+		if existing == nil {
+			existing = &storage.ConceptProgress{
+				StudentID:       studentID,
+				ConceptID:       cid,
+				Status:          string(mastery.StatusMastered),
+				PlacementSeeded: true,
+				IsProvisional:   true,
+				SM2EFactor:      2.5,
+				LastAttempted:   &now,
+			}
+		} else {
+			// If already mastered through normal practice without placement seeding,
+			// keep genuine mastery intact.
+			if existing.Status == string(mastery.StatusMastered) && !existing.PlacementSeeded && !existing.IsProvisional {
+				continue
+			}
+			existing.IsProvisional = true
+			existing.Status = string(mastery.StatusMastered)
+			existing.PlacementSeeded = true
+			if existing.LastAttempted == nil {
+				existing.LastAttempted = &now
+			}
+		}
+		if err := e.repo.UpsertProgress(existing); err != nil {
+			return fmt.Errorf("save provisional progress %s: %w", cid, err)
+		}
+	}
+	return nil
+}
+
+// resolveConceptID resolves a concept ID or Label to a valid concept ID in DAG.
+func (e *Engine) resolveConceptID(idOrLabel string) string {
+	if e.dag == nil {
+		return idOrLabel
+	}
+	if c := e.dag.Concept(idOrLabel); c != nil {
+		return c.ID
+	}
+	for _, c := range e.dag.Order() {
+		if c.Label == idOrLabel {
+			return c.ID
+		}
+	}
+	return idOrLabel
+}
+
+// CheckProvisionalFallback inspects the immediate prerequisites of conceptID.
+// If any prerequisite has IsProvisional set, it demotes from MASTERED to
+// LEARNING, marks with high weakness (0.8) and streak 0, persists to storage
+// and schedules for remedial study first.
+func (e *Engine) CheckProvisionalFallback(studentID, conceptID string) ([]string, error) {
+	if e.dag == nil {
+		return nil, nil
+	}
+	c := e.dag.Concept(conceptID)
+	if c == nil {
+		return nil, nil
+	}
+	var demoted []string
+	for _, prereqID := range c.Prerequisites {
+		p, err := e.repo.GetProgress(studentID, prereqID)
+		if err != nil {
+			return nil, fmt.Errorf("load prerequisite progress %s: %w", prereqID, err)
+		}
+		if p != nil && p.IsProvisional {
+			p.Status = string(mastery.StatusLearning)
+			p.Streak = 0
+			p.WeaknessScore = 0.8
+			if err := e.repo.UpsertProgress(p); err != nil {
+				return nil, fmt.Errorf("demote provisional prerequisite %s: %w", prereqID, err)
+			}
+			demoted = append(demoted, prereqID)
+		}
+	}
+	if len(demoted) > 0 {
+		e.enqueueRemedialHead(studentID, demoted)
+	}
+	return demoted, nil
+}
+
+// enqueueRemedialHead prepends demoted provisional concepts to the student remedial queues.
+func (e *Engine) enqueueRemedialHead(studentID string, demoted []string) {
+	if len(demoted) == 0 {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// Prepend to quiz and study remedial queue
+	existingQuiz := e.quizRemedial[studentID]
+	newQuiz := make([]string, 0, len(demoted)+len(existingQuiz))
+	seen := make(map[string]bool)
+	for _, id := range demoted {
+		if !seen[id] {
+			seen[id] = true
+			newQuiz = append(newQuiz, id)
+		}
+	}
+	for _, id := range existingQuiz {
+		if !seen[id] {
+			seen[id] = true
+			newQuiz = append(newQuiz, id)
+		}
+	}
+	e.quizRemedial[studentID] = newQuiz
+
+	// Prepend to active practice sessions for this student
+	for _, as := range e.sessions {
+		if as.studentID == studentID {
+			as.halted = true
+			newRemedial := make([]string, 0, len(demoted)+len(as.remedialQueue))
+			seenSession := make(map[string]bool)
+			for _, id := range demoted {
+				if !seenSession[id] {
+					seenSession[id] = true
+					newRemedial = append(newRemedial, id)
+				}
+			}
+			for _, id := range as.remedialQueue {
+				if !seenSession[id] {
+					seenSession[id] = true
+					newRemedial = append(newRemedial, id)
+				}
+			}
+			as.remedialQueue = newRemedial
+		}
+	}
 }
 
 func (e *Engine) WeaknessMap(studentID string) map[string]float64 {
@@ -2591,6 +2777,7 @@ func (e *Engine) applyGradedAttempt(progress *storage.ConceptProgress, o gradedA
 	}
 	if newStatus == mastery.StatusMastered {
 		progress.WeaknessScore = 0.0
+		progress.IsProvisional = false
 	}
 	// The decay clock starts when a tier is attained, not when a streak happens to reach
 	// the old threshold.

@@ -440,6 +440,28 @@ func TestEngine_Report_ConditionallyCompleted(t *testing.T) {
 	}
 }
 
+func TestEngine_Report_ConditionallyCompleted_BeliefThresholdBand(t *testing.T) {
+	e := NewEngine(testDAG(t), mustRegistry(t))
+	s := e.Start()
+
+	// Direct check on belief band [beliefThreshold, beliefThreshold+0.15).
+	cid := s.order[0].ID
+	s.confidence[cid] = 0.5
+	s.beliefs[cid] = beliefThreshold + 0.05
+
+	rep := e.Report(s)
+	found := false
+	for _, name := range rep.ConditionallyCompleted {
+		if name == s.order[0].Label || name == cid {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected %q in conditionally completed list", cid)
+	}
+}
+
 // Batch 2: supplementalDiagnostic re-probes settled low-confidence concepts
 // once each (legacy path: answers recorded without question probes leave
 // confidence at 0), then reports complete.

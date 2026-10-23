@@ -46,6 +46,10 @@ type ConceptSnapshot struct {
 	// It is not mastery and is never used to decide mastery, XP, the quiz gate or
 	// review (ADR-008, ADR-050).
 	Placement bool
+	// IsProvisional marks a conditionally completed prerequisite from diagnostic
+	// placement. If a learner struggles on a dependent concept, the prerequisite
+	// demotes to LEARNING and blocks progression until relearned.
+	IsProvisional bool
 }
 
 // Next picks the next concept for a student to work on.
@@ -211,6 +215,10 @@ func prereqsMet(dag *concepts.DAG, c *concepts.Concept, snapshots map[string]*Co
 	for _, pid := range c.Prerequisites {
 		snap := snapshots[pid]
 		if snap == nil {
+			return false
+		}
+		// A demoted provisional prerequisite blocks dependent progression.
+		if snap.IsProvisional && snap.Status == mastery.StatusLearning {
 			return false
 		}
 		// Placement-seeded prerequisites count as satisfied. The diagnostic

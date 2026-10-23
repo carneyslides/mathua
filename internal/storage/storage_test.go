@@ -200,6 +200,41 @@ func TestUpsertProgress_Update(t *testing.T) {
 	}
 }
 
+func TestUpsertProgress_ProvisionalRoundTrip(t *testing.T) {
+	store := newTestStore(t)
+	st, _ := store.CreateStudent("provisional")
+
+	p := &ConceptProgress{
+		StudentID:     st.ID,
+		ConceptID:     "diag.concept",
+		Status:        "MASTERED",
+		IsProvisional: true,
+	}
+	if err := store.UpsertProgress(p); err != nil {
+		t.Fatalf("upsert provisional progress: %v", err)
+	}
+
+	got, err := store.GetProgress(st.ID, "diag.concept")
+	if err != nil {
+		t.Fatalf("get progress: %v", err)
+	}
+	if !got.IsProvisional {
+		t.Fatalf("expected IsProvisional true, got false")
+	}
+
+	p.IsProvisional = false
+	if err := store.UpsertProgress(p); err != nil {
+		t.Fatalf("upsert cleared provisional: %v", err)
+	}
+	got, err = store.GetProgress(st.ID, "diag.concept")
+	if err != nil {
+		t.Fatalf("get progress: %v", err)
+	}
+	if got.IsProvisional {
+		t.Fatalf("expected IsProvisional false, got true")
+	}
+}
+
 func TestGetAllProgress(t *testing.T) {
 	store := newTestStore(t)
 	st, _ := store.CreateStudent("frank")

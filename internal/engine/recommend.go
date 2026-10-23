@@ -36,6 +36,7 @@ func (e *Engine) conceptSnapshotsFrom(studentID string, progress map[string]*sto
 			TimeThreshold:  timeThresh,
 			WeaknessScore:  p.WeaknessScore,
 			Placement:      p.PlacementSeeded,
+			IsProvisional:  p.IsProvisional,
 		}
 	}
 	// Concepts never attempted still need a snapshot: prereqsMet returns false for a missing

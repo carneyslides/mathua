@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chuma-beep/mathua/internal/concepts"
+	"github.com/chuma-beep/mathua/internal/diagnostic"
 	"github.com/chuma-beep/mathua/internal/generator"
 	"github.com/chuma-beep/mathua/internal/mastery"
 	"github.com/chuma-beep/mathua/internal/storage"
@@ -2100,5 +2101,235 @@ func TestEngine_PropagateWeaknessBackwardToPrerequisites(t *testing.T) {
 	}
 	if pA.WeaknessScore < 0.35 {
 		t.Errorf("prerequisite weakness = %v, want >= 0.35 after backward propagation from struggling dependent", pA.WeaknessScore)
+	}
+}
+
+func TestEngine_DiagnosticConditionalCompletion_Persistence(t *testing.T) {
+	e := testEngine(t)
+	st, err := e.CreateStudent("provisional_student")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+
+	report := &diagnostic.DiagnosticReport{
+		ConditionallyCompleted: []string{"Concept A"},
+	}
+	if err := e.ApplyDiagnosticReport(st.ID, report); err != nil {
+		t.Fatalf("apply diagnostic report: %v", err)
+	}
+
+	p, err := e.repo.GetProgress(st.ID, "a")
+	if err != nil {
+		t.Fatalf("get progress: %v", err)
+	}
+	if p == nil {
+		t.Fatal("expected progress row for conditionally completed concept")
+	}
+	if p.Status != string(mastery.StatusMastered) {
+		t.Errorf("status = %q, want MASTERED", p.Status)
+	}
+	if !p.IsProvisional {
+		t.Error("expected IsProvisional true")
+	}
+	if !p.PlacementSeeded {
+		t.Error("expected PlacementSeeded true")
+	}
+}
+
+func TestEngine_ProvisionalFallback_DemotionOnStruggle(t *testing.T) {
+	e := testEngine(t)
+	st, err := e.CreateStudent("struggle_student")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+
+	// Concept a is conditionally completed (provisional mastered).
+	report := &diagnostic.DiagnosticReport{
+		ConditionallyCompleted: []string{"a"},
+	}
+	if err := e.ApplyDiagnosticReport(st.ID, report); err != nil {
+		t.Fatalf("apply report: %v", err)
+	}
+
+	// Concept b depends on a.
+	sess, err := e.repo.CreateSession(st.ID)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	// Active session serving b.
+	e.mu.Lock()
+	e.sessions[sess.ID] = &activeSession{
+		studentID:      st.ID,
+		conceptID:      "b",
+		expectedAnswer: "99",
+		attemptID:      "att-1",
+		requiredStreak: 3,
+		timeThreshold:  60.0,
+	}
+	e.mu.Unlock()
+
+	// Learner struggles on b with a wrong answer.
+	res, err := e.SubmitAnswer(sess.ID, st.ID, "att-1", "wrong", 5.0)
+	if err != nil {
+		t.Fatalf("submit answer: %v", err)
+	}
+
+	if !res.Halted {
+		t.Error("expected session halted after provisional prerequisite fallback")
+	}
+	if len(res.Remedial) == 0 || res.Remedial[0] != "a" {
+		t.Errorf("expected remedial queue head to be prerequisite a, got %v", res.Remedial)
+	}
+
+	// Verify prerequisite a demoted from MASTERED to LEARNING.
+	pA, err := e.repo.GetProgress(st.ID, "a")
+	if err != nil {
+		t.Fatalf("get progress a: %v", err)
+	}
+	if pA.Status != string(mastery.StatusLearning) {
+		t.Errorf("status a = %q, want LEARNING", pA.Status)
+	}
+	if pA.Streak != 0 {
+		t.Errorf("streak a = %d, want 0", pA.Streak)
+	}
+	if pA.WeaknessScore != 0.8 {
+		t.Errorf("weakness a = %v, want 0.8", pA.WeaknessScore)
+	}
+	if !pA.IsProvisional {
+		t.Error("expected IsProvisional to remain true while learning")
+	}
+
+	// Prerequisite a must be served first in active session.
+	nextQ, err := e.NextQuestion(sess.ID, st.ID)
+	if err != nil {
+		t.Fatalf("next question: %v", err)
+	}
+	if nextQ.ConceptID != "a" {
+		t.Errorf("next concept = %q, want remedial concept a", nextQ.ConceptID)
+	}
+}
+
+func TestEngine_ProvisionalClearing_OnTrueMastery(t *testing.T) {
+	e := testEngine(t)
+	st, err := e.CreateStudent("mastery_student")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+
+	// Concept a was provisional and demoted to LEARNING.
+	now := time.Now().UTC()
+	if err := e.repo.UpsertProgress(&storage.ConceptProgress{
+		StudentID:     st.ID,
+		ConceptID:     "a",
+		Status:        string(mastery.StatusLearning),
+		Streak:        0,
+		IsProvisional: true,
+		LastAttempted: &now,
+	}); err != nil {
+		t.Fatalf("seed progress: %v", err)
+	}
+
+	sess, err := e.repo.CreateSession(st.ID)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	// Practice a until true mastery is achieved.
+	for i := 0; i < 6; i++ {
+		e.mu.Lock()
+		e.sessions[sess.ID] = &activeSession{}
+		e.mu.Unlock()
+		q, err := e.NextQuestion(sess.ID, st.ID)
+		if err != nil {
+			t.Fatalf("next question %d: %v", i+1, err)
+		}
+		if q == nil || q.ConceptID != "a" {
+			break
+		}
+		res, err := e.SubmitAnswer(sess.ID, st.ID, q.AttemptID, "42", 1.0)
+		if err != nil {
+			t.Fatalf("submit answer %d: %v", i+1, err)
+		}
+		if res.NewStatus == mastery.StatusMastered {
+			break
+		}
+	}
+
+	// IsProvisional must now be false and status must be MASTERED.
+	pA, err := e.repo.GetProgress(st.ID, "a")
+	if err != nil {
+		t.Fatalf("get progress a: %v", err)
+	}
+	if pA.Status != string(mastery.StatusMastered) {
+		t.Fatalf("status = %q, want MASTERED", pA.Status)
+	}
+	if pA.IsProvisional {
+		t.Error("expected IsProvisional cleared to false after true mastery")
+	}
+
+	// Subsequent struggle on dependent b must NOT demote a.
+	e.mu.Lock()
+	e.sessions[sess.ID] = &activeSession{
+		studentID:      st.ID,
+		conceptID:      "b",
+		expectedAnswer: "99",
+		attemptID:      "att-b",
+		requiredStreak: 3,
+		timeThreshold:  60.0,
+	}
+	e.mu.Unlock()
+
+	_, err = e.SubmitAnswer(sess.ID, st.ID, "att-b", "wrong", 5.0)
+	if err != nil {
+		t.Fatalf("submit answer b: %v", err)
+	}
+
+	pAAfter, err := e.repo.GetProgress(st.ID, "a")
+	if err != nil {
+		t.Fatalf("get progress a: %v", err)
+	}
+	if pAAfter.Status != string(mastery.StatusMastered) {
+		t.Errorf("status a = %q, want to remain MASTERED after independent mastery", pAAfter.Status)
+	}
+}
+
+func TestEngine_ProvisionalFallback_StudyAnchorPath(t *testing.T) {
+	e := testEngine(t)
+	st, err := e.CreateStudent("study_fallback")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+
+	report := &diagnostic.DiagnosticReport{
+		ConditionallyCompleted: []string{"a"},
+	}
+	if err := e.ApplyDiagnosticReport(st.ID, report); err != nil {
+		t.Fatalf("apply report: %v", err)
+	}
+
+	// Set study anchor for concept b.
+	e.SetStudyAnchorBatch(st.ID, "b", map[string]Anchor{
+		"Question B text": {Answer: "99", Explanation: "Explanation B"},
+	})
+
+	// Submit incorrect study answer for b.
+	res, err := e.SubmitStudyAnswer(st.ID, "b", "wrong", 5.0, "Question B text")
+	if err != nil {
+		t.Fatalf("submit study answer: %v", err)
+	}
+	if !res.Halted {
+		t.Error("expected study result halted after provisional fallback")
+	}
+	if len(res.Remedial) == 0 || res.Remedial[0] != "a" {
+		t.Errorf("expected remedial to contain demoted concept a, got %v", res.Remedial)
+	}
+
+	pA, err := e.repo.GetProgress(st.ID, "a")
+	if err != nil {
+		t.Fatalf("get progress a: %v", err)
+	}
+	if pA.Status != string(mastery.StatusLearning) {
+		t.Errorf("status a = %q, want LEARNING", pA.Status)
 	}
 }

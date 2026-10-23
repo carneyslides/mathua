@@ -122,6 +122,7 @@ func authMigrate(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_students_google_id ON students(google_id)",
 		"ALTER TABLE concept_progress ADD COLUMN weakness_score REAL NOT NULL DEFAULT 0",
 		"ALTER TABLE concept_progress ADD COLUMN placement_seeded INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE concept_progress ADD COLUMN is_provisional INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE active_sessions ADD COLUMN last_concept_id TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE active_sessions ADD COLUMN session_review INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE active_sessions ADD COLUMN session_new INTEGER NOT NULL DEFAULT 0",
@@ -875,7 +876,7 @@ func (s *SQLiteStore) GetProgress(studentID, conceptID string) (*ConceptProgress
 		SELECT student_id, concept_id, status, streak, best_streak,
 		       avg_response_time, attempts, last_attempted, last_reviewed,
 		       next_review_due, sm2_repetitions, sm2_interval, sm2_efactor,
-		       mastered_at, weakness_score, placement_seeded
+		       mastered_at, weakness_score, placement_seeded, is_provisional
 		FROM concept_progress
 		WHERE student_id = ? AND concept_id = ?
 	`, studentID, conceptID)
@@ -892,7 +893,7 @@ func (s *SQLiteStore) GetAllProgress(studentID string) (map[string]*ConceptProgr
 		SELECT student_id, concept_id, status, streak, best_streak,
 		       avg_response_time, attempts, last_attempted, last_reviewed,
 		       next_review_due, sm2_repetitions, sm2_interval, sm2_efactor,
-		       mastered_at, weakness_score, placement_seeded
+		       mastered_at, weakness_score, placement_seeded, is_provisional
 		FROM concept_progress
 		WHERE student_id = ?
 	`, studentID)
@@ -918,8 +919,8 @@ func (s *SQLiteStore) UpsertProgress(p *ConceptProgress) error {
 			(student_id, concept_id, status, streak, best_streak,
 			 avg_response_time, attempts, last_attempted, last_reviewed,
 			 next_review_due, sm2_repetitions, sm2_interval, sm2_efactor,
-			 mastered_at, weakness_score, placement_seeded)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 mastered_at, weakness_score, placement_seeded, is_provisional)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(student_id, concept_id) DO UPDATE SET
 			status            = excluded.status,
 			streak            = excluded.streak,
@@ -933,13 +934,16 @@ func (s *SQLiteStore) UpsertProgress(p *ConceptProgress) error {
 			sm2_interval      = excluded.sm2_interval,
 			sm2_efactor       = excluded.sm2_efactor,
 			mastered_at       = excluded.mastered_at,
-			weakness_score    = excluded.weakness_score
+			weakness_score    = excluded.weakness_score,
+			placement_seeded  = excluded.placement_seeded,
+			is_provisional    = excluded.is_provisional
 	`,
 		p.StudentID, p.ConceptID, p.Status, p.Streak, p.BestStreak,
 		p.AvgResponseTime, p.Attempts,
 		nullTime(p.LastAttempted), nullTime(p.LastReviewed),
 		nullTime(p.NextReviewDue), p.SM2Repetitions, p.SM2Interval,
 		p.SM2EFactor, nullTime(p.MasteredAt), p.WeaknessScore, boolToInt(p.PlacementSeeded),
+		boolToInt(p.IsProvisional),
 	)
 	if err != nil {
 		return fmt.Errorf("upsert progress: %w", err)
@@ -960,8 +964,8 @@ func (s *SQLiteStore) UpsertProgressBatch(ps []*ConceptProgress) error {
 			(student_id, concept_id, status, streak, best_streak,
 			 avg_response_time, attempts, last_attempted, last_reviewed,
 			 next_review_due, sm2_repetitions, sm2_interval, sm2_efactor,
-			 mastered_at, weakness_score, placement_seeded)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 mastered_at, weakness_score, placement_seeded, is_provisional)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(student_id, concept_id) DO UPDATE SET
 			status            = excluded.status,
 			streak            = excluded.streak,
@@ -976,7 +980,8 @@ func (s *SQLiteStore) UpsertProgressBatch(ps []*ConceptProgress) error {
 			sm2_efactor       = excluded.sm2_efactor,
 			mastered_at       = excluded.mastered_at,
 			weakness_score    = excluded.weakness_score,
-			placement_seeded  = excluded.placement_seeded
+			placement_seeded  = excluded.placement_seeded,
+			is_provisional    = excluded.is_provisional
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -990,6 +995,7 @@ func (s *SQLiteStore) UpsertProgressBatch(ps []*ConceptProgress) error {
 			nullTime(p.LastAttempted), nullTime(p.LastReviewed),
 			nullTime(p.NextReviewDue), p.SM2Repetitions, p.SM2Interval,
 			p.SM2EFactor, nullTime(p.MasteredAt), p.WeaknessScore, boolToInt(p.PlacementSeeded),
+			boolToInt(p.IsProvisional),
 		); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("exec progress batch: %w", err)
@@ -1736,12 +1742,12 @@ func (s *SQLiteStore) LastQuizCompletion(studentID string) (*QuizCompletion, err
 func scanProgress(scanner interface{ Scan(...interface{}) error }) (*ConceptProgress, error) {
 	p := &ConceptProgress{}
 	var lastAtt, lastRev, nextRev, masterAt sql.NullString
-	var placementSeeded sql.NullInt64
+	var placementSeeded, isProvisional sql.NullInt64
 	err := scanner.Scan(
 		&p.StudentID, &p.ConceptID, &p.Status, &p.Streak, &p.BestStreak,
 		&p.AvgResponseTime, &p.Attempts, &lastAtt, &lastRev,
 		&nextRev, &p.SM2Repetitions, &p.SM2Interval, &p.SM2EFactor,
-		&masterAt, &p.WeaknessScore, &placementSeeded,
+		&masterAt, &p.WeaknessScore, &placementSeeded, &isProvisional,
 	)
 	if err != nil {
 		return nil, err
@@ -1751,6 +1757,7 @@ func scanProgress(scanner interface{ Scan(...interface{}) error }) (*ConceptProg
 	p.NextReviewDue = parseDate(nextRev)
 	p.MasteredAt = parseDate(masterAt)
 	p.PlacementSeeded = placementSeeded.Valid && placementSeeded.Int64 == 1
+	p.IsProvisional = isProvisional.Valid && isProvisional.Int64 == 1
 	return p, nil
 }
 
