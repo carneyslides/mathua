@@ -17,12 +17,14 @@ package probability
 // recompute the answer rather than trusting the author's arithmetic.
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"strconv"
 	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 // decimal6 formats a probability or other decimal to at most six places, with
@@ -147,30 +149,52 @@ func (g *sigmaAlgebraGen) Generate(ctx generator.GeneratorContext) generator.Pro
 
 type inclusionExclusionGen struct{}
 
+var incExcDenomsLow = []int{20, 25, 40, 50}
+var incExcDenomsMid = []int{50, 80, 100, 125}
+var incExcDenomsHigh = []int{100, 160, 200, 250, 400, 500}
+
 func (g *inclusionExclusionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		n, a, b, ab int
-		reason      string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var denoms []int
+	switch tier {
+	case 0:
+		denoms = incExcDenomsLow
+	case 1:
+		denoms = incExcDenomsMid
+	default:
+		denoms = incExcDenomsHigh
 	}
-	claims := []claim{
-		{n: 100, a: 40, b: 30, ab: 10, reason: "(40 + 30 − 10)/100 = 0.6."},
-		{n: 50, a: 20, b: 15, ab: 5, reason: "(20 + 15 − 5)/50 = 0.6."},
-		{n: 20, a: 10, b: 8, ab: 3, reason: "(10 + 8 − 3)/20 = 0.75."},
-		{n: 100, a: 50, b: 40, ab: 20, reason: "(50 + 40 − 20)/100 = 0.7."},
-		{n: 200, a: 80, b: 60, ab: 20, reason: "(80 + 60 − 20)/200 = 0.6."},
-		{n: 25, a: 15, b: 12, ab: 5, reason: "(15 + 12 − 5)/25 = 0.88."},
+	n := denoms[rand.Intn(len(denoms))]
+
+	ab := mathutil.ScaleInt(ctx.Difficulty, 3, 20)
+	if ab < 2 {
+		ab = 2
 	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(c.a+c.b-c.ab) / float64(c.n))
+	if ab >= n/4 {
+		ab = n / 5
+	}
+	if ab < 1 {
+		ab = 1
+	}
+
+	a := ab + 2 + rand.Intn(max(1, n/3))
+	b := ab + 2 + rand.Intn(max(1, n/3))
+	if a+b-ab >= n {
+		a = ab + (n-ab)/4
+		b = ab + (n-ab)/4
+	}
+
+	answer := decimal6(float64(a+b-ab) / float64(n))
+	question := fmt.Sprintf("A sample space has %d equally likely outcomes. Event A has %d outcomes, event B has %d, and A ∩ B has %d. What is P(A ∪ B)? (enter a decimal)", n, a, b, ab)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. By inclusion-exclusion P(A ∪ B) = P(A) + P(B) − P(A ∩ B).\nSubgoal 2: Substitute parameters. Substitute total outcomes %d, |A| = %d, |B| = %d and |A ∩ B| = %d.\nSubgoal 3: Evaluate and simplify. P(A ∪ B) = (%d + %d − %d)/%d = %s.", n, a, b, ab, a, b, ab, n, answer)
+
 	return generator.Problem{
-		Question: "A sample space has " + strconv.Itoa(c.n) + " equally likely outcomes. Event A has " +
-			strconv.Itoa(c.a) + " outcomes, event B has " + strconv.Itoa(c.b) + ", and A ∩ B has " +
-			strconv.Itoa(c.ab) + ". What is P(A ∪ B)? (enter a decimal)",
+		Question:    question,
 		Answer:      answer,
-		Explanation: "By inclusion-exclusion P(A ∪ B) = P(A) + P(B) − P(A ∩ B), and " + c.reason,
+		Explanation: explanation,
 		Facts: map[string]string{
-			"n": strconv.Itoa(c.n), "a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b),
-			"ab": strconv.Itoa(c.ab), "answer": answer,
+			"n": strconv.Itoa(n), "a": strconv.Itoa(a), "b": strconv.Itoa(b),
+			"ab": strconv.Itoa(ab), "answer": answer,
 		},
 	}
 }
@@ -232,29 +256,43 @@ func (g *continuityGen) Generate(ctx generator.GeneratorContext) generator.Probl
 
 type multiplicationGen struct{}
 
+var multDenomsLow = []int{12, 16, 20, 25}
+var multDenomsMid = []int{30, 40, 50, 60}
+var multDenomsHigh = []int{80, 100, 120, 150, 200}
+
 func (g *multiplicationGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		n, a, b int
-		reason  string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var denoms []int
+	switch tier {
+	case 0:
+		denoms = multDenomsLow
+	case 1:
+		denoms = multDenomsMid
+	default:
+		denoms = multDenomsHigh
 	}
-	claims := []claim{
-		{n: 20, a: 10, b: 6, reason: "P(A ∩ B) = (10/20)(6/10) = 6/20 = 0.3."},
-		{n: 50, a: 20, b: 15, reason: "(20/50)(15/20) = 15/50 = 0.3."},
-		{n: 12, a: 4, b: 3, reason: "(4/12)(3/4) = 3/12 = 0.25."},
-		{n: 25, a: 10, b: 6, reason: "(10/25)(6/10) = 6/25 = 0.24."},
-		{n: 40, a: 16, b: 12, reason: "(16/40)(12/16) = 12/40 = 0.3."},
-		{n: 8, a: 2, b: 1, reason: "(2/8)(1/2) = 1/8 = 0.125."},
+	n := denoms[rand.Intn(len(denoms))]
+
+	a := mathutil.ScaleInt(ctx.Difficulty, 4, n/2)
+	if a < 3 {
+		a = 3
 	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(c.b) / float64(c.n))
+	if a >= n {
+		a = n - 2
+	}
+
+	b := 1 + rand.Intn(a-1)
+
+	answer := decimal6(float64(b) / float64(n))
+	question := fmt.Sprintf("An experiment has %d equally likely outcomes. Event A has %d of them, and among those A-outcomes %d also lie in event B. What is P(A ∩ B)? (enter a decimal)", n, a, b)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. By the multiplication rule P(A ∩ B) = P(A)·P(B | A).\nSubgoal 2: Substitute parameters. P(A) = %d/%d and P(B | A) = %d/%d.\nSubgoal 3: Evaluate and simplify. Multiplying gives P(A ∩ B) = (%d/%d)(%d/%d) = %d/%d = %s.", a, n, b, a, a, n, b, a, b, n, answer)
+
 	return generator.Problem{
-		Question: "An experiment has " + strconv.Itoa(c.n) + " equally likely outcomes. Event A has " +
-			strconv.Itoa(c.a) + " of them, and among those A-outcomes " + strconv.Itoa(c.b) +
-			" also lie in event B. What is P(A ∩ B)? (enter a decimal)",
+		Question:    question,
 		Answer:      answer,
-		Explanation: "By the multiplication rule P(A ∩ B) = P(A)·P(B | A), and " + c.reason,
+		Explanation: explanation,
 		Facts: map[string]string{
-			"n": strconv.Itoa(c.n), "a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b), "answer": answer,
+			"n": strconv.Itoa(n), "a": strconv.Itoa(a), "b": strconv.Itoa(b), "answer": answer,
 		},
 	}
 }
@@ -265,33 +303,29 @@ func (g *multiplicationGen) Generate(ctx generator.GeneratorContext) generator.P
 
 type bayesGen struct{}
 
+var bayesDenoms = []int{4, 5, 8, 10, 20}
+
 func (g *bayesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		tA, aA, tB, aB int
-		reason         string
-	}
-	claims := []claim{
-		{tA: 4, aA: 3, tB: 4, aB: 1, reason: "(3/4)/((3/4) + (1/4)) = 3/4 = 0.75."},
-		{tA: 5, aA: 4, tB: 5, aB: 1, reason: "(4/5)/((4/5) + (1/5)) = 4/5 = 0.8."},
-		{tA: 10, aA: 7, tB: 10, aB: 3, reason: "(7/10)/((7/10) + (3/10)) = 0.7."},
-		{tA: 10, aA: 9, tB: 10, aB: 3, reason: "(9/10)/((9/10) + (3/10)) = 9/12 = 0.75."},
-		{tA: 5, aA: 2, tB: 5, aB: 2, reason: "(2/5)/((2/5) + (2/5)) = 1/2 = 0.5."},
-		{tA: 10, aA: 3, tB: 10, aB: 1, reason: "(3/10)/((3/10) + (1/10)) = 3/4 = 0.75."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	pa := float64(c.aA) / float64(c.tA)
-	pb := float64(c.aB) / float64(c.tB)
+	tA := bayesDenoms[rand.Intn(len(bayesDenoms))]
+	tB := bayesDenoms[rand.Intn(len(bayesDenoms))]
+
+	aA := 1 + rand.Intn(tA-1)
+	aB := 1 + rand.Intn(tB-1)
+
+	pa := float64(aA) / float64(tA)
+	pb := float64(aB) / float64(tB)
 	answer := decimal6(pa / (pa + pb))
+
+	question := fmt.Sprintf("Two boxes are equally likely to be chosen. Box one holds %d red marbles out of %d; box two holds %d red out of %d. A red marble is drawn. What is P(box one | red)? (enter a decimal)", aA, tA, aB, tB)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. By Bayes' theorem with equal priors, P(box one | red) = P(red | box one) / (P(red | box one) + P(red | box two)).\nSubgoal 2: Substitute parameters. Substitute conditional probabilities %d/%d and %d/%d.\nSubgoal 3: Evaluate and simplify. Evaluating the ratio yields (%d/%d)/((%d/%d) + (%d/%d)) = %s.", aA, tA, aB, tB, aA, tA, aA, tA, aB, tB, answer)
+
 	return generator.Problem{
-		Question: "Two boxes are equally likely to be chosen. Box one holds " + strconv.Itoa(c.aA) +
-			" red marbles out of " + strconv.Itoa(c.tA) + "; box two holds " + strconv.Itoa(c.aB) +
-			" red out of " + strconv.Itoa(c.tB) + ". A red marble is drawn. What is P(box one | red)? (enter a decimal)",
-		Answer: answer,
-		Explanation: "The equal priors cancel in Bayes' theorem, so the posterior is " +
-			"(aA/tA)/((aA/tA) + (aB/tB)); " + c.reason,
+		Question:    question,
+		Answer:      answer,
+		Explanation: explanation,
 		Facts: map[string]string{
-			"tA": strconv.Itoa(c.tA), "aA": strconv.Itoa(c.aA),
-			"tB": strconv.Itoa(c.tB), "aB": strconv.Itoa(c.aB), "answer": answer,
+			"tA": strconv.Itoa(tA), "aA": strconv.Itoa(aA),
+			"tB": strconv.Itoa(tB), "aB": strconv.Itoa(aB), "answer": answer,
 		},
 	}
 }
@@ -659,29 +693,35 @@ func (g *mgfGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 
 type transformGen struct{}
 
+var transformVarsLow = []string{"1", "2", "3", "4", "9"}
+var transformVarsMid = []string{"2", "3", "5", "6", "8", "0.5"}
+var transformVarsHigh = []string{"0.5", "1.5", "2.5", "3.5", "7", "11"}
+
 func (g *transformGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		v      string
-		c      int
-		reason string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var pool []string
+	switch tier {
+	case 0:
+		pool = transformVarsLow
+	case 1:
+		pool = transformVarsMid
+	default:
+		pool = transformVarsHigh
 	}
-	claims := []claim{
-		{v: "4", c: 3, reason: "Var(3X) = 9·4 = 36."},
-		{v: "2", c: 5, reason: "Var(5X) = 25·2 = 50."},
-		{v: "9", c: 2, reason: "Var(2X) = 4·9 = 36."},
-		{v: "1", c: 7, reason: "Var(7X) = 49·1 = 49."},
-		{v: "0.5", c: 4, reason: "Var(4X) = 16·0.5 = 8."},
-		{v: "3", c: 2, reason: "Var(2X) = 4·3 = 12."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	v, _ := strconv.ParseFloat(c.v, 64)
-	answer := decimal6(float64(c.c*c.c) * v)
+	vStr := pool[rand.Intn(len(pool))]
+	c := 2 + rand.Intn(3+tier*2)
+
+	v, _ := strconv.ParseFloat(vStr, 64)
+	answer := decimal6(float64(c*c) * v)
+
+	question := fmt.Sprintf("A random variable X has variance %s. What is the variance of the transformed variable Y = %dX? (enter a number)", vStr, c)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. Scaling a random variable by constant c scales its variance quadratically: Var(cX) = c^2·Var(X).\nSubgoal 2: Substitute parameters. Set scale factor c = %d and base variance Var(X) = %s.\nSubgoal 3: Evaluate and simplify. Var(%dX) = %d^2 · %s = %d · %s = %s.", c, vStr, c, c, vStr, c*c, vStr, answer)
+
 	return generator.Problem{
-		Question: "A random variable X has variance " + c.v + ". What is the variance of the transformed variable Y = " +
-			strconv.Itoa(c.c) + "X? (enter a number)",
+		Question:    question,
 		Answer:      answer,
-		Explanation: "Scaling by a constant scales the variance by the square of the constant: Var(cX) = c²Var(X); " + c.reason,
-		Facts:       map[string]string{"v": c.v, "c": strconv.Itoa(c.c), "answer": answer},
+		Explanation: explanation,
+		Facts:       map[string]string{"v": vStr, "c": strconv.Itoa(c), "answer": answer},
 	}
 }
 
@@ -691,30 +731,26 @@ func (g *transformGen) Generate(ctx generator.GeneratorContext) generator.Proble
 
 type orderStatsGen struct{}
 
+var orderStatXValues = []string{"0.2", "0.4", "0.5", "0.6", "0.8", "0.9"}
+
 func (g *orderStatsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		n      int
-		x      string
-		reason string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	n := 2 + rand.Intn(2+tier*2)
+	if n > 6 {
+		n = 6
 	}
-	claims := []claim{
-		{n: 3, x: "0.5", reason: "0.5³ = 0.125."},
-		{n: 2, x: "0.9", reason: "0.9² = 0.81."},
-		{n: 5, x: "0.5", reason: "0.5⁵ = 0.03125."},
-		{n: 4, x: "0.5", reason: "0.5⁴ = 0.0625."},
-		{n: 2, x: "0.5", reason: "0.5² = 0.25."},
-		{n: 3, x: "0.8", reason: "0.8³ = 0.512."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	x, _ := strconv.ParseFloat(c.x, 64)
-	answer := decimal6(pow(x, c.n))
+	xStr := orderStatXValues[rand.Intn(len(orderStatXValues))]
+	x, _ := strconv.ParseFloat(xStr, 64)
+	answer := decimal6(pow(x, n))
+
+	question := fmt.Sprintf("Let %d independent observations be uniform on [0, 1]. What is P(maximum ≤ %s)? (enter a decimal)", n, xStr)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. The sample maximum X_{(n)} satisfies P(X_{(n)} ≤ x) = (F(x))^n for i.i.d. observations.\nSubgoal 2: Substitute parameters. For %d uniform observations on [0, 1], F(x) = x with threshold x = %s.\nSubgoal 3: Evaluate and simplify. P(maximum ≤ %s) = (%s)^%d = %s.", n, xStr, xStr, xStr, n, answer)
+
 	return generator.Problem{
-		Question: "Let n independent observations be uniform on [0, 1]. What is P(maximum ≤ " + c.x +
-			")? (enter a decimal)",
-		Answer: answer,
-		Explanation: "The maximum is at most x exactly when all n observations are, so the probability is x^n; " +
-			c.reason,
-		Facts: map[string]string{"n": strconv.Itoa(c.n), "x": c.x, "answer": answer},
+		Question:    question,
+		Answer:      answer,
+		Explanation: explanation,
+		Facts:       map[string]string{"n": strconv.Itoa(n), "x": xStr, "answer": answer},
 	}
 }
 
@@ -783,28 +819,44 @@ func (g *memorylessGen) Generate(ctx generator.GeneratorContext) generator.Probl
 
 type markovGen struct{}
 
+type markovPair struct {
+	mean int
+	a    int
+}
+
+var markovPairsLow = []markovPair{
+	{mean: 8, a: 16}, {mean: 10, a: 20}, {mean: 12, a: 24}, {mean: 10, a: 25}, {mean: 9, a: 12}, {mean: 15, a: 30},
+}
+var markovPairsMid = []markovPair{
+	{mean: 10, a: 40}, {mean: 14, a: 28}, {mean: 16, a: 32}, {mean: 20, a: 25}, {mean: 18, a: 24}, {mean: 25, a: 50},
+}
+var markovPairsHigh = []markovPair{
+	{mean: 12, a: 48}, {mean: 15, a: 60}, {mean: 20, a: 80}, {mean: 30, a: 40}, {mean: 24, a: 32}, {mean: 35, a: 70},
+}
+
 func (g *markovGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		mean, a int
-		reason  string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var pool []markovPair
+	switch tier {
+	case 0:
+		pool = markovPairsLow
+	case 1:
+		pool = markovPairsMid
+	default:
+		pool = markovPairsHigh
 	}
-	claims := []claim{
-		{mean: 12, a: 24, reason: "12/24 = 0.5."},
-		{mean: 10, a: 25, reason: "10/25 = 0.4."},
-		{mean: 15, a: 30, reason: "15/30 = 0.5."},
-		{mean: 8, a: 16, reason: "8/16 = 0.5."},
-		{mean: 9, a: 12, reason: "9/12 = 0.75."},
-		{mean: 10, a: 40, reason: "10/40 = 0.25."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(c.mean) / float64(c.a))
+	p := pool[rand.Intn(len(pool))]
+	answer := decimal6(float64(p.mean) / float64(p.a))
+
+	question := fmt.Sprintf("A nonnegative random variable has mean %d. By Markov's inequality, what is the upper bound on P(X ≥ %d)? (enter a decimal)", p.mean, p.a)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. Markov's inequality bounds tail probabilities of nonnegative random variables by P(X ≥ a) ≤ E[X]/a.\nSubgoal 2: Substitute parameters. Substitute expectation E[X] = %d and tail threshold a = %d.\nSubgoal 3: Evaluate and simplify. P(X ≥ %d) ≤ %d/%d = %s.", p.mean, p.a, p.a, p.mean, p.a, answer)
+
 	return generator.Problem{
-		Question: "A nonnegative random variable has mean " + strconv.Itoa(c.mean) +
-			". By Markov's inequality, what is the upper bound on P(X ≥ " + strconv.Itoa(c.a) + ")? (enter a decimal)",
+		Question:    question,
 		Answer:      answer,
-		Explanation: "Markov's inequality gives P(X ≥ a) ≤ E[X]/a; " + c.reason,
+		Explanation: explanation,
 		Facts: map[string]string{
-			"mean": strconv.Itoa(c.mean), "a": strconv.Itoa(c.a), "answer": answer,
+			"mean": strconv.Itoa(p.mean), "a": strconv.Itoa(p.a), "answer": answer,
 		},
 	}
 }
@@ -815,28 +867,44 @@ func (g *markovGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 
 type chebyshevGen struct{}
 
+type chebyshevPair struct {
+	sigma int
+	d     int
+}
+
+var chebyshevPairsLow = []chebyshevPair{
+	{sigma: 1, d: 2}, {sigma: 1, d: 4}, {sigma: 2, d: 4}, {sigma: 2, d: 5}, {sigma: 3, d: 6}, {sigma: 4, d: 5},
+}
+var chebyshevPairsMid = []chebyshevPair{
+	{sigma: 3, d: 10}, {sigma: 5, d: 10}, {sigma: 6, d: 10}, {sigma: 4, d: 8}, {sigma: 5, d: 20}, {sigma: 6, d: 12},
+}
+var chebyshevPairsHigh = []chebyshevPair{
+	{sigma: 8, d: 10}, {sigma: 7, d: 14}, {sigma: 8, d: 20}, {sigma: 9, d: 15}, {sigma: 10, d: 25}, {sigma: 12, d: 20},
+}
+
 func (g *chebyshevGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		sigma, d int
-		reason   string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var pool []chebyshevPair
+	switch tier {
+	case 0:
+		pool = chebyshevPairsLow
+	case 1:
+		pool = chebyshevPairsMid
+	default:
+		pool = chebyshevPairsHigh
 	}
-	claims := []claim{
-		{sigma: 2, d: 5, reason: "(2/5)² = 0.16."},
-		{sigma: 3, d: 10, reason: "(3/10)² = 0.09."},
-		{sigma: 4, d: 5, reason: "(4/5)² = 0.64."},
-		{sigma: 5, d: 20, reason: "(5/20)² = 0.0625."},
-		{sigma: 1, d: 4, reason: "(1/4)² = 0.0625."},
-		{sigma: 6, d: 10, reason: "(6/10)² = 0.36."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(c.sigma*c.sigma) / float64(c.d*c.d))
+	p := pool[rand.Intn(len(pool))]
+	answer := decimal6(float64(p.sigma*p.sigma) / float64(p.d*p.d))
+
+	question := fmt.Sprintf("A random variable has standard deviation %d. Chebyshev's inequality bounds P(|X − μ| ≥ %d) by what value? (enter a decimal)", p.sigma, p.d)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. Chebyshev's inequality bounds departure from the mean by P(|X − μ| ≥ d) ≤ σ^2/d^2.\nSubgoal 2: Substitute parameters. Substitute standard deviation σ = %d and distance d = %d.\nSubgoal 3: Evaluate and simplify. P(|X − μ| ≥ %d) ≤ %d^2/%d^2 = %d/%d = %s.", p.sigma, p.d, p.d, p.sigma, p.d, p.sigma*p.sigma, p.d*p.d, answer)
+
 	return generator.Problem{
-		Question: "A random variable has standard deviation " + strconv.Itoa(c.sigma) +
-			". Chebyshev's inequality bounds P(|X − μ| ≥ " + strconv.Itoa(c.d) + ") by what value? (enter a decimal)",
+		Question:    question,
 		Answer:      answer,
-		Explanation: "Chebyshev gives P(|X − μ| ≥ d) ≤ σ²/d²; " + c.reason,
+		Explanation: explanation,
 		Facts: map[string]string{
-			"sigma": strconv.Itoa(c.sigma), "d": strconv.Itoa(c.d), "answer": answer,
+			"sigma": strconv.Itoa(p.sigma), "d": strconv.Itoa(p.d), "answer": answer,
 		},
 	}
 }
@@ -847,28 +915,62 @@ func (g *chebyshevGen) Generate(ctx generator.GeneratorContext) generator.Proble
 
 type cltGen struct{}
 
+type cltCase struct {
+	n     int
+	mu    int
+	sigma int
+	x     int
+}
+
+var cltCasesLow = []cltCase{
+	{n: 16, mu: 5, sigma: 2, x: 88},
+	{n: 25, mu: 2, sigma: 1, x: 60},
+	{n: 36, mu: 0, sigma: 2, x: 6},
+	{n: 64, mu: 0, sigma: 1, x: 8},
+	{n: 100, mu: 1, sigma: 2, x: 110},
+	{n: 100, mu: 3, sigma: 2, x: 320},
+}
+
+var cltCasesMid = []cltCase{
+	{n: 25, mu: 4, sigma: 2, x: 110},
+	{n: 36, mu: 3, sigma: 1, x: 117},
+	{n: 49, mu: 2, sigma: 2, x: 112},
+	{n: 64, mu: 2, sigma: 2, x: 144},
+	{n: 81, mu: 1, sigma: 3, x: 108},
+	{n: 100, mu: 2, sigma: 3, x: 230},
+}
+
+var cltCasesHigh = []cltCase{
+	{n: 64, mu: 5, sigma: 2, x: 352},
+	{n: 100, mu: 5, sigma: 4, x: 560},
+	{n: 144, mu: 2, sigma: 2, x: 312},
+	{n: 144, mu: 1, sigma: 3, x: 180},
+	{n: 100, mu: 4, sigma: 5, x: 475},
+	{n: 225, mu: 2, sigma: 2, x: 480},
+}
+
 func (g *cltGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		n, mu, sigma, x int
-		reason          string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var pool []cltCase
+	switch tier {
+	case 0:
+		pool = cltCasesLow
+	case 1:
+		pool = cltCasesMid
+	default:
+		pool = cltCasesHigh
 	}
-	claims := []claim{
-		{n: 100, mu: 1, sigma: 2, x: 110, reason: "(110 − 100)/(2·10) = 10/20 = 0.5."},
-		{n: 64, mu: 0, sigma: 1, x: 8, reason: "(8 − 0)/(1·8) = 1."},
-		{n: 25, mu: 2, sigma: 1, x: 60, reason: "(60 − 50)/(1·5) = 2."},
-		{n: 36, mu: 0, sigma: 2, x: 6, reason: "(6 − 0)/(2·6) = 6/12 = 0.5."},
-		{n: 16, mu: 5, sigma: 2, x: 88, reason: "(88 − 80)/(2·4) = 8/8 = 1."},
-		{n: 100, mu: 3, sigma: 2, x: 320, reason: "(320 − 300)/(2·10) = 20/20 = 1."},
-	}
-	c := claims[rand.Intn(len(claims))]
+	c := pool[rand.Intn(len(pool))]
 	z := float64(c.x-c.n*c.mu) / (float64(c.sigma) * sqrtInt(c.n))
 	answer := decimal6(z)
+
+	question := fmt.Sprintf("The sum S of n independent copies of a variable with mean μ and variance σ² is standardised as z = (x − nμ)/(σ√n). For n = %d, μ = %d, σ = %d and x = %d, what is z? (enter a number)", c.n, c.mu, c.sigma, c.x)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. The central limit theorem standardises sample sums by z = (x − nμ)/(σ√n).\nSubgoal 2: Substitute parameters. Substitute n = %d, μ = %d, σ = %d and observed sum x = %d.\nSubgoal 3: Evaluate and simplify. Evaluating the standardisation gives z = (%d − %d)/(%d · %d) = %s.", c.n, c.mu, c.sigma, c.x, c.x, c.n*c.mu, c.sigma, int(sqrtInt(c.n)), answer)
+
 	return generator.Problem{
-		Question: "The sum S of n independent copies of a variable with mean μ and variance σ² is standardised as " +
-			"z = (x − nμ)/(σ√n). For n = " + strconv.Itoa(c.n) + ", μ = " + strconv.Itoa(c.mu) +
-			", σ = " + strconv.Itoa(c.sigma) + " and x = " + strconv.Itoa(c.x) + ", what is z? (enter a number)",
+		Question:    question,
 		Answer:      answer,
-		Explanation: "Substituting the parameters into the standardisation gives the z-score; " + c.reason,
+		Explanation: explanation,
 		Facts: map[string]string{
 			"n": strconv.Itoa(c.n), "mu": strconv.Itoa(c.mu), "sigma": strconv.Itoa(c.sigma),
 			"x": strconv.Itoa(c.x), "answer": answer,
@@ -894,34 +996,33 @@ func sqrtInt(n int) float64 {
 type totalProbabilityGen struct{}
 
 func (g *totalProbabilityGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		w1, a1, t1, w2, a2, t2 int
-		reason                 string
-	}
-	claims := []claim{
-		{w1: 1, a1: 3, t1: 4, w2: 1, a2: 1, t2: 4, reason: "(1/2)(3/4) + (1/2)(1/4) = 0.5."},
-		{w1: 1, a1: 4, t1: 5, w2: 1, a2: 2, t2: 5, reason: "(1/2)(4/5) + (1/2)(2/5) = 0.6."},
-		{w1: 1, a1: 1, t1: 1, w2: 3, a2: 1, t2: 2, reason: "(1/4)(1) + (3/4)(1/2) = 0.625."},
-		{w1: 1, a1: 1, t1: 5, w2: 4, a2: 3, t2: 5, reason: "(1/5)(1/5) + (4/5)(3/5) = 0.52."},
-		{w1: 2, a1: 1, t1: 2, w2: 3, a2: 1, t2: 4, reason: "(2/5)(1/2) + (3/5)(1/4) = 0.35."},
-		{w1: 1, a1: 7, t1: 10, w2: 1, a2: 1, t2: 10, reason: "(1/2)(7/10) + (1/2)(1/10) = 0.4."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	total := c.w1 + c.w2
-	totalProb := float64(c.w1)/float64(total)*float64(c.a1)/float64(c.t1) +
-		float64(c.w2)/float64(total)*float64(c.a2)/float64(c.t2)
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	w1 := 1 + rand.Intn(2+tier)
+	w2 := 1 + rand.Intn(2+tier)
+
+	t1Pool := []int{2, 4, 5, 10}
+	t2Pool := []int{2, 4, 5, 10}
+	t1 := t1Pool[rand.Intn(len(t1Pool))]
+	t2 := t2Pool[rand.Intn(len(t2Pool))]
+
+	a1 := 1 + rand.Intn(t1-1)
+	a2 := 1 + rand.Intn(t2-1)
+
+	total := w1 + w2
+	totalProb := float64(w1)/float64(total)*float64(a1)/float64(t1) +
+		float64(w2)/float64(total)*float64(a2)/float64(t2)
 	answer := decimal6(totalProb)
+
+	question := fmt.Sprintf("Two boxes are chosen with probabilities proportional to the weights %d and %d. Box one yields the event with probability %d/%d, box two with probability %d/%d. What is the total probability of the event? (enter a decimal)", w1, w2, a1, t1, a2, t2)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. The law of total probability averages conditional probabilities with prior weights: P(E) = (w1/(w1+w2))·P(E | B1) + (w2/(w1+w2))·P(E | B2).\nSubgoal 2: Substitute parameters. Substitute weights %d and %d alongside event rates %d/%d and %d/%d.\nSubgoal 3: Evaluate and simplify. P(E) = (%d/%d)(%d/%d) + (%d/%d)(%d/%d) = %s.", w1, w2, a1, t1, a2, t2, w1, total, a1, t1, w2, total, a2, t2, answer)
+
 	return generator.Problem{
-		Question: "Two boxes are chosen with probabilities proportional to the weights " +
-			strconv.Itoa(c.w1) + " and " + strconv.Itoa(c.w2) + ". Box one yields the event with probability " +
-			strconv.Itoa(c.a1) + "/" + strconv.Itoa(c.t1) + ", box two with probability " +
-			strconv.Itoa(c.a2) + "/" + strconv.Itoa(c.t2) +
-			". What is the total probability of the event? (enter a decimal)",
+		Question:    question,
 		Answer:      answer,
-		Explanation: "The law of total probability averages the conditional probabilities with the prior weights; " + c.reason,
+		Explanation: explanation,
 		Facts: map[string]string{
-			"w1": strconv.Itoa(c.w1), "a1": strconv.Itoa(c.a1), "t1": strconv.Itoa(c.t1),
-			"w2": strconv.Itoa(c.w2), "a2": strconv.Itoa(c.a2), "t2": strconv.Itoa(c.t2),
+			"w1": strconv.Itoa(w1), "a1": strconv.Itoa(a1), "t1": strconv.Itoa(t1),
+			"w2": strconv.Itoa(w2), "a2": strconv.Itoa(a2), "t2": strconv.Itoa(t2),
 			"answer": answer,
 		},
 	}
