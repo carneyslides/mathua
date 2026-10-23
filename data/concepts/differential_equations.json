@@ -138,7 +138,7 @@
     "label": "Convolution and Laplace transforms",
     "domain": "differential_equations",
     "subdomain": "differential_equations.transforms",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "ode.transforms.laplace"
     ],

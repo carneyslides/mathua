@@ -459,19 +459,63 @@ func (g *variationParamsGen) Generate(ctx generator.GeneratorContext) generator.
 type convolutionGen struct{}
 
 func (g *convolutionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type qa struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		k := smallInt(1, 3+int(ctx.Difficulty*2))
+		a := 2 * k
+		b := smallInt(1, 4+int(ctx.Difficulty*3))
+		tVal := smallInt(1, 3+int(ctx.Difficulty*2))
+		ans := k * b * tVal * tVal
+		return generator.Problem{
+			Question:    fmt.Sprintf("Compute the convolution value \\((f * g)(%d)\\) where \\(f(t) = %d\\) and \\(g(t) = %d t\\).", tVal, a, b),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The continuous convolution is \\((f * g)(t) = \\int_0^t f(\\tau) g(t - \\tau) d\\tau = \\int_0^t %d \\cdot %d (t - \\tau) d\\tau = %d \\left[ t\\tau - \\frac{\\tau^2}{2} \\right]_0^t = %d \\cdot \\frac{t^2}{2}\\). Evaluating at \\(t = %d\\) gives %d.", a, b, a*b, a*b, tVal, ans),
+		}
+	case 1:
+		k := smallInt(1, 3+int(ctx.Difficulty*2))
+		a := 2 * k
+		b := smallInt(1, 4+int(ctx.Difficulty*3))
+		tVal := smallInt(1, 3+int(ctx.Difficulty*2))
+		ans := k * b * tVal * tVal
+		return generator.Problem{
+			Question:    fmt.Sprintf("Compute the convolution value \\((f * g)(%d)\\) where \\(f(t) = %d t\\) and \\(g(t) = %d\\).", tVal, a, b),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The convolution integral is \\((f * g)(t) = \\int_0^t a \\tau \\cdot b d\\tau = %d \\int_0^t \\tau d\\tau = %d \\frac{t^2}{2}\\). Evaluating at \\(t = %d\\) gives %d.", a*b, a*b, tVal, ans),
+		}
+	case 2:
+		a := smallInt(2, 5+int(ctx.Difficulty*3))
+		b := smallInt(2, 5+int(ctx.Difficulty*3))
+		tVal := smallInt(2, 6+int(ctx.Difficulty*4))
+		ans := a * b * tVal
+		return generator.Problem{
+			Question:    fmt.Sprintf("Compute the convolution \\((f * g)(%d)\\) where \\(f(t) = %d\\) and \\(g(t) = %d\\).", tVal, a, b),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The convolution of two constant functions is \\((f * g)(t) = \\int_0^t %d \\cdot %d d\\tau = %d t\\). At \\(t = %d\\), the value is %d.", a, b, a*b, tVal, ans),
+		}
+	case 3:
+		k := smallInt(1, 2+int(ctx.Difficulty*2))
+		a := 6 * k
+		m := smallInt(1, 3+int(ctx.Difficulty*2))
+		tVal := smallInt(1, 3)
+		ans := k * m * tVal * tVal * tVal
+		return generator.Problem{
+			Question:    fmt.Sprintf("Compute the convolution value \\((f * g)(%d)\\) where \\(f(t) = %d t\\) and \\(g(t) = %d t\\).", tVal, a, m),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The convolution integral is \\((f * g)(t) = \\int_0^t %d \\tau \\cdot %d (t - \\tau) d\\tau = %d \\left[ \\frac{t \\tau^2}{2} - \\frac{\\tau^3}{3} \\right]_0^t = %d \\frac{t^3}{6} = %d t^3\\). Evaluating at \\(t = %d\\) gives %d.", a, m, a*m, a*m, k*m, tVal, ans),
+		}
+	default:
+		k := smallInt(1, 2+int(ctx.Difficulty*2))
+		a := 3 * k
+		m := smallInt(1, 3+int(ctx.Difficulty*2))
+		tVal := smallInt(1, 3)
+		ans := k * m * tVal * tVal * tVal
+		return generator.Problem{
+			Question:    fmt.Sprintf("Compute the convolution value \\((f * g)(%d)\\) where \\(f(t) = %d t^2\\) and \\(g(t) = %d\\).", tVal, a, m),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The convolution integral is \\((f * g)(t) = \\int_0^t %d \\tau^2 \\cdot %d d\\tau = %d \\left[ \\frac{\\tau^3}{3} \\right]_0^t = %d t^3\\). Evaluating at \\(t = %d\\) gives %d.", a, m, a*m, k*m, tVal, ans),
+		}
 	}
-	templates := []qa{
-		{q: "The convolution \\((f*g)(t) = \\int_0^t f(\\tau)g(t-\\tau)d\\tau\\). What is \\((1*1)(t)\\)?", a: "t", e: "\\((1*1)(t)=\\int_0^t 1\\cdot1 d\\tau = t\\)."},
-		{q: "\\(L\\{f*g\\} = L\\{f\\} \\cdot L\\{g\\}\\). If \\(L\\{f\\}=1/s\\) and \\(L\\{g\\}=1/s\\), what is \\(L\\{f*g\\}\\)?", a: "1/s^2", e: "By the convolution theorem, \\(L\\{f*g\\}= (1/s)(1/s)=1/s^2\\)."},
-		{q: "Is convolution commutative: \\(f*g = g*f\\)? (yes/no)", a: "yes", e: "Yes, by substitution \\(\\tau \\to t-\\tau\\) the integral is symmetric."},
-		{q: "If \\(f(t)=e^{t}\\) and \\(g(t)=1\\), \\((f*g)(t)=e^{t}-1\\). Does \\(L\\{f*g\\}=1/(s(s-1))\\) hold? (yes/no)", a: "yes", e: "\\(L\\{e^t\\}=1/(s-1)\\), \\(L\\{1\\}=1/s\\), product is \\(1/(s(s-1))=L\\{e^t-1\\}\\)."},
-	}
-	t := templates[rand.Intn(len(templates))]
-	return generator.Problem{Question: t.q, Answer: t.a, Explanation: t.e}
 }
 
 type linearPhaseGen struct{}

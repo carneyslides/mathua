@@ -26,6 +26,7 @@ func TestHomogeneousGen(t *testing.T)    { fuzzGen(t, &homogeneousGen{}) }
 func TestNonhomogeneousGen(t *testing.T) { fuzzGen(t, &nonhomogeneousGen{}) }
 func TestLaplaceGen(t *testing.T)        { fuzzGen(t, &laplaceGen{}) }
 func TestSystemsGen(t *testing.T)        { fuzzGen(t, &systemsGen{}) }
+func TestConvolutionGenerator(t *testing.T) { fuzzGen(t, &convolutionGen{}) }
 func TestRK4Gen(t *testing.T) {
 	gen := &rk4Gen{}
 	for i := 0; i < 200; i++ {
