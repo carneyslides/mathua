@@ -161,3 +161,34 @@ func TestScoresCarryTheQuizGate(t *testing.T) {
 		t.Errorf("quiz_gate_xp = %v, want %d", got, xp.QuizGateXP)
 	}
 }
+
+// The fallback daily goal for a learner with no stored target was a literal 10 while
+// xp.DefaultDailyGoal and the planner said 30 (code-defects.md §1). This asserts that
+// an unconfigured learner evaluates against xp.DefaultDailyGoal, and that an explicit
+// goal takes precedence.
+func TestScoresDailyGoalFallback(t *testing.T) {
+	d, _ := concepts.Load("../../data/concepts.json")
+	store, _ := storage.NewSQLiteStore(":memory:")
+	defer store.Close()
+	st, _ := store.CreateStudent("tester")
+
+	u := NewUpdater(d, store)
+	scores, err := u.Compute(st.ID)
+	if err != nil {
+		t.Fatalf("compute: %v", err)
+	}
+	if scores.DailyXPGoal != xp.DefaultDailyGoal {
+		t.Errorf("DailyXPGoal = %d, want xp.DefaultDailyGoal = %d", scores.DailyXPGoal, xp.DefaultDailyGoal)
+	}
+
+	if err := store.SetDailyXPGoal(st.ID, 50); err != nil {
+		t.Fatalf("set daily goal: %v", err)
+	}
+	scoresExplicit, err := u.Compute(st.ID)
+	if err != nil {
+		t.Fatalf("compute explicit: %v", err)
+	}
+	if scoresExplicit.DailyXPGoal != 50 {
+		t.Errorf("DailyXPGoal = %d, want 50", scoresExplicit.DailyXPGoal)
+	}
+}
