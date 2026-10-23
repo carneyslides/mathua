@@ -292,48 +292,84 @@ func (g *homogeneousGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type nonhomogeneousGen struct{}
 
 func (g *nonhomogeneousGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type qa struct {
-		q string
-		a string
-		e string
-	}
-	templates := []qa{
-		{
-			q: "Solve: \\(y'' + y = 1\\)",
-			a: "C1*cos(x)+C2*sin(x)+1",
-			e: "The homogeneous solution: \\(y_c = C_{1}\\cos(x) + C_{2}\\sin(x)\\) (characteristic \\(r^{2}+1=0\\), roots \\(\\pm i\\)). Particular solution: \\(y_p = 1\\). General: \\(y = C_{1}\\cos(x) + C_{2}\\sin(x) + 1\\).",
-		},
-		{
-			q: "Solve: \\(y'' + y = 2\\)",
-			a: "C1*cos(x)+C2*sin(x)+2",
-			e: "The homogeneous solution: \\(y_c = C_{1}\\cos(x) + C_{2}\\sin(x)\\). Particular solution: \\(y_p = 2\\). General: \\(y = C_{1}\\cos(x) + C_{2}\\sin(x) + 2\\).",
-		},
-		{
-			q: "Solve: \\(y'' - y = 1\\)",
-			a: "C1*e^x+C2*e^(-x)-1",
-			e: "The homogeneous solution: \\(y_c = C_{1}e^{x} + C_{2}e^{-x}\\) (characteristic \\(r^{2}-1=0\\), roots \\(\\pm 1\\)). Particular solution: \\(y_p = -1\\). General: \\(y = C_{1}e^{x} + C_{2}e^{-x} - 1\\).",
-		},
-		{
-			q: "Solve: \\(y'' - y = 2\\)",
-			a: "C1*e^x+C2*e^(-x)-2",
-			e: "The homogeneous solution: \\(y_c = C_{1}e^{x} + C_{2}e^{-x}\\). Particular solution: \\(y_p = -2\\). General: \\(y = C_{1}e^{x} + C_{2}e^{-x} - 2\\).",
-		},
-		{
-			q: "Solve: \\(y'' - 4y = 0\\)",
-			a: "C1*e^(2x)+C2*e^(-2x)",
-			e: "Characteristic equation: \\(r^{2} - 4 = 0\\), roots \\(r = \\pm 2\\). General solution: \\(y = C_{1}e^{2x} + C_{2}e^{-2x}\\).",
-		},
-		{
-			q: "Solve: \\(y'' - 4y = 1\\)",
-			a: "C1*e^(2x)+C2*e^(-2x)-0.25",
-			e: "The homogeneous solution: \\(y_c = C_{1}e^{2x} + C_{2}e^{-2x}\\). Particular solution: \\(y_p = -1/4\\). General: \\(y = C_{1}e^{2x} + C_{2}e^{-2x} - 1/4\\).",
-		},
-	}
-	t := templates[rand.Intn(len(templates))]
-	return generator.Problem{
-		Question:    t.q,
-		Answer:      t.a,
-		Explanation: t.e,
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Constant particular solution y_p for y'' + b y' + c y = K
+		b := smallInt(1, 5)
+		c := smallInt(2, 6)
+		m := smallInt(1, 7+int(ctx.Difficulty*3))
+		kVal := c * m
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the constant particular solution \\(y_p\\) for the differential equation \\(y'' + %dy' + %dy = %d\\).", b, c, kVal),
+			Answer:   fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf(
+				"For a constant particular solution \\(y_p = A\\), the derivatives vanish: \\(y_p' = 0\\) and \\(y_p'' = 0\\). Substituting gives \\(0 + 0 + %d A = %d\\), which yields \\(A = \\frac{%d}{%d} = %d\\).",
+				c, kVal, kVal, c, m,
+			),
+		}
+
+	case 1:
+		// Undamped resonance angular frequency omega_0 for y'' + omega_0^2 y = cos(omega t)
+		omega0 := smallInt(2, 9)
+		c := omega0 * omega0
+		return generator.Problem{
+			Question: fmt.Sprintf("At what driving angular frequency \\(\\omega\\) does pure resonance occur for the driven undamped oscillator \\(y'' + %dy = \\cos(\\omega t)\\)?", c),
+			Answer:   fmt.Sprintf("%d", omega0),
+			Explanation: fmt.Sprintf(
+				"Pure resonance occurs when the driving frequency matches the natural frequency of the undamped oscillator \\(\\omega_0 = \\sqrt{%d} = %d\\).",
+				c, omega0,
+			),
+		}
+
+	case 2:
+		// Exponential particular solution amplitude A for y'' - a^2 y = K e^(b x)
+		a := smallInt(1, 3)
+		b := smallInt(4, 6)
+		m := smallInt(1, 5)
+		aSq := a * a
+		bSq := b * b
+		denom := bSq - aSq
+		kVal := m * denom
+		return generator.Problem{
+			Question: fmt.Sprintf("The differential equation \\(y'' - %d y = %d e^{%d x}\\) has a particular solution of the form \\(y_p(x) = A e^{%d x}\\). What is the value of the amplitude coefficient \\(A\\)?", aSq, kVal, b, b),
+			Answer:   fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf(
+				"Computing derivatives gives \\(y_p' = %d A e^{%d x}\\) and \\(y_p'' = %d A e^{%d x}\\). Substituting into the differential equation yields \\((%d - %d) A e^{%d x} = %d A e^{%d x} = %d e^{%d x}\\). Solving for \\(A\\) gives \\(A = \\frac{%d}{%d} = %d\\).",
+				b, b, bSq, b, bSq, aSq, b, denom, b, kVal, b, kVal, denom, m,
+			),
+		}
+
+	case 3:
+		// Polynomial particular solution linear coefficient A_1 for y'' + c y = K x
+		c := smallInt(2, 5)
+		m := smallInt(1, 6)
+		kVal := c * m
+		return generator.Problem{
+			Question: fmt.Sprintf("The differential equation \\(y'' + %d y = %d x\\) has a particular solution \\(y_p(x) = A_1 x + A_0\\). What is the value of the linear coefficient \\(A_1\\)?", c, kVal),
+			Answer:   fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf(
+				"For \\(y_p(x) = A_1 x + A_0\\), the second derivative is \\(y_p'' = 0\\). Substituting into the differential equation gives \\(0 + %d(A_1 x + A_0) = %d A_1 x + %d A_0 = %d x\\). Equating linear coefficients yields \\(%d A_1 = %d\\), so \\(A_1 = %d\\).",
+				c, c, c, kVal, c, kVal, m,
+			),
+		}
+
+	default:
+		// Initial value problem particular solution constant C_1 in y(x) = C_1 cos(omega x) + y_p with y(0) = y_0
+		omega := smallInt(2, 5)
+		m := smallInt(1, 5)
+		y0 := smallInt(1, 9)
+		omegaSq := omega * omega
+		kVal := m * omegaSq
+		constC1 := y0 - m
+		return generator.Problem{
+			Question: fmt.Sprintf("For the initial value problem \\(y'' + %d y = %d\\) with initial conditions \\(y(0) = %d\\) and \\(y'(0) = 0\\), the solution is \\(y(x) = C_1 \\cos(%d x) + %d\\). What is the value of the constant \\(C_1\\)?", omegaSq, kVal, y0, omega, m),
+			Answer:   fmt.Sprintf("%d", constC1),
+			Explanation: fmt.Sprintf(
+				"The particular solution is \\(y_p = \\frac{%d}{%d} = %d\\). The general solution with zero initial velocity is \\(y(x) = C_1 \\cos(%d x) + %d\\). Applying initial condition \\(y(0) = C_1 + %d = %d\\) yields \\(C_1 = %d - %d = %d\\).",
+				kVal, omegaSq, m, omega, m, m, y0, y0, m, constC1,
+			),
+		}
 	}
 }
 

@@ -79,7 +79,7 @@
     "label": "Non-homogeneous second-order ODEs",
     "domain": "differential_equations",
     "subdomain": "differential_equations.second_order",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "ode.second_order.homogeneous",
       "alg.eq.vars_both_sides"
