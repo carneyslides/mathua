@@ -12,8 +12,12 @@ package calculus
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func registerVector(reg *generator.Registry) {
@@ -25,6 +29,18 @@ func registerVector(reg *generator.Registry) {
 	reg.Register("calc.multi.double_integral_region", &doubleIntegralRegionGen{})
 	reg.Register("calc.multi.saddle_test", &saddleTestGen{})
 	reg.Register("calc.multi.lagrange", &lagrangeGen{})
+}
+
+func containsWord(s, word string) bool {
+	fields := strings.FieldsFunc(s, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.'
+	})
+	for _, f := range fields {
+		if f == word {
+			return true
+		}
+	}
+	return false
 }
 
 // small returns a random int in [lo, hi], and never panics when hi < lo.
@@ -39,15 +55,39 @@ func small(lo, hi int) int {
 type curlGen struct{}
 
 func (g *curlGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := small(1, 2+int(ctx.Difficulty*4))
-	b := small(1, 2+int(ctx.Difficulty*4))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b, curlVal int
+	var q, ex string
+	for {
+		maxBound := 2 + tier*3
+		a = small(1, maxBound)
+		b = small(1, maxBound)
+		if tier > 0 && rand.Intn(2) == 0 {
+			a = -a
+		}
+		if tier > 0 && rand.Intn(2) == 0 {
+			b = -b
+		}
+		curlVal = b - a
+		ansStr := strconv.Itoa(curlVal)
+		q = fmt.Sprintf("For the field \\(\\mathbf{F} = (%dy,\\ %dx)\\), find the scalar curl \\(\\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y}\\).", a, b)
+		if curlVal == a || curlVal == -a || curlVal == b || curlVal == -b || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("The scalar curl of a planar vector field \\(\\mathbf{F} = (P, Q)\\) is defined as \\(\\operatorname{curl} \\mathbf{F} = \\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y}\\). Compute partial derivatives for component functions \\(P(x,y) = %dy\\) and \\(Q(x,y) = %dx\\), yielding \\(\\frac{\\partial P}{\\partial y} = %d\\) and \\(\\frac{\\partial Q}{\\partial x} = %d\\). Substitute into the curl definition to evaluate \\(\\operatorname{curl} \\mathbf{F} = %d - (%d) = %d\\).",
+			a, b, a, b, b, a, curlVal)
+		break
+	}
 	return generator.Problem{
-		Question: fmt.Sprintf("For the field \\(\\mathbf{F} = (%dy,\\ %dx)\\), find the scalar curl \\(\\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y}\\).", a, b),
-		Answer:   fmt.Sprintf("%d", b-a),
-		Explanation: fmt.Sprintf("Q = %dx so dQ/dx = %d, and P = %dy so dP/dy = %d. The curl is %d - %d = %d: a non-zero curl says the field swirls and is not a gradient.",
-			b, b, a, a, b, a, b-a),
-		Facts: map[string]string{"a": fmt.Sprintf("%d", a), "b": fmt.Sprintf("%d", b),
-			"curl": fmt.Sprintf("%d", b-a)},
+		Question:    q,
+		Answer:      strconv.Itoa(curlVal),
+		Explanation: ex,
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"curl":   strconv.Itoa(curlVal),
+			"answer": strconv.Itoa(curlVal),
+		},
 	}
 }
 
@@ -55,15 +95,39 @@ func (g *curlGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type divergenceGen struct{}
 
 func (g *divergenceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := small(1, 3+int(ctx.Difficulty*4))
-	b := small(1, 3+int(ctx.Difficulty*4))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b, divVal int
+	var q, ex string
+	for {
+		maxBound := 3 + tier*3
+		a = small(1, maxBound)
+		b = small(1, maxBound)
+		if tier > 0 && rand.Intn(2) == 0 {
+			a = -a
+		}
+		if tier > 0 && rand.Intn(2) == 0 {
+			b = -b
+		}
+		divVal = a + b
+		ansStr := strconv.Itoa(divVal)
+		q = fmt.Sprintf("For the field \\(\\mathbf{F} = (%dx,\\ %dy)\\), find the divergence \\(\\frac{\\partial P}{\\partial x} + \\frac{\\partial Q}{\\partial y}\\).", a, b)
+		if divVal == a || divVal == -a || divVal == b || divVal == -b || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("The divergence of a planar vector field \\(\\mathbf{F} = (P, Q)\\) measures net outward flux density: \\(\\operatorname{div} \\mathbf{F} = \\nabla \\cdot \\mathbf{F} = \\frac{\\partial P}{\\partial x} + \\frac{\\partial Q}{\\partial y}\\). Evaluate the partial derivatives of components \\(P(x,y) = %dx\\) and \\(Q(x,y) = %dy\\), giving \\(\\frac{\\partial P}{\\partial x} = %d\\) and \\(\\frac{\\partial Q}{\\partial y} = %d\\). Sum the diagonal derivatives to obtain \\(\\operatorname{div} \\mathbf{F} = %d + (%d) = %d\\).",
+			a, b, a, b, a, b, divVal)
+		break
+	}
 	return generator.Problem{
-		Question: fmt.Sprintf("For the field \\(\\mathbf{F} = (%dx,\\ %dy)\\), find the divergence \\(\\frac{\\partial P}{\\partial x} + \\frac{\\partial Q}{\\partial y}\\).", a, b),
-		Answer:   fmt.Sprintf("%d", a+b),
-		Explanation: fmt.Sprintf("The partials are the diagonal entries %d and %d, so the divergence is %d + %d = %d. It measures how much the field spreads rather than turns, which is why a field can have zero curl and non-zero divergence.",
-			a, b, a, b, a+b),
-		Facts: map[string]string{"a": fmt.Sprintf("%d", a), "b": fmt.Sprintf("%d", b),
-			"divergence": fmt.Sprintf("%d", a+b)},
+		Question:    q,
+		Answer:      strconv.Itoa(divVal),
+		Explanation: ex,
+		Facts: map[string]string{
+			"a":          strconv.Itoa(a),
+			"b":          strconv.Itoa(b),
+			"divergence": strconv.Itoa(divVal),
+			"answer":     strconv.Itoa(divVal),
+		},
 	}
 }
 
@@ -71,15 +135,39 @@ func (g *divergenceGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type conservativeTestGen struct{}
 
 func (g *conservativeTestGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	b := small(1, 3+int(ctx.Difficulty*4))
-	c := small(1, 3+int(ctx.Difficulty*4))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var b, c, diffVal int
+	var q, ex string
+	for {
+		maxBound := 3 + tier*3
+		b = small(1, maxBound)
+		c = small(1, maxBound)
+		if tier > 0 && rand.Intn(2) == 0 {
+			b = -b
+		}
+		if tier > 0 && rand.Intn(2) == 0 {
+			c = -c
+		}
+		diffVal = c - b
+		ansStr := strconv.Itoa(diffVal)
+		q = fmt.Sprintf("For \\(\\mathbf{F} = (2x %+dy,\\ %dx + 5y)\\), compute \\(\\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y}\\). A value of zero means the field is conservative.", b, c)
+		if diffVal == b || diffVal == -b || diffVal == c || diffVal == -c || diffVal == 2 || diffVal == 5 || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("A continuously differentiable field \\(\\mathbf{F} = (P, Q)\\) on a simply connected domain is conservative if and only if \\(\\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y} = 0\\). Differentiate components \\(P = 2x %+dy\\) with respect to y and \\(Q = %dx + 5y\\) with respect to x: \\(\\frac{\\partial P}{\\partial y} = %d\\) and \\(\\frac{\\partial Q}{\\partial x} = %d\\). Calculate the cross-partial difference \\(\\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y} = %d - (%d) = %d\\).",
+			b, c, b, c, c, b, diffVal)
+		break
+	}
 	return generator.Problem{
-		Question: fmt.Sprintf("For \\(\\mathbf{F} = (2x + %dy,\\ %dx + 5y)\\), compute \\(\\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y}\\). A value of zero means the field is conservative.", b, c),
-		Answer:   fmt.Sprintf("%d", c-b),
-		Explanation: fmt.Sprintf("dQ/dx = %d and dP/dy = %d, so the difference is %d - %d = %d. When it is zero on a simply connected region the field is the gradient of a potential and every line integral becomes a difference of potentials.",
-			c, b, c, b, c-b),
-		Facts: map[string]string{"b": fmt.Sprintf("%d", b), "c": fmt.Sprintf("%d", c),
-			"difference": fmt.Sprintf("%d", c-b)},
+		Question:    q,
+		Answer:      strconv.Itoa(diffVal),
+		Explanation: ex,
+		Facts: map[string]string{
+			"b":          strconv.Itoa(b),
+			"c":          strconv.Itoa(c),
+			"difference": strconv.Itoa(diffVal),
+			"answer":     strconv.Itoa(diffVal),
+		},
 	}
 }
 
@@ -88,15 +176,33 @@ func (g *conservativeTestGen) Generate(ctx generator.GeneratorContext) generator
 type greensTheoremGen struct{}
 
 func (g *greensTheoremGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := small(1, 3+int(ctx.Difficulty*4))
-	b := small(1, 3+int(ctx.Difficulty*4))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b, areaVal int
+	var q, ex string
+	for {
+		maxBound := 3 + tier*3
+		a = small(2, maxBound)
+		b = small(2, maxBound+1)
+		areaVal = a * b
+		ansStr := strconv.Itoa(areaVal)
+		q = fmt.Sprintf("Use Green's theorem to evaluate \\(\\oint_C x\\,dy\\) counterclockwise around the rectangle with corners \\((0,0)\\), \\((%d,0)\\), \\((%d,%d)\\) and \\((0,%d)\\).", a, a, b, b)
+		if areaVal == a || areaVal == b || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("By Green's theorem in the plane, \\(\\oint_C P\\,dx + Q\\,dy = \\iint_R \\left(\\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y}\\right)\\,dA\\). With \\(P = 0\\) and \\(Q = x\\), the integrand is \\(\\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y} = 1 - 0 = 1\\), reducing the boundary circulation to the enclosed area \\(\\iint_R 1\\,dA\\). Evaluate the area of the rectangle with width %d and height %d to get \\(%d \\times %d = %d\\).",
+			a, b, a, b, areaVal)
+		break
+	}
 	return generator.Problem{
-		Question: fmt.Sprintf("Use Green's theorem to evaluate \\(\\oint_C x\\,dy\\) counterclockwise around the rectangle with corners \\((0,0)\\), \\((%d,0)\\), \\((%d,%d)\\) and \\((0,%d)\\).", a, a, b, b),
-		Answer:   fmt.Sprintf("%d", a*b),
-		Explanation: fmt.Sprintf("Green's theorem turns the boundary integral into \\(\\iint (\\partial Q/\\partial x - \\partial P/\\partial y)\\,dA\\) with P = 0 and Q = x, and that integrand is 1, so the integral is the area %d times %d = %d.",
-			a, b, a*b),
-		Facts: map[string]string{"a": fmt.Sprintf("%d", a), "b": fmt.Sprintf("%d", b),
-			"area": fmt.Sprintf("%d", a*b)},
+		Question:    q,
+		Answer:      strconv.Itoa(areaVal),
+		Explanation: ex,
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"area":   strconv.Itoa(areaVal),
+			"answer": strconv.Itoa(areaVal),
+		},
 	}
 }
 
@@ -104,17 +210,40 @@ func (g *greensTheoremGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type transformJacobianGen struct{}
 
 func (g *transformJacobianGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := small(1, 3+int(ctx.Difficulty*4))
-	b := small(1, 3+int(ctx.Difficulty*4))
-	c := small(1, 3+int(ctx.Difficulty*4))
-	d := small(1, 3+int(ctx.Difficulty*4))
-	det := a*d - b*c
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b, c, d, det int
+	var q, ex string
+	for {
+		maxBound := 3 + tier*2
+		a = small(1, maxBound)
+		b = small(1, maxBound)
+		c = small(1, maxBound)
+		d = small(1, maxBound)
+		det = a*d - b*c
+		if det == 0 {
+			continue
+		}
+		ansStr := strconv.Itoa(det)
+		q = fmt.Sprintf("For the change of variables \\(x = %du + %dv,\\ y = %du + %dv\\), find \\(\\frac{\\partial(x,y)}{\\partial(u,v)}\\).", a, b, c, d)
+		if det == a || det == -a || det == b || det == -b || det == c || det == -c || det == d || det == -d || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("The Jacobian determinant for transformation \\((u, v) \\mapsto (x, y)\\) is given by \\(\\frac{\\partial(x,y)}{\\partial(u,v)} = \\det \\begin{pmatrix} x_u & x_v \\\\ y_u & y_v \\end{pmatrix} = x_u y_v - x_v y_u\\). Compute partial derivatives from \\(x = %du + %dv\\) and \\(y = %du + %dv\\), giving matrix entries \\(x_u = %d\\), \\(x_v = %d\\), \\(y_u = %d\\) and \\(y_v = %d\\). Evaluate the determinant \\((%d)(%d) - (%d)(%d) = %d - %d = %d\\).",
+			a, b, c, d, a, b, c, d, a, d, b, c, a*d, b*c, det)
+		break
+	}
 	return generator.Problem{
-		Question: fmt.Sprintf("For the change of variables \\(x = %du + %dv,\\ y = %du + %dv\\), find \\(\\frac{\\partial(x,y)}{\\partial(u,v)}\\).", a, b, c, d),
-		Answer:   fmt.Sprintf("%d", det),
-		Explanation: fmt.Sprintf("The matrix of partials is [[%d, %d], [%d, %d]] and its determinant is %d*%d - %d*%d = %d. Its absolute value is the factor that converts an area element du dv into dx dy.",
-			a, b, c, d, a, d, b, c, det),
-		Facts: map[string]string{"det": fmt.Sprintf("%d", det)},
+		Question:    q,
+		Answer:      strconv.Itoa(det),
+		Explanation: ex,
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"c":      strconv.Itoa(c),
+			"d":      strconv.Itoa(d),
+			"det":    strconv.Itoa(det),
+			"answer": strconv.Itoa(det),
+		},
 	}
 }
 
@@ -123,13 +252,32 @@ func (g *transformJacobianGen) Generate(ctx generator.GeneratorContext) generato
 type doubleIntegralRegionGen struct{}
 
 func (g *doubleIntegralRegionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := 2 * small(1, 3+int(ctx.Difficulty*3))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, areaVal int
+	var q, ex string
+	for {
+		maxBound := 3 + tier*3
+		k := small(2, maxBound)
+		a = 2 * k
+		areaVal = a * a / 2
+		ansStr := strconv.Itoa(areaVal)
+		q = fmt.Sprintf("Evaluate \\(\\iint_R 1\\,dA\\) where R is the triangle \\(0 \\le y \\le x \\le %d\\).", a)
+		if areaVal == a || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("Set up the iterated integral over the triangular region \\(R\\): \\(\\iint_R 1\\,dA = \\int_0^{%d} \\int_0^x 1\\,dy\\,dx\\). Evaluate the inner integral \\(\\int_0^x 1\\,dy = [y]_0^x = x\\), reducing the problem to \\(\\int_0^{%d} x\\,dx\\). Integrate with respect to x: \\(\\left[\\frac{x^2}{2}\\right]_0^{%d} = \\frac{(%d)^2}{2} = \\frac{%d}{2} = %d\\).",
+			a, a, a, a, a*a, areaVal)
+		break
+	}
 	return generator.Problem{
-		Question: fmt.Sprintf("Evaluate \\(\\iint_R 1\\,dA\\) where R is the triangle \\(0 \\le y \\le x \\le %d\\).", a),
-		Answer:   fmt.Sprintf("%d", a*a/2),
-		Explanation: fmt.Sprintf("The integrand is 1, so the integral is the area of the triangle, which has base %d and height %d: base times height over two is %d.",
-			a, a, a*a/2),
-		Facts: map[string]string{"a": fmt.Sprintf("%d", a), "area": fmt.Sprintf("%d", a*a/2)},
+		Question:    q,
+		Answer:      strconv.Itoa(areaVal),
+		Explanation: ex,
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"area":   strconv.Itoa(areaVal),
+			"answer": strconv.Itoa(areaVal),
+		},
 	}
 }
 
@@ -138,14 +286,36 @@ func (g *doubleIntegralRegionGen) Generate(ctx generator.GeneratorContext) gener
 type saddleTestGen struct{}
 
 func (g *saddleTestGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	a := small(1, 3+int(ctx.Difficulty*3))
-	b := small(1, 3+int(ctx.Difficulty*3))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b, discVal int
+	var q, ex string
+	for {
+		maxBound := 3 + tier*2
+		a = small(1, maxBound)
+		b = small(1, maxBound)
+		if tier > 0 && rand.Intn(2) == 0 {
+			b = -b
+		}
+		discVal = 4 * a * b
+		ansStr := strconv.Itoa(discVal)
+		q = fmt.Sprintf("For \\(f(x,y) = %dx^2 %+dy^2\\), evaluate the discriminant \\(D = f_{xx}f_{yy} - (f_{xy})^2\\) at the origin.", a, b)
+		if discVal == a || discVal == -a || discVal == b || discVal == -b || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("The discriminant in the Second Derivative Test is given by \\(D = f_{xx} f_{yy} - (f_{xy})^2\\). Calculate second-order partial derivatives for \\(f(x,y) = %dx^2 %+dy^2\\): \\(f_{xx} = %d\\), \\(f_{yy} = %d\\) and \\(f_{xy} = 0\\). Evaluate the discriminant product at the origin: \\(D = (%d)(%d) - (0)^2 = %d\\).",
+			a, b, 2*a, 2*b, 2*a, 2*b, discVal)
+		break
+	}
 	return generator.Problem{
-		Question: fmt.Sprintf("For \\(f(x,y) = %dx^2 + %dy^2\\), evaluate the discriminant \\(D = f_{xx}f_{yy} - (f_{xy})^2\\) at the origin.", a, b),
-		Answer:   fmt.Sprintf("%d", 4*a*b),
-		Explanation: fmt.Sprintf("f_xx = %d, f_yy = %d and f_xy = 0, so D = %d * %d = %d. A positive D with f_xx > 0 makes the point a minimum; a negative D would make it a saddle.",
-			2*a, 2*b, 2*a, 2*b, 4*a*b),
-		Facts: map[string]string{"D": fmt.Sprintf("%d", 4*a*b)},
+		Question:    q,
+		Answer:      strconv.Itoa(discVal),
+		Explanation: ex,
+		Facts: map[string]string{
+			"a":      strconv.Itoa(a),
+			"b":      strconv.Itoa(b),
+			"D":      strconv.Itoa(discVal),
+			"answer": strconv.Itoa(discVal),
+		},
 	}
 }
 
@@ -153,12 +323,32 @@ func (g *saddleTestGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type lagrangeGen struct{}
 
 func (g *lagrangeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	s := 2 * small(2, 4+int(ctx.Difficulty*4))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var s, halfS, maxVal int
+	var q, ex string
+	for {
+		maxBound := 3 + tier*4
+		k := small(3, maxBound)
+		s = 2 * k
+		halfS = s / 2
+		maxVal = halfS * halfS
+		ansStr := strconv.Itoa(maxVal)
+		q = fmt.Sprintf("Use Lagrange multipliers to find the largest value of \\(xy\\) subject to \\(x + y = %d\\) with \\(x, y > 0\\).", s)
+		if maxVal == s || containsWord(q, ansStr) {
+			continue
+		}
+		ex = fmt.Sprintf("Formulate the Lagrange condition \\(\\nabla f = \\lambda \\nabla g\\) for objective \\(f(x,y) = xy\\) and constraint \\(g(x,y) = x + y = %d\\), giving system \\(y = \\lambda\\) and \\(x = \\lambda\\). Equating components yields \\(x = y\\); substitute into the constraint to get \\(2x = %d\\), so \\(x = y = %d\\). Evaluate the maximum product: \\(f(%d, %d) = %d \\times %d = %d\\).",
+			s, s, halfS, halfS, halfS, halfS, halfS, maxVal)
+		break
+	}
 	return generator.Problem{
-		Question: fmt.Sprintf("Use Lagrange multipliers to find the largest value of \\(xy\\) subject to \\(x + y = %d\\) with \\(x, y > 0\\).", s),
-		Answer:   fmt.Sprintf("%d", s*s/4),
-		Explanation: fmt.Sprintf("Lagrange gives y = lambda and x = lambda, so x = y = %d/2 = %d and the product is %d*%d = %d. The constraint forces the two factors to share the sum equally.",
-			s, s/2, s/2, s/2, s*s/4),
-		Facts: map[string]string{"s": fmt.Sprintf("%d", s), "maximum": fmt.Sprintf("%d", s*s/4)},
+		Question:    q,
+		Answer:      strconv.Itoa(maxVal),
+		Explanation: ex,
+		Facts: map[string]string{
+			"s":       strconv.Itoa(s),
+			"maximum": strconv.Itoa(maxVal),
+			"answer":  strconv.Itoa(maxVal),
+		},
 	}
 }
