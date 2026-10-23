@@ -156,3 +156,25 @@ func TestNextStaticFSUnknownRouteIs404(t *testing.T) {
 		t.Errorf("served a page for an unexpected filename")
 	}
 }
+
+// The rewritten URL path handed to http.FileServer must always use forward slashes.
+// On Windows, filepath.Clean produces backslashes ('\admin'), which causes http.FileServer
+// to return 404 for all fallback routes.
+func TestNextStaticFSRewritesToForwardSlashPath(t *testing.T) {
+	root := adminExport(t)
+	handler := nextStaticFS(root)
+	for _, route := range []string{"/admin", "/learn", "/domains", "/docs"} {
+		req := httptest.NewRequest(http.MethodGet, route, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if strings.Contains(req.URL.Path, `\`) {
+			t.Errorf("%s: rewritten URL path %q contains backslashes", route, req.URL.Path)
+		}
+		if !strings.HasSuffix(req.URL.Path, ".html") {
+			t.Errorf("%s: expected URL path to end in .html, got %q", route, req.URL.Path)
+		}
+		if rec.Code != 200 {
+			t.Errorf("%s: status = %d, want 200", route, rec.Code)
+		}
+	}
+}
