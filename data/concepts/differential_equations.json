@@ -94,7 +94,7 @@
     "label": "Laplace transforms",
     "domain": "differential_equations",
     "subdomain": "differential_equations.transforms",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "ode.second_order.nonhomogeneous",
       "calc.integral.parts"

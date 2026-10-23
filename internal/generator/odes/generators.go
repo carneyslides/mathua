@@ -340,53 +340,58 @@ func (g *nonhomogeneousGen) Generate(ctx generator.GeneratorContext) generator.P
 type laplaceGen struct{}
 
 func (g *laplaceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type qa struct {
-		q string
-		a string
-		e string
-	}
-	templates := []qa{
-		{
-			q: "Find \\(L\\{1\\}\\)",
-			a: "1/s",
-			e: "\\(L\\{1\\} = \\int_{0}^{\\infty} e^{-st} dt = 1/s\\) for \\(s > 0\\).",
-		},
-		{
-			q: "Find \\(L\\{t\\}\\)",
-			a: "1/s^2",
-			e: "\\(L\\{t\\} = 1/s^{2}\\) for \\(s > 0\\).",
-		},
-		{
-			q: "Find \\(L\\{t^{2}\\}\\)",
-			a: "2/s^3",
-			e: "\\(L\\{t^{2}\\} = 2/s^{3}\\) for \\(s > 0\\).",
-		},
-	}
-	alphas := []int{1, 2, 3}
-	a := alphas[rand.Intn(len(alphas))]
-	templates = append(templates,
-		qa{
-			q: fmt.Sprintf("Find \\(L\\{e^{%dt}\\}\\)", a),
-			a: fmt.Sprintf("1/(s-%d)", a),
-			e: fmt.Sprintf("\\(L\\{e^{%dt}\\} = 1/(s - %d)\\) for \\(s > %d\\).", a, a, a),
-		},
-		qa{
-			q: fmt.Sprintf("Find \\(L\\{\\sin(%dt)\\}\\)", a),
-			a: fmt.Sprintf("%d/(s^2+%d)", a, a*a),
-			e: fmt.Sprintf("\\(L\\{\\sin(%dt)\\} = %d/(s^{2} + %d^{2})\\) for \\(s > 0\\).", a, a, a),
-		},
-		qa{
-			q: fmt.Sprintf("Find \\(L\\{\\cos(%dt)\\}\\)", a),
-			a: fmt.Sprintf("s/(s^2+%d)", a*a),
-			e: fmt.Sprintf("\\(L\\{\\cos(%dt)\\} = s/(s^{2} + %d^{2})\\) for \\(s > 0\\).", a, a),
-		},
-	)
-
-	t := templates[rand.Intn(len(templates))]
-	return generator.Problem{
-		Question:    t.q,
-		Answer:      t.a,
-		Explanation: t.e,
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		a := smallInt(1, 4)
+		d := smallInt(1, 3)
+		m := smallInt(1, 4+int(ctx.Difficulty*3))
+		s0 := a + d
+		k := m * d
+		return generator.Problem{
+			Question:    fmt.Sprintf("Evaluate the Laplace transform \\(\\mathcal{L}\\{%d e^{%d t}\\}(s)\\) at \\(s = %d\\).", k, a, s0),
+			Answer:      fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf("The Laplace transform is \\(\\mathcal{L}\\{e^{at}\\}(s) = 1/(s - a)\\). Thus \\(\\mathcal{L}\\{%d e^{%d t}\\}(s) = %d / (s - %d)\\). At \\(s = %d\\), the value is %d / %d = %d.", k, a, k, a, s0, k, d, m),
+		}
+	case 1:
+		s0 := smallInt(2, 4)
+		m := smallInt(1, 4+int(ctx.Difficulty*3))
+		k := m * s0 * s0
+		return generator.Problem{
+			Question:    fmt.Sprintf("Evaluate the Laplace transform \\(\\mathcal{L}\\{%d t\\}(s)\\) at \\(s = %d\\).", k, s0),
+			Answer:      fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf("The Laplace transform of \\(t\\) is \\(\\mathcal{L}\\{t\\}(s) = 1/s^2\\). Thus \\(\\mathcal{L}\\{%d t\\}(%d) = %d / %d^2 = %d\\).", k, s0, k, s0, m),
+		}
+	case 2:
+		s0 := smallInt(2, 5)
+		m := smallInt(2, 6+int(ctx.Difficulty*4))
+		k := m * s0
+		return generator.Problem{
+			Question:    fmt.Sprintf("Evaluate the Laplace transform \\(\\mathcal{L}\\{%d\\}(s)\\) at \\(s = %d\\).", k, s0),
+			Answer:      fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf("The Laplace transform of a constant \\(k\\) is \\(k/s\\). Evaluating at \\(s = %d\\) gives %d / %d = %d.", s0, k, s0, m),
+		}
+	case 3:
+		a := smallInt(1, 3)
+		d := smallInt(1, 3)
+		m := smallInt(1, 4+int(ctx.Difficulty*3))
+		s0 := a + d
+		k := m * d * d
+		return generator.Problem{
+			Question:    fmt.Sprintf("By the first shifting theorem, evaluate \\(\\mathcal{L}\\{%d t e^{%d t}\\}(s)\\) at \\(s = %d\\).", k, a, s0),
+			Answer:      fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf("By the first shifting theorem, \\(\\mathcal{L}\\{t e^{at}\\}(s) = 1/(s - a)^2\\). For \\(s = %d\\) and \\(a = %d\\), \\(s - a = %d\\). Thus \\(\\mathcal{L}\\{%d t e^{%d t}\\}(%d) = %d / (%d)^2 = %d\\).", s0, a, d, k, a, s0, k, d, m),
+		}
+	default:
+		s0 := smallInt(2, 5)
+		Y0 := smallInt(2, 6+int(ctx.Difficulty*3))
+		y0 := smallInt(1, 5)
+		ans := s0*Y0 - y0
+		return generator.Problem{
+			Question:    fmt.Sprintf("Given \\(y(0) = %d\\) and \\(Y(%d) = %d\\), compute the value of \\(\\mathcal{L}\\{y'\\}(%d) = s Y(s) - y(0)\\).", y0, s0, Y0, s0),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("By the derivative property of the Laplace transform, \\(\\mathcal{L}\\{y'\\}(s) = s Y(s) - y(0)\\). Substituting \\(s = %d\\), \\(Y(%d) = %d\\) and \\(y(0) = %d\\) gives (%d)(%d) - %d = %d.", s0, s0, Y0, y0, s0, Y0, y0, ans),
+		}
 	}
 }
 
