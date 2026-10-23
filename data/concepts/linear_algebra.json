@@ -251,7 +251,7 @@
     "label": "Rank of a matrix",
     "domain": "linear_algebra",
     "subdomain": "linear_algebra.matrices",
-    "grading_type": "symbolic",
+    "grading_type": "numeric",
     "prerequisites": [
       "linalg.det.2x2",
       "linalg.det.3x3"
@@ -266,7 +266,7 @@
     "label": "Matrix diagonalization",
     "domain": "linear_algebra",
     "subdomain": "linear_algebra.eigenvalues",
-    "grading_type": "symbolic",
+    "grading_type": "numeric",
     "prerequisites": [
       "linalg.eigen.compute"
     ],
@@ -294,7 +294,7 @@
     "label": "Cosine similarity between vectors",
     "domain": "linear_algebra",
     "subdomain": "linear_algebra.vectors",
-    "grading_type": "symbolic",
+    "grading_type": "numeric",
     "prerequisites": [
       "linalg.vector.dot"
     ],

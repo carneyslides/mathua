@@ -2,7 +2,6 @@ package linalg
 
 import (
 	"fmt"
-	"math"
 	"math/rand"
 	"regexp"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/chuma-beep/mathua/internal/generator"
 	"github.com/chuma-beep/mathua/internal/grader"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 var matrixRe = regexp.MustCompile(`\[\[([^\]]+)\],\[([^\]]+)\]\]`)
@@ -238,87 +238,144 @@ func (g *matrixMultGen) Generate(ctx generator.GeneratorContext) generator.Probl
 
 type matrixIdentityGen struct{}
 
-func (g *matrixIdentityGen) AnswerFormat() generator.AnswerFormat {
-	return generator.AnswerFormat{Hint: "Matrix with rows in brackets, e.g. [[1,2],[3,4]]", InputMode: "text"}
-}
-
-func (g *matrixIdentityGen) Grade(expected, userAnswer string) grader.Result {
-	return gradeMatrix(expected, userAnswer)
-}
-
 func (g *matrixIdentityGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	candidates := [][4]int{
-		{2, 1, 1, 1}, // det=1
-		{3, 2, 2, 1}, // det=-1
-		{3, 4, 2, 3}, // det=1
-		{4, 3, 3, 2}, // det=-1
-		{5, 3, 3, 2}, // det=1
-		{5, 7, 2, 3}, // det=1
-		{4, 5, 3, 4}, // det=1
-		{3, 1, 4, 1}, // det=-1
-		{2, 5, 1, 3}, // det=1
-		{1, 2, 3, 5}, // det=-1
-		{2, 3, 5, 7}, // det=-1
-		{7, 4, 5, 3}, // det=1
-		{6, 5, 5, 4}, // det=-1
-		{3, 5, 2, 3}, // det=-1
-		{4, 7, 1, 2}, // det=1
-		{7, 5, 4, 3}, // det=1
-	}
-	c := candidates[rand.Intn(len(candidates))]
-	a, b, cVal, d := c[0], c[1], c[2], c[3]
-	det := a*d - b*cVal
-	if det < 0 {
-		det = -det
-	}
-	inv := make([][]int, 2)
-	for i := range inv {
-		inv[i] = make([]int, 2)
-	}
-	inv[0][0] = d / det
-	inv[0][1] = -b / det
-	inv[1][0] = -cVal / det
-	inv[1][1] = a / det
-	return generator.Problem{
-		Question:    fmt.Sprintf("Find the inverse of the matrix \\(%s\\).", formatMatrix2([][]int{{a, b}, {cVal, d}})),
-		Answer:      formatMatrix(inv),
-		Explanation: fmt.Sprintf("det = %d*%d - %d*%d = %d, inverse = (1/%d)×[[%d,%d],[%d,%d]] = %s", a, d, b, cVal, a*d-b*cVal, det, d, -b, -cVal, a, formatMatrix(inv)),
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Identity vector multiplication I_2 v = v
+		v1 := mathutil.ScaleInt(ctx.Difficulty, 1, 10)
+		v2 := mathutil.ScaleInt(ctx.Difficulty, 1, 10)
+		if rand.Intn(2) == 0 {
+			v1 = -v1
+		}
+		if rand.Intn(2) == 0 {
+			v2 = -v2
+		}
+		comp := 1
+		ans := v1
+		if rand.Intn(2) == 0 {
+			comp = 2
+			ans = v2
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(I_2\\) be the \\(2 \\times 2\\) identity matrix and \\(v = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). Find component %d of the product vector \\(I_2 v\\).", v1, v2, comp),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the governing property of the identity matrix: \\(I_n v = v\\) for any vector \\(v\\).\n"+
+				"Subgoal 2: Substitute vector components: \\(I_2 \\begin{pmatrix} %d \\\\ %d \\end{pmatrix} = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\).\n"+
+				"Subgoal 3: Extract component %d, giving %d.", v1, v2, v1, v2, comp, ans),
+		}
+	case 1:
+		// Determinant of scaled identity det(c * I_n) = c^n
+		n := 2
+		if ctx.Difficulty > 0.5 {
+			n = 3
+		}
+		c := mathutil.ScaleInt(ctx.Difficulty, 2, 5)
+		ans := 1
+		for i := 0; i < n; i++ {
+			ans *= c
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the determinant of the scaled \\(%d \\times %d\\) identity matrix \\(%d I_%d\\).", n, n, c, n),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the determinant scaling identity for identity matrices: \\(\\det(c I_n) = c^n\\).\n"+
+				"Subgoal 2: Substitute dimension \\(n = %d\\) and scalar \\(c = %d\\): \\((%d)^{%d}\\).\n"+
+				"Subgoal 3: Evaluate the exponent to obtain %d.", n, c, c, n, ans),
+		}
+	case 2:
+		// Trace of identity matrix tr(I_n) = n
+		n := mathutil.ScaleInt(ctx.Difficulty, 2, 8)
+		return generator.Problem{
+			Question: fmt.Sprintf("Compute the trace of the \\(%d \\times %d\\) identity matrix \\(I_%d\\).", n, n, n),
+			Answer:   fmt.Sprintf("%d", n),
+			Explanation: fmt.Sprintf("Subgoal 1: State the trace definition as the sum of all diagonal elements: \\(\\operatorname{tr}(A) = \\sum_{i=1}^n a_{ii}\\).\n"+
+				"Subgoal 2: Substitute the diagonal elements of \\(I_%d\\), each equal to 1: \\(\\sum_{i=1}^{%d} 1\\).\n"+
+				"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(I_%d) = %d\\).", n, n, n, n),
+		}
+	case 3:
+		// Unimodular matrix inverse entry
+		rng := rand.New(rand.NewSource(rand.Int63()))
+		mat := mathutil.RandomUnimodular2x2(rng, 1+int(ctx.Difficulty*2))
+		if mat.Det() == -1 {
+			mat.A = -mat.A
+			mat.B = -mat.B
+		}
+		inv, _ := mat.Inverse()
+		pos := rand.Intn(4)
+		row, col, ans := 1, 1, inv.A
+		switch pos {
+		case 1:
+			row, col, ans = 1, 2, inv.B
+		case 2:
+			row, col, ans = 2, 1, inv.C
+		case 3:
+			row, col, ans = 2, 2, inv.D
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("For the invertible matrix \\(A = %s\\) with \\(\\det(A) = 1\\), what is the \\((%d,%d)\\) entry of its inverse \\(A^{-1}\\)?", mat.LaTeX(), row, col),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the \\(2 \\times 2\\) matrix inverse formula: \\(A^{-1} = \\frac{1}{\\det(A)} \\begin{pmatrix} d & -b \\\\ -c & a \\end{pmatrix}\\).\n"+
+				"Subgoal 2: Substitute matrix parameters with \\(\\det(A) = 1\\) to construct \\(A^{-1} = %s\\).\n"+
+				"Subgoal 3: Read off entry \\((%d,%d)\\), which equals %d.", inv.LaTeX(), row, col, ans),
+		}
+	default:
+		// Determinant of inverse matrix reciprocal
+		d := mathutil.ScaleInt(ctx.Difficulty, 2, 7)
+		if rand.Intn(2) == 0 {
+			d = -d
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("If an invertible matrix \\(A\\) has \\(\\det(A) = %d\\), compute the value of \\(%d \\cdot \\det(A^{-1})\\).", d, d),
+			Answer:   "1",
+			Explanation: fmt.Sprintf("Subgoal 1: State the determinant reciprocal rule for invertible matrices: \\(\\det(A^{-1}) = \\frac{1}{\\det(A)}\\).\n"+
+				"Subgoal 2: Substitute \\(\\det(A) = %d\\) into the identity: \\(\\det(A^{-1}) = \\frac{1}{%d}\\).\n"+
+				"Subgoal 3: Multiply by %d: \\(%d \\cdot \\frac{1}{%d} = 1\\).", d, d, d, d, d),
+		}
 	}
 }
 
 type det2x2Gen struct{}
 
 func (g *det2x2Gen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
-	a, b := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-	c, d := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
+	span := mathutil.ScaleInt(ctx.Difficulty, 3, 12)
+	a := rand.Intn(2*span+1) - span
+	b := rand.Intn(2*span+1) - span
+	c := rand.Intn(2*span+1) - span
+	d := rand.Intn(2*span+1) - span
 	det := a*d - b*c
 	return generator.Problem{
-		Question:    fmt.Sprintf("Find the determinant of \\(%s\\).", formatMatrix2([][]int{{a, b}, {c, d}})),
-		Answer:      fmt.Sprintf("%d", det),
-		Explanation: fmt.Sprintf("det = %d*%d - %d*%d = %d-%d = %d", a, d, b, c, a*d, b*c, det),
+		Question: fmt.Sprintf("Find the determinant of the matrix \\(%s\\).", formatMatrix2([][]int{{a, b}, {c, d}})),
+		Answer:   fmt.Sprintf("%d", det),
+		Explanation: fmt.Sprintf("Subgoal 1: State the governing formula for a \\(2 \\times 2\\) determinant: \\(\\det(A) = ad - bc\\).\n"+
+			"Subgoal 2: Substitute matrix parameters \\(a = %d, b = %d, c = %d, d = %d\\): \\((%d)(%d) - (%d)(%d)\\).\n"+
+			"Subgoal 3: Evaluate products and subtract: %d - (%d) = %d.", a, b, c, d, a, d, b, c, a*d, b*c, det),
 	}
 }
 
 type det3x3Gen struct{}
 
 func (g *det3x3Gen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
+	span := mathutil.ScaleInt(ctx.Difficulty, 2, 6)
 	m := make([][]int, 3)
 	for i := range m {
 		m[i] = make([]int, 3)
 		for j := range m[i] {
-			m[i][j] = rand.Intn(max(1, scale*2)) - scale
+			m[i][j] = rand.Intn(2*span+1) - span
 		}
 	}
 	a, b, c := m[0][0], m[0][1], m[0][2]
 	d, e, f := m[1][0], m[1][1], m[1][2]
 	gVal, h, i := m[2][0], m[2][1], m[2][2]
-	det := a*(e*i-f*h) - b*(d*i-f*gVal) + c*(d*h-e*gVal)
+	m11 := e*i - f*h
+	m12 := d*i - f*gVal
+	m13 := d*h - e*gVal
+	det := a*m11 - b*m12 + c*m13
 	return generator.Problem{
-		Question:    fmt.Sprintf("Find the determinant of \\(%s\\).", formatMatrix(m)),
-		Answer:      fmt.Sprintf("%d", det),
-		Explanation: fmt.Sprintf("det = %d*(%d*%d-%d*%d) - %d*(%d*%d-%d*%d) + %d*(%d*%d-%d*%d) = %d", a, e, i, f, h, b, d, i, f, gVal, c, d, h, e, gVal, det),
+		Question: fmt.Sprintf("Find the determinant of the matrix \\(%s\\).", formatMatrix(m)),
+		Answer:   fmt.Sprintf("%d", det),
+		Explanation: fmt.Sprintf("Subgoal 1: State Laplace cofactor expansion along the first row: \\(\\det(A) = a(ei - fh) - b(di - fg) + c(dh - eg)\\).\n"+
+			"Subgoal 2: Substitute row entries and evaluate \\(2 \\times 2\\) minors: \\(M_{11} = %d, M_{12} = %d, M_{13} = %d\\).\n"+
+			"Subgoal 3: Combine with alternating signs: \\(%d(%d) - (%d)(%d) + (%d)(%d) = %d\\).", m11, m12, m13, a, m11, b, m12, c, m13, det),
 	}
 }
 
@@ -350,41 +407,43 @@ func (g *systemsMatrixGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type cramerGen struct{}
 
 func (g *cramerGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
-	x := rand.Intn(max(1, scale*2)) - scale
-	y := rand.Intn(max(1, scale*2)) - scale
-	a, b := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-	c, d := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-	if a == 0 && c == 0 {
-		a = 1
-		c = 2
+	rng := rand.New(rand.NewSource(rand.Int63()))
+	mat := mathutil.RandomUnimodular2x2(rng, 1+int(ctx.Difficulty*3))
+	a, b := mat.A, mat.B
+	c, d := mat.C, mat.D
+	detA := a*d - b*c
+
+	x := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+	y := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+	if rand.Intn(2) == 0 {
+		x = -x
 	}
-	if b == 0 && d == 0 {
-		b = 1
-		d = 3
+	if rand.Intn(2) == 0 {
+		y = -y
 	}
 	e1 := a*x + b*y
 	e2 := c*x + d*y
-	det := a*d - b*c
-	if det == 0 {
-		det = 1
-	}
+
 	askX := rand.Intn(2) == 0
 	if askX {
 		detX := e1*d - b*e2
-		valX := detX / det
+		valX := detX / detA
 		return generator.Problem{
-			Question:    fmt.Sprintf("Use Cramer's rule to find \\(x\\): \\(%dx + %dy = %d\\), \\(%dx + %dy = %d\\)", a, b, e1, c, d, e2),
-			Answer:      fmt.Sprintf("%d", valX),
-			Explanation: fmt.Sprintf("x = det([[%d,%d],[%d,%d]]) / det([[%d,%d],[%d,%d]]) = (%d*%d-%d*%d)/(%d*%d-%d*%d) = %d/%d = %d", e1, b, e2, d, a, b, c, d, e1, d, b, e2, a, d, b, c, detX, det, valX),
+			Question: fmt.Sprintf("Use Cramer's rule to find \\(x\\) for the linear system: \\(%dx + %dy = %d\\), \\(%dx + %dy = %d\\).", a, b, e1, c, d, e2),
+			Answer:   fmt.Sprintf("%d", valX),
+			Explanation: fmt.Sprintf("Subgoal 1: State Cramer's rule for coordinate \\(x\\): \\(x = \\frac{\\det(A_x)}{\\det(A)}\\).\n"+
+				"Subgoal 2: Compute coefficient determinant \\(\\det(A) = (%d)(%d) - (%d)(%d) = %d\\) and modified determinant \\(\\det(A_x) = (%d)(%d) - (%d)(%d) = %d\\).\n"+
+				"Subgoal 3: Divide determinants: \\(x = \\frac{%d}{%d} = %d\\).", a, d, b, c, detA, e1, d, b, e2, detX, detX, detA, valX),
 		}
 	}
 	detY := a*e2 - e1*c
-	valY := detY / det
+	valY := detY / detA
 	return generator.Problem{
-		Question:    fmt.Sprintf("Use Cramer's rule to find \\(y\\): \\(%dx + %dy = %d\\), \\(%dx + %dy = %d\\)", a, b, e1, c, d, e2),
-		Answer:      fmt.Sprintf("%d", valY),
-		Explanation: fmt.Sprintf("y = det([[%d,%d],[%d,%d]]) / det([[%d,%d],[%d,%d]]) = (%d*%d-%d*%d)/(%d*%d-%d*%d) = %d/%d = %d", a, e1, c, e2, a, b, c, d, a, e2, e1, c, a, d, b, c, detY, det, valY),
+		Question: fmt.Sprintf("Use Cramer's rule to find \\(y\\) for the linear system: \\(%dx + %dy = %d\\), \\(%dx + %dy = %d\\).", a, b, e1, c, d, e2),
+		Answer:   fmt.Sprintf("%d", valY),
+		Explanation: fmt.Sprintf("Subgoal 1: State Cramer's rule for coordinate \\(y\\): \\(y = \\frac{\\det(A_y)}{\\det(A)}\\).\n"+
+			"Subgoal 2: Compute coefficient determinant \\(\\det(A) = (%d)(%d) - (%d)(%d) = %d\\) and modified determinant \\(\\det(A_y) = (%d)(%d) - (%d)(%d) = %d\\).\n"+
+			"Subgoal 3: Divide determinants: \\(y = \\frac{%d}{%d} = %d\\).", a, d, b, c, detA, a, e2, e1, c, detY, detY, detA, valY),
 	}
 }
 
@@ -693,101 +752,156 @@ func gradeMatrix(expected, userAnswer string) grader.Result {
 	return grader.Result{Correct: true, Score: 1}
 }
 
-// Diagonalization: find P and D such that A = PDP⁻¹ for a 2x2 matrix
+// Diagonalization: algebraic properties of diagonalizable matrices PDP⁻¹
 type diagonalizationGen struct{}
 
-func (g *diagonalizationGen) Grade(expected, userAnswer string) grader.Result {
-	// Expect "P=[[a,b],[c,d]] D=[[λ1,0],[0,λ2]]"
-	// Allow any order of eigenvalues in D
-	return gradeMatrixPair(expected, userAnswer)
-}
-
 func (g *diagonalizationGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	// Diagonalizable matrices (real distinct eigenvalues)
-	type entry struct {
-		a, b, c, d int
-		l1, l2     int
+	rng := rand.New(rand.NewSource(rand.Int63()))
+	l1 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+	l2 := l1 + mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+	if rand.Intn(2) == 0 {
+		l1 = -l1
 	}
-	entries := []entry{
-		{2, 0, 0, 3, 2, 3},  // diagonal already
-		{3, 1, 0, 2, 3, 2},  // triangular
-		{1, 2, 2, 1, 3, -1}, // need eigenvectors
-		{5, 0, 0, 4, 5, 4},
-		{2, 1, 0, 1, 2, 1},
-		{3, 0, 0, 5, 3, 5},
-		{2, 2, 0, 4, 2, 4},
-	}
-	e := entries[rand.Intn(len(entries))]
-	answer := fmt.Sprintf("P=[[%d,%d],[%d,%d]] D=[[%d,0],[0,%d]]", e.a, e.b, e.c, e.d, e.l1, e.l2)
-	return generator.Problem{
-		Question:    fmt.Sprintf("Find matrices \\(P\\) and \\(D\\) (diagonal) such that \\(A = PDP^{-1}\\) for \\(A = %s\\).", formatMatrix2([][]int{{e.a, e.b}, {e.c, e.d}})),
-		Answer:      answer,
-		Explanation: fmt.Sprintf("Eigenvalues are λ=%d and λ=%d. The eigenvectors form the columns of P: %s", e.l1, e.l2, answer),
-	}
-}
+	mat := mathutil.IntegerEigenvalues2x2(rng, l1, l2, 1+int(ctx.Difficulty*2))
 
-func gradeMatrixPair(expected, userAnswer string) grader.Result {
-	// Parse "P=[[...]] D=[[...]]"
-	parsePair := func(s string) (pStr, dStr string, ok bool) {
-		parts := strings.SplitN(s, " D=", 2)
-		if len(parts) != 2 {
-			return "", "", false
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Trace of diagonal matrix D
+		tr := l1 + l2
+		return generator.Problem{
+			Question: fmt.Sprintf("The matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the trace of \\(D\\)?", mat.LaTeX()),
+			Answer:   fmt.Sprintf("%d", tr),
+			Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of trace: \\(\\operatorname{tr}(D) = \\operatorname{tr}(A) = \\lambda_1 + \\lambda_2\\).\n"+
+				"Subgoal 2: Compute the trace of \\(A\\) by summing its diagonal entries: \\((%d) + (%d)\\).\n"+
+				"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(D) = %d\\).", mat.A, mat.D, tr),
 		}
-		pPart := strings.TrimPrefix(parts[0], "P=")
-		return pPart, parts[1], true
+	case 1:
+		// Determinant of diagonal matrix D
+		det := l1 * l2
+		return generator.Problem{
+			Question: fmt.Sprintf("The matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the determinant of \\(D\\)?", mat.LaTeX()),
+			Answer:   fmt.Sprintf("%d", det),
+			Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of determinant: \\(\\det(D) = \\det(A) = \\lambda_1 \\lambda_2\\).\n"+
+				"Subgoal 2: Compute the determinant of \\(A\\): \\((%d)(%d) - (%d)(%d)\\).\n"+
+				"Subgoal 3: Evaluate products to find \\(\\det(D) = %d\\).", mat.A, mat.D, mat.B, mat.C, det),
+		}
+	case 2:
+		// Power trace tr(A^2)
+		ans := l1*l1 + l2*l2
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(A = PDP^{-1}\\) be diagonalizable with diagonal matrix \\(D = \\begin{pmatrix} %d & 0 \\\\ 0 & %d \\end{pmatrix}\\). Compute \\(\\operatorname{tr}(A^2)\\).", l1, l2),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the power trace formula: \\(\\operatorname{tr}(A^2) = \\operatorname{tr}(D^2) = \\lambda_1^2 + \\lambda_2^2\\).\n"+
+				"Subgoal 2: Substitute the eigenvalues \\(\\lambda_1 = %d\\) and \\(\\lambda_2 = %d\\): \\((%d)^2 + (%d)^2\\).\n"+
+				"Subgoal 3: Evaluate squares and sum: %d + %d = %d.", l1, l2, l1, l2, l1*l1, l2*l2, ans),
+		}
+	case 3:
+		// Larger eigenvalue of diagonalizable matrix
+		larger := l1
+		if l2 > larger {
+			larger = l2
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("The matrix \\(A = %s\\) has distinct integer eigenvalues. Find its largest eigenvalue.", mat.LaTeX()),
+			Answer:   fmt.Sprintf("%d", larger),
+			Explanation: fmt.Sprintf("Subgoal 1: State the characteristic equation \\(\\det(A - \\lambda I) = \\lambda^2 - \\operatorname{tr}(A)\\lambda + \\det(A) = 0\\).\n"+
+				"Subgoal 2: Substitute \\(\\operatorname{tr}(A) = %d\\) and \\(\\det(A) = %d\\) to solve for roots \\(\\lambda_1 = %d\\) and \\(\\lambda_2 = %d\\).\n"+
+				"Subgoal 3: Select the maximum root: %d.", mat.Trace(), mat.Det(), l1, l2, larger),
+		}
+	default:
+		// Shifted determinant det(A - c I)
+		c := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		ans := (l1 - c) * (l2 - c)
+		return generator.Problem{
+			Question: fmt.Sprintf("A diagonalizable matrix \\(A\\) has eigenvalues \\(\\lambda_1 = %d\\) and \\(\\lambda_2 = %d\\). Compute \\(\\det(A - %d I)\\).", l1, l2, c),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the spectral shift property: eigenvalues of \\(A - cI\\) are \\(\\lambda_1 - c\\) and \\(\\lambda_2 - c\\), so \\(\\det(A - cI) = (\\lambda_1 - c)(\\lambda_2 - c)\\).\n"+
+				"Subgoal 2: Substitute eigenvalues and shift scalar: \\((%d - %d)(%d - %d)\\).\n"+
+				"Subgoal 3: Multiply the shifted factors to obtain %d.", l1, c, l2, c, ans),
+		}
 	}
-	eP, eD, ok := parsePair(expected)
-	if !ok {
-		return grader.Result{Correct: false, Score: 0, Feedback: "Expected format: P=[[...]] D=[[...]]"}
-	}
-	aP, aD, ok2 := parsePair(userAnswer)
-	if !ok2 {
-		return grader.Result{Correct: false, Score: 0, Feedback: "Expected format: P=[[...]] D=[[...]]"}
-	}
-	// Compare matrices — check both orderings in case eigenvalues are swapped
-	norm := func(s string) string {
-		s = strings.ReplaceAll(s, " ", "")
-		s = strings.ReplaceAll(s, "\n", "")
-		return s
-	}
-	if norm(expected) == norm(userAnswer) {
-		return grader.Result{Correct: true, Score: 1}
-	}
-	// Check swapped: P1 D1 <-> P2 D2
-	if norm(eP) == norm(aP) && norm(eD) == norm(aD) {
-		return grader.Result{Correct: true, Score: 1}
-	}
-	if norm(eP) == norm(aD) && norm(eD) == norm(aP) {
-		return grader.Result{Correct: true, Score: 1}
-	}
-	return grader.Result{Correct: false, Score: 0, Feedback: "Incorrect P or D"}
 }
 
 // Rank of a matrix
 type rankGen struct{}
 
 func (g *rankGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		matrix [][]int
-		rank   int
-	}
-	entries := []entry{
-		{[][]int{{1, 0}, {0, 1}}, 2},
-		{[][]int{{1, 2}, {2, 4}}, 1},
-		{[][]int{{1, 0, 0}, {0, 0, 0}}, 1},
-		{[][]int{{1, 2, 3}, {0, 0, 0}}, 1},
-		{[][]int{{1, 0}, {0, 0}}, 1},
-		{[][]int{{1, 2}, {3, 4}}, 2},
-		{[][]int{{1, 0, 0}, {0, 1, 0}}, 2},
-		{[][]int{{0, 0}, {0, 0}}, 0},
-		{[][]int{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, 3},
-		{[][]int{{1, 1, 1}, {2, 2, 2}, {3, 3, 3}}, 1},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    fmt.Sprintf("What is the rank of matrix \\(%s\\)?", formatMatrix(e.matrix)),
-		Answer:      fmt.Sprintf("%d", e.rank),
-		Explanation: fmt.Sprintf("The rank is %d (the number of linearly independent rows/columns).", e.rank),
+	rng := rand.New(rand.NewSource(rand.Int63()))
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Full rank 2x2 matrix via RandomUnimodular2x2
+		mat := mathutil.RandomUnimodular2x2(rng, 1+int(ctx.Difficulty*2))
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the rank of matrix \\(%s\\)?", mat.LaTeX()),
+			Answer:   "2",
+			Explanation: fmt.Sprintf("Subgoal 1: State the full-rank criterion: an \\(n \\times n\\) matrix has rank \\(n\\) if and only if \\(\\det(A) \\ne 0\\).\n"+
+				"Subgoal 2: Compute \\(\\det(A) = (%d)(%d) - (%d)(%d) = %d \\ne 0\\).\n"+
+				"Subgoal 3: Conclude that both rows are linearly independent, so \\(\\operatorname{rank}(A) = 2\\).", mat.A, mat.D, mat.B, mat.C, mat.Det()),
+		}
+	case 1:
+		// Rank 1 outer product 2x2 matrix
+		u1 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		u2 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		k := mathutil.ScaleInt(ctx.Difficulty, 2, 4)
+		if rand.Intn(2) == 0 {
+			k = -k
+		}
+		m := [][]int{{u1, u2}, {k * u1, k * u2}}
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the rank of matrix \\(%s\\)?", formatMatrix2(m)),
+			Answer:   "1",
+			Explanation: fmt.Sprintf("Subgoal 1: State the rank definition as the count of linearly independent rows.\n"+
+				"Subgoal 2: Observe that row 2 is a scalar multiple of row 1 (ratio %d).\n"+
+				"Subgoal 3: Conclude there is only 1 linearly independent row, so \\(\\operatorname{rank}(A) = 1\\).", k),
+		}
+	case 2:
+		// Upper triangular 3x3 matrix with controlled pivots
+		pivots := []int{mathutil.ScaleInt(ctx.Difficulty, 1, 4), mathutil.ScaleInt(ctx.Difficulty, 1, 4), mathutil.ScaleInt(ctx.Difficulty, 1, 4)}
+		targetRank := 1 + rand.Intn(3)
+		for i := targetRank; i < 3; i++ {
+			pivots[i] = 0
+		}
+		m := [][]int{
+			{pivots[0], smallInt(0, 3), smallInt(0, 3)},
+			{0, pivots[1], smallInt(0, 3)},
+			{0, 0, pivots[2]},
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the rank of the upper triangular matrix \\(%s\\)?", formatMatrix(m)),
+			Answer:   fmt.Sprintf("%d", targetRank),
+			Explanation: fmt.Sprintf("Subgoal 1: State the echelon rank property: for an upper triangular matrix, rank equals the count of nonzero diagonal pivots.\n"+
+				"Subgoal 2: Inspect diagonal entries: %d, %d and %d.\n"+
+				"Subgoal 3: Count the %d nonzero pivot(s) to determine \\(\\operatorname{rank}(A) = %d\\).", pivots[0], pivots[1], pivots[2], targetRank, targetRank),
+		}
+	case 3:
+		// Rank-Nullity theorem application
+		n := mathutil.ScaleInt(ctx.Difficulty, 3, 6)
+		nullity := 1 + rand.Intn(n-1)
+		rank := n - nullity
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(T: \\mathbb{R}^{%d} \\to \\mathbb{R}^{%d}\\) be a linear transformation with nullity \\(\\dim(\\ker(T)) = %d\\). What is the rank \\(\\dim(\\operatorname{im}(T))\\)?", n, n, nullity),
+			Answer:   fmt.Sprintf("%d", rank),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Rank-Nullity Theorem: \\(\\operatorname{rank}(T) + \\operatorname{nullity}(T) = n\\), where \\(n\\) is the domain dimension.\n"+
+				"Subgoal 2: Substitute domain dimension \\(n = %d\\) and nullity = %d: \\(\\operatorname{rank}(T) + %d = %d\\).\n"+
+				"Subgoal 3: Solve for rank: \\(%d - %d = %d\\).", n, nullity, nullity, n, n, nullity, rank),
+		}
+	default:
+		// Collinear 3x3 rows
+		a, b, cVal := smallInt(1, 3), smallInt(1, 3), smallInt(1, 3)
+		m := [][]int{
+			{a, b, cVal},
+			{2 * a, 2 * b, 2 * cVal},
+			{3 * a, 3 * b, 3 * cVal},
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the rank of matrix \\(%s\\)?", formatMatrix(m)),
+			Answer:   "1",
+			Explanation: fmt.Sprintf("Subgoal 1: Recall that the rank is the dimension of the subspace spanned by the row vectors.\n"+
+				"Subgoal 2: Observe that row 2 = 2 \\times row 1 and row 3 = 3 \\times row 1, meaning all rows are scalar multiples of row 1.\n"+
+				"Subgoal 3: Conclude the row space is 1-dimensional, so \\(\\operatorname{rank}(A) = 1\\)."),
+		}
 	}
 }
 
@@ -795,31 +909,72 @@ func (g *rankGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type cosineSimilarityGen struct{}
 
 func (g *cosineSimilarityGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		u, v [2]int
-		cos  int
-	}
-	entries := []entry{
-		{[2]int{1, 0}, [2]int{1, 0}, 1},
-		{[2]int{1, 0}, [2]int{0, 1}, 0},
-		{[2]int{1, 1}, [2]int{1, 1}, 1},
-		{[2]int{1, 0}, [2]int{-1, 0}, -1},
-		{[2]int{3, 4}, [2]int{6, 8}, 1},
-		{[2]int{1, 1}, [2]int{1, -1}, 0},
-		{[2]int{1, 2}, [2]int{2, 4}, 1},
-		{[2]int{1, 0}, [2]int{0, -1}, 0},
-		{[2]int{1, 1}, [2]int{-1, 1}, 0},
-	}
-	e := entries[rand.Intn(len(entries))]
-	uStr := fmt.Sprintf("(%d,%d)", e.u[0], e.u[1])
-	vStr := fmt.Sprintf("(%d,%d)", e.v[0], e.v[1])
-	dot := e.u[0]*e.v[0] + e.u[1]*e.v[1]
-	uMag := int(math.Sqrt(float64(e.u[0]*e.u[0] + e.u[1]*e.u[1])))
-	vMag := int(math.Sqrt(float64(e.v[0]*e.v[0] + e.v[1]*e.v[1])))
-	return generator.Problem{
-		Question:    fmt.Sprintf("Compute the cosine similarity between \\(u=%s\\) and \\(v=%s\\).", uStr, vStr),
-		Answer:      fmt.Sprintf("%d", e.cos),
-		Explanation: fmt.Sprintf("cos(θ) = (u·v)/(|u||v|) = (%d)/(%d×%d) = %d/%d = %d", dot, uMag, vMag, dot, uMag*vMag, e.cos),
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Parallel vectors with positive scalar k > 0
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		k := mathutil.ScaleInt(ctx.Difficulty, 2, 4)
+		uStr := fmt.Sprintf("(%d,%d)", a, b)
+		vStr := fmt.Sprintf("(%d,%d)", k*a, k*b)
+		return generator.Problem{
+			Question: fmt.Sprintf("Compute the cosine similarity between \\(u=%s\\) and \\(v=%s\\).", uStr, vStr),
+			Answer:   "1",
+			Explanation: fmt.Sprintf("Subgoal 1: State the cosine similarity formula: \\(\\cos(\\theta) = \\frac{u \\cdot v}{\\|u\\| \\|v\\|}\\).\n"+
+				"Subgoal 2: Note \\(v = %d u\\) with positive scalar \\(k = %d\\), so \\(u\\) and \\(v\\) point in the identical direction (\\(\\theta = 0\\)).\n"+
+				"Subgoal 3: Evaluate \\(\\cos(0) = 1\\).", k, k),
+		}
+	case 1:
+		// Anti-parallel vectors with negative scalar k < 0
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		k := -mathutil.ScaleInt(ctx.Difficulty, 2, 4)
+		uStr := fmt.Sprintf("(%d,%d)", a, b)
+		vStr := fmt.Sprintf("(%d,%d)", k*a, k*b)
+		return generator.Problem{
+			Question: fmt.Sprintf("Compute the cosine similarity between \\(u=%s\\) and \\(v=%s\\).", uStr, vStr),
+			Answer:   "-1",
+			Explanation: fmt.Sprintf("Subgoal 1: State the cosine similarity formula: \\(\\cos(\\theta) = \\frac{u \\cdot v}{\\|u\\| \\|v\\|}\\).\n"+
+				"Subgoal 2: Note \\(v = %d u\\) with negative scalar \\(k = %d\\), so \\(u\\) and \\(v\\) point in opposite directions (\\(\\theta = \\pi\\)).\n"+
+				"Subgoal 3: Evaluate \\(\\cos(\\pi) = -1\\).", k, k),
+		}
+	case 2:
+		// Orthogonal 2D vectors (a, b) and (-b, a)
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		uStr := fmt.Sprintf("(%d,%d)", a, b)
+		vStr := fmt.Sprintf("(%d,%d)", -b, a)
+		return generator.Problem{
+			Question: fmt.Sprintf("Compute the cosine similarity between orthogonal vectors \\(u=%s\\) and \\(v=%s\\).", uStr, vStr),
+			Answer:   "0",
+			Explanation: fmt.Sprintf("Subgoal 1: State the cosine similarity formula: \\(\\cos(\\theta) = \\frac{u \\cdot v}{\\|u\\| \\|v\\|}\\).\n"+
+				"Subgoal 2: Compute the dot product: \\(u \\cdot v = (%d)(%d) + (%d)(%d) = %d + (%d) = 0\\).\n"+
+				"Subgoal 3: Divide numerator zero by the nonzero norms to obtain \\(\\cos(\\theta) = 0\\).", a, -b, b, a, -a*b, a*b),
+		}
+	case 3:
+		// Orthogonal 3D vectors
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		cVal := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		uStr := fmt.Sprintf("(%d,0,0)", a)
+		vStr := fmt.Sprintf("(0,%d,%d)", b, cVal)
+		return generator.Problem{
+			Question: fmt.Sprintf("Compute the cosine similarity between vectors \\(u=%s\\) and \\(v=%s\\).", uStr, vStr),
+			Answer:   "0",
+			Explanation: fmt.Sprintf("Subgoal 1: State the cosine similarity formula: \\(\\cos(\\theta) = \\frac{u \\cdot v}{\\|u\\| \\|v\\|}\\).\n"+
+				"Subgoal 2: Compute dot product: \\((%d)(0) + (0)(%d) + (0)(%d) = 0\\).\n"+
+				"Subgoal 3: Evaluate \\(\\frac{0}{\\|u\\| \\|v\\|} = 0\\).", a, b, cVal),
+		}
+	default:
+		// Identical standard unit vectors
+		return generator.Problem{
+			Question: "Compute the cosine similarity between unit vectors \\(u=(1,0)\\) and \\(v=(1,0)\\).",
+			Answer:   "1",
+			Explanation: "Subgoal 1: State the cosine similarity formula for identical unit vectors: \\(\\cos(\\theta) = \\frac{u \\cdot v}{\\|u\\| \\|v\\|}\\).\n" +
+				"Subgoal 2: Compute \\(u \\cdot v = (1)(1) + (0)(0) = 1\\) and \\(\\|u\\| = 1, \\|v\\| = 1\\).\n" +
+				"Subgoal 3: Evaluate \\(\\frac{1}{1 \\times 1} = 1\\).",
+		}
 	}
 }
 
