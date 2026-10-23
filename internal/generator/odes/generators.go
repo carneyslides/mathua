@@ -172,65 +172,84 @@ func (g *linearFirstGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type exactGen struct{}
 
 func (g *exactGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
-	}
-	easy := []entry{
-		{
-			q: "Is \\(M dx + N dy = 0\\) exact when \\(M = y\\) and \\(N = x\\)? (yes/no)",
-			a: "yes",
-			e: "\\(\\partial M/\\partial y = 1\\) and \\(\\partial N/\\partial x = 1\\). Since \\(\\partial M/\\partial y = \\partial N/\\partial x\\), the equation is exact.",
-		},
-		{
-			q: "Is \\(M dx + N dy = 0\\) exact when \\(M = x\\) and \\(N = x\\)? (yes/no)",
-			a: "no",
-			e: "\\(\\partial M/\\partial y = 0\\) and \\(\\partial N/\\partial x = 1\\). Since \\(\\partial M/\\partial y \\neq \\partial N/\\partial x\\) \\((0 \\neq 1)\\), the equation is not exact.",
-		},
-		{
-			q: "Is \\(M dx + N dy = 0\\) exact when \\(M = xy\\) and \\(N = xy\\)? (yes/no)",
-			a: "no",
-			e: "\\(\\partial M/\\partial y = x\\) and \\(\\partial N/\\partial x = y\\). Since \\(\\partial M/\\partial y \\neq \\partial N/\\partial x\\) \\((x \\neq y\\) in general), the equation is not exact.",
-		},
-	}
-	// Parameterized production: dM/dy at a point for M = a*x*y.
-	aChoices := []int{2, 3}
-	xChoices := []int{2, 3, 4, 5}
-	a := aChoices[rand.Intn(len(aChoices))]
-	x := xChoices[rand.Intn(len(xChoices))]
-	easy = append(easy, entry{
-		q: fmt.Sprintf("For \\(M = %dxy\\), what is \\(dM/dy\\) at \\(x = %d\\)? (enter a number)", a, x),
-		a: fmt.Sprintf("%d", a*x),
-		e: fmt.Sprintf("\\(dM/dy = %dx\\), so at \\(x = %d\\) the value is %d.", a, x, a*x),
-	})
-	hard := []entry{
-		{
-			q: "Is \\(M dx + N dy = 0\\) exact when \\(M = 2xy\\) and \\(N = x^{2}\\)? (yes/no)",
-			a: "yes",
-			e: "\\(\\partial M/\\partial y = 2x\\) and \\(\\partial N/\\partial x = 2x\\). Since \\(\\partial M/\\partial y = \\partial N/\\partial x\\), the equation is exact.",
-		},
-		{
-			q: "Is \\(M dx + N dy = 0\\) exact when \\(M = y^{2}\\) and \\(N = x\\)? (yes/no)",
-			a: "no",
-			e: "\\(\\partial M/\\partial y = 2y\\) and \\(\\partial N/\\partial x = 1\\). Since \\(\\partial M/\\partial y \\neq \\partial N/\\partial x\\) \\((2y \\neq 1\\) in general), the equation is not exact.",
-		},
-		{
-			q: "Is \\(M dx + N dy = 0\\) exact when \\(M = \\sin(y)\\) and \\(N = x\\cos(y)\\)? (yes/no)",
-			a: "yes",
-			e: "\\(\\partial M/\\partial y = \\cos(y)\\) and \\(\\partial N/\\partial x = \\cos(y)\\). Since \\(\\partial M/\\partial y = \\partial N/\\partial x\\), the equation is exact.",
-		},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	t := pool[rand.Intn(len(pool))]
-	return generator.Problem{
-		Question:    t.q,
-		Answer:      t.a,
-		Explanation: t.e,
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Exactness condition: partial M / partial y = partial N / partial x
+		c := smallInt(2, 6+int(ctx.Difficulty*2))
+		b := smallInt(1, 8)
+		d := smallInt(1, 8)
+		return generator.Problem{
+			Question: fmt.Sprintf("What value of the constant \\(k\\) makes the differential equation \\((k x y^2 + %d x) dx + (%d x^2 y + %d y) dy = 0\\) exact?", b, c, d),
+			Answer:   fmt.Sprintf("%d", c),
+			Explanation: fmt.Sprintf(
+				"A first-order differential equation \\(M dx + N dy = 0\\) is exact when \\(\\frac{\\partial M}{\\partial y} = \\frac{\\partial N}{\\partial x}\\). Here \\(\\frac{\\partial M}{\\partial y} = 2k x y\\) and \\(\\frac{\\partial N}{\\partial x} = 2(%d) x y = %d x y\\). Equating these partial derivatives requires \\(2k = %d\\), so \\(k = %d\\).",
+				c, 2*c, 2*c, c,
+			),
+		}
+
+	case 1:
+		// Partial derivative evaluation dM/dy at (x0, y0)
+		a := smallInt(2, 5)
+		b := smallInt(2, 6)
+		x0 := smallInt(1, 3)
+		y0 := smallInt(1, 3)
+		val := 2 * a * x0 * y0
+		return generator.Problem{
+			Question: fmt.Sprintf("For the differential equation \\(M dx + N dy = 0\\) with \\(M(x, y) = %d x y^2 + %d x^2\\), what is the value of the partial derivative \\(\\frac{\\partial M}{\\partial y}\\) evaluated at the point \\((%d, %d)\\)?", a, b, x0, y0),
+			Answer:   fmt.Sprintf("%d", val),
+			Explanation: fmt.Sprintf(
+				"Differentiating \\(M(x, y) = %d x y^2 + %d x^2\\) with respect to \\(y\\) treats \\(x\\) as constant, giving \\(\\frac{\\partial M}{\\partial y} = 2(%d) x y = %d x y\\). Evaluating at \\((%d, %d)\\) gives \\(%d(%d)(%d) = %d\\).",
+				a, b, a, 2*a, x0, y0, 2*a, x0, y0, val,
+			),
+		}
+
+	case 2:
+		// Potential function evaluation Psi(x0, y0) with Psi(0, 0) = 0
+		a := smallInt(1, 4)
+		b := smallInt(1, 4)
+		c := smallInt(1, 4)
+		x0 := smallInt(1, 3)
+		y0 := smallInt(1, 3)
+		val := a*x0*x0*y0 + b*x0*x0 + c*y0*y0
+		return generator.Problem{
+			Question: fmt.Sprintf("The exact differential equation \\((%d x y + %d x) dx + (%d x^2 + %d y) dy = 0\\) possesses a potential function \\(\\Psi(x, y)\\) such that \\(d\\Psi = M dx + N dy\\) and \\(\\Psi(0, 0) = 0\\). Evaluate \\(\\Psi(%d, %d)\\).", 2*a, 2*b, a, 2*c, x0, y0),
+			Answer:   fmt.Sprintf("%d", val),
+			Explanation: fmt.Sprintf(
+				"Integrating \\(M(x, y)\\) with respect to \\(x\\) yields \\(\\Psi(x, y) = %d x^2 y + %d x^2 + g(y)\\). Differentiating with respect to \\(y\\) gives \\(\\frac{\\partial \\Psi}{\\partial y} = %d x^2 + g'(y) = %d x^2 + %d y\\), meaning \\(g'(y) = %d y\\) and \\(g(y) = %d y^2\\). With \\(\\Psi(0,0)=0\\), the potential function is \\(\\Psi(x, y) = %d x^2 y + %d x^2 + %d y^2\\). Evaluating at \\((%d, %d)\\) gives %d.",
+				a, b, a, a, 2*c, 2*c, c, a, b, c, x0, y0, val,
+			),
+		}
+
+	case 3:
+		// Integrating factor exponent p for mu(x) = x^p
+		p := smallInt(1, 4+int(ctx.Difficulty*2))
+		coeff := p + 1
+		return generator.Problem{
+			Question: fmt.Sprintf("The differential equation \\((%d y) dx + x dy = 0\\) is not exact, but multiplying by an integrating factor of the form \\(\\mu(x) = x^p\\) transforms it into an exact equation. What is the value of the exponent \\(p\\)?", coeff),
+			Answer:   fmt.Sprintf("%d", p),
+			Explanation: fmt.Sprintf(
+				"Computing \\(\\frac{1}{N}\\left(\\frac{\\partial M}{\\partial y} - \\frac{\\partial N}{\\partial x}\\right) = \\frac{%d - 1}{x} = \\frac{%d}{x}\\). The integrating factor is \\(\\mu(x) = \\exp\\left(\\int \\frac{%d}{x} dx\\right) = x^{%d}\\), giving exponent \\(p = %d\\).",
+				coeff, p, p, p, p,
+			),
+		}
+
+	default:
+		// First integral IVP constant C
+		a := smallInt(1, 3)
+		b := smallInt(1, 3)
+		c := smallInt(1, 3)
+		x0 := smallInt(1, 3)
+		y0 := smallInt(1, 3)
+		constC := a*x0*x0 + b*x0*y0 + c*y0*y0
+		return generator.Problem{
+			Question: fmt.Sprintf("The exact differential equation \\((%d x + %d y) dx + (%d x + %d y) dy = 0\\) has first integral \\(%d x^2 + %d x y + %d y^2 = C\\). Given the initial condition \\(y(%d) = %d\\), what is the value of the constant \\(C\\)?", 2*a, b, b, 2*c, a, b, c, x0, y0),
+			Answer:   fmt.Sprintf("%d", constC),
+			Explanation: fmt.Sprintf(
+				"Substituting the initial condition \\(x = %d\\) and \\(y = %d\\) into the first integral yields \\(C = %d(%d)^2 + %d(%d)(%d) + %d(%d)^2 = %d + %d + %d = %d\\).",
+				x0, y0, a, x0, b, x0, y0, c, y0, a*x0*x0, b*x0*y0, c*y0*y0, constC,
+			),
+		}
 	}
 }
 
