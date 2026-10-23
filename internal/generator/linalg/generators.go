@@ -974,42 +974,57 @@ func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type subspaceGen struct{}
 
 func (g *subspaceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
-	}
-	tableEasy := []entry{
-		{"Does the line y = x + 1 form a subspace of R^2? (yes/no)", "no", "It misses the origin: no subspace lacks 0."},
-		{"Is {(0,0)} a subspace of R^2? (yes/no)", "yes", "The zero subspace always qualifies."},
-		{"Is the union of the x-axis and y-axis a subspace of R^2? (yes/no)", "no", "(1,0)+(0,1) = (1,1) escapes the union."},
-		{"Do the subspaces of R^2 consist exactly of {0}, lines through origin, R^2? (yes/no)", "yes", "One nonzero vector spans a line; two independent ones span all of R^2."},
-	}
-	tableHard := []entry{
-		{"Two planes through the origin in R^3 meet in a line. Their sum has dimension? (enter a number)", "3", "Grassmann: 2+2-1 = 3."},
-		{"A complement of a line in R^2 has dimension? (enter a number)", "1", "dim A + dim B = dim V: 1 + 1 = 2."},
-		{"Is the sum of three lines in R^2 with pairwise trivial intersection direct? (yes/no)", "no", "(1,0)+(0,1)-(1,1) = 0 is a nontrivial relation."},
-	}
-	pool := tableEasy
-	if scale > 3 {
-		pool = append(tableEasy, tableHard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: dimension counts (unique answers).
-		type dimEntry struct {
-			question string
-			answer   string
-			reason   string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Grassmann's dimension formula: dim(U + W) = dim(U) + dim(W) - dim(U cap W)
+		d12 := smallInt(1, 3)
+		d1 := d12 + smallInt(1, 3+int(ctx.Difficulty*2))
+		d2 := d12 + smallInt(1, 3+int(ctx.Difficulty*2))
+		ans := d1 + d2 - d12
+		return generator.Problem{
+			Question:    fmt.Sprintf("Two subspaces \\(U\\) and \\(W\\) of a vector space satisfy \\(\\dim(U) = %d\\), \\(\\dim(W) = %d\\) and \\(\\dim(U \\cap W) = %d\\). What is \\(\\dim(U + W)\\)?", d1, d2, d12),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("By Grassmann's dimension formula, \\(\\dim(U + W) = \\dim(U) + \\dim(W) - \\dim(U \\cap W) = %d + %d - %d = %d\\).", d1, d2, d12, ans),
 		}
-		dimTable := []dimEntry{
-			{"Two planes through the origin in R^3 meet in a line. Their sum has dimension? (enter a number)", "3", "Grassmann: 2+2-1 = 3."},
-			{"A complement of a line in R^2 has dimension? (enter a number)", "1", "dim A + dim B = dim V: 1 + 1 = 2."},
-			{"The zero subspace of R^5 has dimension? (enter a number)", "0", "Only the zero vector: dimension 0."},
+	case 1:
+		// Direct sum: dim(U \oplus W) = dim(U) + dim(W)
+		d1 := smallInt(1, 4+int(ctx.Difficulty*2))
+		d2 := smallInt(1, 4+int(ctx.Difficulty*2))
+		ans := d1 + d2
+		return generator.Problem{
+			Question:    fmt.Sprintf("If \\(V = U \\oplus W\\) is the direct sum of subspaces \\(U\\) and \\(W\\) with \\(\\dim(U) = %d\\) and \\(\\dim(W) = %d\\), what is \\(\\dim(V)\\)?", d1, d2),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("For a direct sum \\(U \\cap W = \\{0\\}\\), so \\(\\dim(U \\oplus W) = \\dim(U) + \\dim(W) = %d + %d = %d\\).", d1, d2, ans),
 		}
-		d := dimTable[rand.Intn(len(dimTable))]
-		return generator.Problem{Question: d.question, Answer: d.answer, Explanation: d.reason}
+	case 2:
+		// Orthogonal complement dimension: dim(W^\perp) = n - dim(W)
+		n := smallInt(3, 6+int(ctx.Difficulty*3))
+		dimW := smallInt(1, n-1)
+		ans := n - dimW
+		return generator.Problem{
+			Question:    fmt.Sprintf("In \\(\\mathbb{R}^{%d}\\), let \\(W\\) be a subspace of dimension %d. What is the dimension of the orthogonal complement \\(W^\\perp\\)?", n, dimW),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("In an \\(n\\)-dimensional space, \\(\\dim(W) + \\dim(W^\\perp) = n\\). Here \\(\\dim(W^\\perp) = %d - %d = %d\\).", n, dimW, ans),
+		}
+	case 3:
+		// Hyperplane defined by a single linear constraint
+		n := smallInt(3, 7+int(ctx.Difficulty*3))
+		ans := n - 1
+		return generator.Problem{
+			Question:    fmt.Sprintf("What is the dimension of the subspace in \\(\\mathbb{R}^{%d}\\) defined by the single equation \\(x_1 + x_2 + \\dots + x_{%d} = 0\\)?", n, n),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("A single nonzero homogeneous linear equation in \\(\\mathbb{R}^{%d}\\) imposes 1 constraint, so the dimension is %d - 1 = %d.", n, n, ans),
+		}
+	default:
+		// k independent linear equations
+		n := smallInt(4, 7+int(ctx.Difficulty*2))
+		k := smallInt(2, n-2)
+		ans := n - k
+		return generator.Problem{
+			Question:    fmt.Sprintf("What is the dimension of the subspace in \\(\\mathbb{R}^{%d}\\) defined by %d linearly independent homogeneous linear equations?", n, k),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Each independent constraint reduces the dimension of the solution space by 1. Therefore the dimension is %d - %d = %d.", n, k, ans),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
