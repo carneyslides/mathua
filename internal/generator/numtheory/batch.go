@@ -14,7 +14,7 @@ package numtheory
 //
 // The batch fills real gaps instead: the Jacobi symbol, discrete logarithms,
 // square roots modulo a prime, sums of two squares, Pell's equation, Pisano
-// periods, the Carmichael function, the Miller-Rabin test, prime gaps, and
+// periods, the Carmichael function, the Miller-Rabin test, prime gaps and
 // Bertrand's postulate.
 //
 // Eight concepts are numeric and two are multiple choice. Every numeric
@@ -25,11 +25,176 @@ package numtheory
 // curves and class numbers.
 
 import (
+	"fmt"
 	"math/rand"
 	"strconv"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
+
+func computeJacobi(a, n int) int {
+	if n <= 0 || n%2 == 0 {
+		return 0
+	}
+	a %= n
+	if a < 0 {
+		a += n
+	}
+	result := 1
+	for a != 0 {
+		for a%2 == 0 {
+			a /= 2
+			if n%8 == 3 || n%8 == 5 {
+				result = -result
+			}
+		}
+		a, n = n, a
+		if a%4 == 3 && n%4 == 3 {
+			result = -result
+		}
+		a %= n
+	}
+	if n == 1 {
+		return result
+	}
+	return 0
+}
+
+func computeGCD(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
+func computeLCM(a, b int) int {
+	if a == 0 || b == 0 {
+		return 0
+	}
+	return (a / computeGCD(a, b)) * b
+}
+
+func computeCarmichael(n int) int {
+	if n <= 1 {
+		return 1
+	}
+	result := 1
+	m := n
+	for p := 2; p*p <= m; p++ {
+		if m%p != 0 {
+			continue
+		}
+		e := 0
+		pe := 1
+		for m%p == 0 {
+			m /= p
+			e++
+			pe *= p
+		}
+		var part int
+		if p == 2 && e >= 3 {
+			part = 1 << (e - 2)
+		} else {
+			part = (pe / p) * (p - 1)
+		}
+		result = computeLCM(result, part)
+	}
+	if m > 1 {
+		result = computeLCM(result, m-1)
+	}
+	return result
+}
+
+func isPrime(n int) bool {
+	if n < 2 {
+		return false
+	}
+	if n%2 == 0 {
+		return n == 2
+	}
+	for d := 3; d*d <= n; d += 2 {
+		if n%d == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func computeNextPrime(n int) int {
+	for c := n + 1; ; c++ {
+		if isPrime(c) {
+			return c
+		}
+	}
+}
+
+func powMod(base, exp, mod int) int {
+	res := 1
+	base %= mod
+	if base < 0 {
+		base += mod
+	}
+	for exp > 0 {
+		if exp&1 == 1 {
+			res = (res * base) % mod
+		}
+		base = (base * base) % mod
+		exp >>= 1
+	}
+	return res
+}
+
+func findPrimitiveRoot(p int) int {
+	if p == 2 {
+		return 1
+	}
+	phi := p - 1
+	n := phi
+	var factors []int
+	for d := 2; d*d <= n; d++ {
+		if n%d == 0 {
+			factors = append(factors, d)
+			for n%d == 0 {
+				n /= d
+			}
+		}
+	}
+	if n > 1 {
+		factors = append(factors, n)
+	}
+	for g := 2; g < p; g++ {
+		ok := true
+		for _, q := range factors {
+			if powMod(g, phi/q, p) == 1 {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return g
+		}
+	}
+	return 2
+}
+
+func computePisano(n int) int {
+	if n <= 1 {
+		return 1
+	}
+	a, b := 0, 1
+	period := 0
+	for {
+		a, b = b, (a+b)%n
+		period++
+		if a == 0 && b == 1 {
+			return period
+		}
+	}
+}
 
 func registerBatch(reg *generator.Registry) {
 	reg.Register("nt.adv.jacobi", &jacobiGen{})
@@ -51,26 +216,41 @@ func registerBatch(reg *generator.Registry) {
 type jacobiGen struct{}
 
 func (g *jacobiGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, n   int
-		answer string
-		reason string
+	minN := mathutil.ScaleInt(ctx.Difficulty, 9, 35)
+	maxN := mathutil.ScaleInt(ctx.Difficulty, 25, 105)
+	if maxN <= minN {
+		maxN = minN + 6
 	}
-	claims := []claim{
-		{a: 2, n: 15, answer: "1", reason: "(2/15) = (2/3)(2/5) = (-1)(-1) = 1."},
-		{a: 7, n: 15, answer: "-1", reason: "(7/15) = (7/3)(7/5) = (1/3)(2/5) = (1)(-1) = -1."},
-		{a: 6, n: 35, answer: "-1", reason: "(6/35) = (2/35)(3/35) = (-1)(1) = -1."},
-		{a: 5, n: 21, answer: "1", reason: "(5/21) = (5/3)(5/7) = (2/3)(5/7) = (-1)(-1) = 1."},
-		{a: 10, n: 21, answer: "-1", reason: "(10/21) = (2/21)(5/21) = (-1)(1) = -1."},
-		{a: -1, n: 15, answer: "-1", reason: "(-1/15) = (-1/3)(-1/5) = (-1)(1) = -1."},
+	k := rand.Intn((maxN-minN)/2 + 1)
+	n := minN + 2*k
+	if n%2 == 0 {
+		n++
 	}
-	c := claims[rand.Intn(len(claims))]
+
+	var a int
+	for attempts := 0; attempts < 100; attempts++ {
+		a = rand.Intn(2*n) - n
+		if a != 0 && computeGCD(mathutil.Abs(a), n) == 1 {
+			break
+		}
+	}
+	if a == 0 || computeGCD(mathutil.Abs(a), n) != 1 {
+		a = 2
+		if computeGCD(a, n) != 1 {
+			a = -1
+		}
+	}
+
+	ans := computeJacobi(a, n)
+	ansStr := strconv.Itoa(ans)
+	question := fmt.Sprintf("Compute the Jacobi symbol (a/n) for a = %d and n = %d. (enter 1 or -1)", a, n)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. The Jacobi symbol (a/n) extends the Legendre symbol multiplicatively across prime factors of odd modulus n.\nSubgoal 2: Substitute parameters. Substitute a = %d and n = %d into quadratic reciprocity and reduction identities.\nSubgoal 3: Evaluate and simplify. Successive reduction yields (a/n) = %s.", a, n, ansStr)
+
 	return generator.Problem{
-		Question: "Compute the Jacobi symbol (a/n) for a = " + strconv.Itoa(c.a) +
-			" and n = " + strconv.Itoa(c.n) + ". (enter 1 or -1)",
-		Answer:      c.answer,
-		Explanation: c.reason,
-		Facts:       map[string]string{"a": strconv.Itoa(c.a), "n": strconv.Itoa(c.n), "answer": c.answer},
+		Question:    question,
+		Answer:      ansStr,
+		Explanation: explanation,
+		Facts:       map[string]string{"a": strconv.Itoa(a), "n": strconv.Itoa(n), "answer": ansStr},
 	}
 }
 
@@ -80,30 +260,48 @@ func (g *jacobiGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 
 type discreteLogGen struct{}
 
+var dlPrimesLow = []int{7, 11, 13, 17, 19, 23}
+var dlPrimesMid = []int{29, 31, 37, 41}
+var dlPrimesHigh = []int{43, 47, 53, 59}
+
 func (g *discreteLogGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		p, g, h int
-		answer  string
-		reason  string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var primePool []int
+	switch tier {
+	case 0:
+		primePool = dlPrimesLow
+	case 1:
+		primePool = dlPrimesMid
+	default:
+		primePool = dlPrimesHigh
 	}
-	claims := []claim{
-		{p: 7, g: 3, h: 6, answer: "3", reason: "3^1 = 3, 3^2 = 2, 3^3 = 6 mod 7, so x = 3."},
-		{p: 11, g: 2, h: 9, answer: "6", reason: "The powers of 2 mod 11 are 2, 4, 8, 5, 10, 9, so 2^6 = 9 and x = 6."},
-		{p: 13, g: 2, h: 11, answer: "7", reason: "The powers of 2 mod 13 reach 11 at the seventh step, so x = 7."},
-		{p: 17, g: 3, h: 5, answer: "5", reason: "The powers of 3 mod 17 are 3, 9, 10, 13, 5, so 3^5 = 5 and x = 5."},
-		{p: 7, g: 5, h: 4, answer: "2", reason: "5^1 = 5 and 5^2 = 25 = 4 mod 7, so x = 2."},
-		{p: 11, g: 8, h: 5, answer: "8", reason: "The powers of 8 mod 11 reach 5 at the eighth step, so x = 8."},
+	p := primePool[rand.Intn(len(primePool))]
+
+	baseRoot := findPrimitiveRoot(p)
+	var roots []int
+	for k := 1; k < p-1; k++ {
+		if computeGCD(k, p-1) == 1 {
+			roots = append(roots, powMod(baseRoot, k, p))
+		}
 	}
-	c := claims[rand.Intn(len(claims))]
+	if len(roots) == 0 {
+		roots = []int{baseRoot}
+	}
+	gElem := roots[rand.Intn(len(roots))]
+
+	x := 1 + rand.Intn(p-1)
+	h := powMod(gElem, x, p)
+
+	ansStr := strconv.Itoa(x)
+	question := fmt.Sprintf("Modulo %d, the element %d is a primitive root. Find x with %d^x = %d (mod %d), where 1 <= x <= %d. (enter a number)", p, gElem, gElem, h, p, p-1)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. The discrete logarithm x satisfies g^x = h (mod p) for primitive root g modulo prime p.\nSubgoal 2: Substitute parameters. Set generator base %d, target value %d and prime modulus %d.\nSubgoal 3: Evaluate and simplify. Successive modular exponentiation gives %d^%d = %d (mod %d), so x = %s.", gElem, h, p, gElem, x, h, p, ansStr)
+
 	return generator.Problem{
-		Question: "Modulo " + strconv.Itoa(c.p) + ", the element " + strconv.Itoa(c.g) +
-			" is a primitive root. Find x with " + strconv.Itoa(c.g) + "^x = " + strconv.Itoa(c.h) +
-			" (mod " + strconv.Itoa(c.p) + "), where 1 <= x <= " + strconv.Itoa(c.p-1) +
-			". (enter a number)",
-		Answer:      c.answer,
-		Explanation: c.reason,
+		Question:    question,
+		Answer:      ansStr,
+		Explanation: explanation,
 		Facts: map[string]string{
-			"p": strconv.Itoa(c.p), "g": strconv.Itoa(c.g), "h": strconv.Itoa(c.h), "answer": c.answer,
+			"p": strconv.Itoa(p), "g": strconv.Itoa(gElem), "h": strconv.Itoa(h), "answer": ansStr,
 		},
 	}
 }
@@ -114,27 +312,36 @@ func (g *discreteLogGen) Generate(ctx generator.GeneratorContext) generator.Prob
 
 type modularSqrtGen struct{}
 
+var modSqrtPrimesLow = []int{7, 11, 13, 17, 19}
+var modSqrtPrimesMid = []int{23, 29, 31, 37, 41}
+var modSqrtPrimesHigh = []int{43, 47, 53, 59, 61, 67, 71}
+
 func (g *modularSqrtGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, p   int
-		answer string
-		reason string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var primePool []int
+	switch tier {
+	case 0:
+		primePool = modSqrtPrimesLow
+	case 1:
+		primePool = modSqrtPrimesMid
+	default:
+		primePool = modSqrtPrimesHigh
 	}
-	claims := []claim{
-		{a: 4, p: 7, answer: "2", reason: "2^2 = 4 and 5^2 = 25 = 4 mod 7; the smaller root is 2."},
-		{a: 2, p: 7, answer: "3", reason: "3^2 = 9 = 2 and 4^2 = 16 = 2 mod 7; the smaller root is 3."},
-		{a: 9, p: 11, answer: "3", reason: "3^2 = 9 and 8^2 = 64 = 9 mod 11; the smaller root is 3."},
-		{a: 5, p: 11, answer: "4", reason: "4^2 = 16 = 5 and 7^2 = 49 = 5 mod 11; the smaller root is 4."},
-		{a: 3, p: 13, answer: "4", reason: "4^2 = 16 = 3 and 9^2 = 81 = 3 mod 13; the smaller root is 4."},
-		{a: 10, p: 13, answer: "6", reason: "6^2 = 36 = 10 and 7^2 = 49 = 10 mod 13; the smaller root is 6."},
-	}
-	c := claims[rand.Intn(len(claims))]
+	p := primePool[rand.Intn(len(primePool))]
+
+	maxR := (p - 1) / 2
+	r := 1 + rand.Intn(maxR)
+	a := (r * r) % p
+
+	ansStr := strconv.Itoa(r)
+	question := fmt.Sprintf("Solve x^2 = %d (mod %d) for the smaller root x in 1..%d. (enter a number)", a, p, p-1)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. The quadratic congruence x^2 = a (mod p) has two roots r and p - r in 1..(p-1).\nSubgoal 2: Substitute parameters. Substitute residue a = %d and prime modulus p = %d.\nSubgoal 3: Evaluate and simplify. The square roots are %d and %d, with smaller root x = %s.", a, p, r, p-r, ansStr)
+
 	return generator.Problem{
-		Question: "Solve x^2 = " + strconv.Itoa(c.a) + " (mod " + strconv.Itoa(c.p) +
-			") for the smaller root x in 1.." + strconv.Itoa(c.p-1) + ". (enter a number)",
-		Answer:      c.answer,
-		Explanation: c.reason,
-		Facts:       map[string]string{"a": strconv.Itoa(c.a), "p": strconv.Itoa(c.p), "answer": c.answer},
+		Question:    question,
+		Answer:      ansStr,
+		Explanation: explanation,
+		Facts:       map[string]string{"a": strconv.Itoa(a), "p": strconv.Itoa(p), "answer": ansStr},
 	}
 }
 
@@ -145,26 +352,34 @@ func (g *modularSqrtGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type twoSquaresGen struct{}
 
 func (g *twoSquaresGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		n      int
-		answer string
-		reason string
+	minN := mathutil.ScaleInt(ctx.Difficulty, 3, 25)
+	maxN := mathutil.ScaleInt(ctx.Difficulty, 15, 80)
+	if maxN <= minN {
+		maxN = minN + 10
 	}
-	claims := []claim{
-		{n: 5, answer: "8", reason: "The pairs are (±1, ±2) and (±2, ±1): eight in all."},
-		{n: 10, answer: "8", reason: "The pairs are (±1, ±3) and (±3, ±1): eight in all."},
-		{n: 25, answer: "12", reason: "The pairs are (±5, 0), (0, ±5), (±3, ±4) and (±4, ±3): twelve in all."},
-		{n: 13, answer: "8", reason: "The pairs are (±2, ±3) and (±3, ±2): eight in all."},
-		{n: 9, answer: "4", reason: "The pairs are (±3, 0) and (0, ±3): four in all."},
-		{n: 3, answer: "0", reason: "No integer pair has x^2 + y^2 = 3, so there are no representations."},
+	n := minN + rand.Intn(maxN-minN+1)
+
+	count := 0
+	for x := -n; x <= n; x++ {
+		if x*x > n {
+			continue
+		}
+		for y := -n; y <= n; y++ {
+			if x*x+y*y == n {
+				count++
+			}
+		}
 	}
-	c := claims[rand.Intn(len(claims))]
+
+	ansStr := strconv.Itoa(count)
+	question := fmt.Sprintf("How many integer pairs (x, y), counting signs and order, satisfy x^2 + y^2 = %d? (enter a number)", n)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. By Jacobi's two-square theorem, r_2(n) = 4(d_1(n) - d_3(n)) counts ordered signed coordinate pairs (x, y) with x^2 + y^2 = n.\nSubgoal 2: Substitute parameters. Substitute n = %d and test integer coordinate lattice points.\nSubgoal 3: Evaluate and simplify. Enumerating valid signed pairs yields %s solutions.", n, ansStr)
+
 	return generator.Problem{
-		Question: "How many integer pairs (x, y), counting signs and order, satisfy x^2 + y^2 = " +
-			strconv.Itoa(c.n) + "? (enter a number)",
-		Answer:      c.answer,
-		Explanation: c.reason,
-		Facts:       map[string]string{"n": strconv.Itoa(c.n), "answer": c.answer},
+		Question:    question,
+		Answer:      ansStr,
+		Explanation: explanation,
+		Facts:       map[string]string{"n": strconv.Itoa(n), "answer": ansStr},
 	}
 }
 
@@ -174,27 +389,97 @@ func (g *twoSquaresGen) Generate(ctx generator.GeneratorContext) generator.Probl
 
 type pellGen struct{}
 
+type pellCase struct {
+	d int
+	x int
+	y int
+}
+
+var pellCasesLow = []pellCase{
+	{d: 2, x: 3, y: 2},
+	{d: 3, x: 2, y: 1},
+	{d: 5, x: 9, y: 4},
+	{d: 6, x: 5, y: 2},
+	{d: 7, x: 8, y: 3},
+	{d: 8, x: 3, y: 1},
+	{d: 11, x: 10, y: 3},
+	{d: 12, x: 7, y: 2},
+	{d: 15, x: 4, y: 1},
+	{d: 20, x: 9, y: 2},
+	{d: 24, x: 5, y: 1},
+	{d: 35, x: 6, y: 1},
+	{d: 48, x: 7, y: 1},
+}
+
+var pellCasesMid = []pellCase{
+	{d: 10, x: 19, y: 6},
+	{d: 14, x: 15, y: 4},
+	{d: 17, x: 33, y: 8},
+	{d: 18, x: 17, y: 4},
+	{d: 21, x: 55, y: 12},
+	{d: 23, x: 24, y: 5},
+	{d: 26, x: 51, y: 10},
+	{d: 27, x: 26, y: 5},
+	{d: 30, x: 11, y: 2},
+	{d: 32, x: 17, y: 3},
+	{d: 33, x: 23, y: 4},
+	{d: 34, x: 35, y: 6},
+	{d: 37, x: 73, y: 12},
+	{d: 38, x: 37, y: 6},
+	{d: 39, x: 25, y: 4},
+	{d: 40, x: 19, y: 3},
+	{d: 42, x: 13, y: 2},
+	{d: 50, x: 99, y: 14},
+	{d: 56, x: 15, y: 2},
+	{d: 63, x: 8, y: 1},
+}
+
+var pellCasesHigh = []pellCase{
+	{d: 13, x: 649, y: 180},
+	{d: 19, x: 170, y: 39},
+	{d: 22, x: 197, y: 42},
+	{d: 28, x: 127, y: 24},
+	{d: 31, x: 1520, y: 273},
+	{d: 41, x: 2049, y: 320},
+	{d: 43, x: 3482, y: 531},
+	{d: 44, x: 199, y: 30},
+	{d: 45, x: 161, y: 24},
+	{d: 51, x: 50, y: 7},
+	{d: 52, x: 649, y: 90},
+	{d: 54, x: 485, y: 66},
+	{d: 55, x: 89, y: 12},
+	{d: 57, x: 151, y: 20},
+	{d: 60, x: 31, y: 4},
+	{d: 62, x: 63, y: 8},
+	{d: 65, x: 129, y: 16},
+	{d: 66, x: 65, y: 8},
+	{d: 68, x: 33, y: 4},
+	{d: 69, x: 7775, y: 936},
+	{d: 70, x: 251, y: 30},
+}
+
 func (g *pellGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		d      int
-		answer string
-		reason string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var pool []pellCase
+	switch tier {
+	case 0:
+		pool = pellCasesLow
+	case 1:
+		pool = pellCasesMid
+	default:
+		pool = pellCasesHigh
 	}
-	claims := []claim{
-		{d: 2, answer: "3", reason: "3^2 - 2*2^2 = 9 - 8 = 1, and no smaller positive x works."},
-		{d: 3, answer: "2", reason: "2^2 - 3*1^2 = 4 - 3 = 1, so the smallest x is 2."},
-		{d: 5, answer: "9", reason: "9^2 - 5*4^2 = 81 - 80 = 1, and no smaller positive x works."},
-		{d: 6, answer: "5", reason: "5^2 - 6*2^2 = 25 - 24 = 1, so the smallest x is 5."},
-		{d: 7, answer: "8", reason: "8^2 - 7*3^2 = 64 - 63 = 1, so the smallest x is 8."},
-		{d: 8, answer: "3", reason: "3^2 - 8*1^2 = 9 - 8 = 1, so the smallest x is 3."},
-	}
-	c := claims[rand.Intn(len(claims))]
+	c := pool[rand.Intn(len(pool))]
+
+	ansStr := strconv.Itoa(c.x)
+	question := fmt.Sprintf("Find the smallest positive integer x for which Pell's equation x^2 - %d*y^2 = 1 has a positive integer solution y. (enter a number)", c.d)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. Pell's equation x^2 - d*y^2 = 1 has fundamental solution (x_1, y_1) obtained from continued fraction convergents of sqrt(d).\nSubgoal 2: Substitute parameters. Substitute d = %d to evaluate x^2 - %d*y^2 = 1.\nSubgoal 3: Evaluate and simplify. Minimal positive integer solution is x = %s (with y = %d).", c.d, c.d, ansStr, c.y)
+
 	return generator.Problem{
-		Question: "Find the smallest positive integer x for which Pell's equation x^2 - " + strconv.Itoa(c.d) +
-			"*y^2 = 1 has a positive integer solution y. (enter a number)",
-		Answer:      c.answer,
-		Explanation: c.reason,
-		Facts:       map[string]string{"d": strconv.Itoa(c.d), "answer": c.answer},
+		Question:    question,
+		Answer:      ansStr,
+		Explanation: explanation,
+		Facts:       map[string]string{"d": strconv.Itoa(c.d), "answer": ansStr},
 	}
 }
 
@@ -205,28 +490,24 @@ func (g *pellGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type pisanoGen struct{}
 
 func (g *pisanoGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		n      int
-		answer string
-		reason string
+	minN := mathutil.ScaleInt(ctx.Difficulty, 2, 7)
+	maxN := mathutil.ScaleInt(ctx.Difficulty, 6, 20)
+	if maxN <= minN {
+		maxN = minN + 2
 	}
-	claims := []claim{
-		{n: 2, answer: "3", reason: "Modulo 2 the Fibonacci pairs repeat as (0,1), (1,1), (1,0), (0,1), so the period is 3."},
-		{n: 3, answer: "8", reason: "Modulo 3 the pair (0,1) first returns after 8 steps, so the period is 8."},
-		{n: 4, answer: "6", reason: "Modulo 4 the pair (0,1) first returns after 6 steps."},
-		{n: 5, answer: "20", reason: "Modulo 5 the pair (0,1) first returns after 20 steps."},
-		{n: 6, answer: "24", reason: "Modulo 6 the period is the least common multiple of the periods modulo 2 and 3, which is 24."},
-		{n: 7, answer: "16", reason: "Modulo 7 the pair (0,1) first returns after 16 steps."},
-	}
-	c := claims[rand.Intn(len(claims))]
+	n := minN + rand.Intn(maxN-minN+1)
+
+	period := computePisano(n)
+	ansStr := strconv.Itoa(period)
+
+	question := fmt.Sprintf("The Fibonacci sequence starts F0 = 0, F1 = 1 and satisfies F(n) = F(n-1) + F(n-2). What is its Pisano period modulo %d, the smallest k > 0 with F(k) = 0 and F(k+1) = 1 mod %d? (enter a number)", n, n)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. The Pisano period pi(n) is the length of the repetition cycle of Fibonacci numbers modulo n.\nSubgoal 2: Substitute parameters. Iterate consecutive Fibonacci pairs modulo %d starting from (0, 1).\nSubgoal 3: Evaluate and simplify. The initial pair (0, 1) first repeats after %s steps, giving pi(%d) = %s.", n, ansStr, n, ansStr)
+
 	return generator.Problem{
-		Question: "The Fibonacci sequence starts F0 = 0, F1 = 1 and satisfies F(n) = F(n-1) + F(n-2). " +
-			"What is its Pisano period modulo " + strconv.Itoa(c.n) +
-			", the smallest k > 0 with F(k) = 0 and F(k+1) = 1 mod " + strconv.Itoa(c.n) +
-			"? (enter a number)",
-		Answer:      c.answer,
-		Explanation: c.reason,
-		Facts:       map[string]string{"n": strconv.Itoa(c.n), "answer": c.answer},
+		Question:    question,
+		Answer:      ansStr,
+		Explanation: explanation,
+		Facts:       map[string]string{"n": strconv.Itoa(n), "answer": ansStr},
 	}
 }
 
@@ -237,26 +518,24 @@ func (g *pisanoGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type carmichaelFunctionGen struct{}
 
 func (g *carmichaelFunctionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		n      int
-		answer string
-		reason string
+	minN := mathutil.ScaleInt(ctx.Difficulty, 8, 35)
+	maxN := mathutil.ScaleInt(ctx.Difficulty, 30, 150)
+	if maxN <= minN {
+		maxN = minN + 5
 	}
-	claims := []claim{
-		{n: 8, answer: "2", reason: "For 2^3 with exponent at least 3, lambda is 2^(3-2) = 2."},
-		{n: 9, answer: "6", reason: "lambda(9) = phi(9) = 6, since 9 is an odd prime power."},
-		{n: 10, answer: "4", reason: "lambda(10) = lcm(lambda(2), lambda(5)) = lcm(1, 4) = 4."},
-		{n: 12, answer: "2", reason: "lambda(12) = lcm(lambda(4), lambda(3)) = lcm(2, 2) = 2."},
-		{n: 15, answer: "4", reason: "lambda(15) = lcm(lambda(3), lambda(5)) = lcm(2, 4) = 4."},
-		{n: 16, answer: "4", reason: "For 2^4 with exponent at least 3, lambda is 2^(4-2) = 4."},
-	}
-	c := claims[rand.Intn(len(claims))]
+	n := minN + rand.Intn(maxN-minN+1)
+
+	ans := computeCarmichael(n)
+	ansStr := strconv.Itoa(ans)
+
+	question := fmt.Sprintf("What is the Carmichael function lambda(%d), the exponent of the multiplicative group modulo %d? (enter a number)", n, n)
+	explanation := fmt.Sprintf("Subgoal 1: State governing formula. The Carmichael function lambda(n) is the lcm of prime power components lambda(p^k), where lambda(2^k) = 2^(k-2) for k >= 3 and lambda(p^k) = phi(p^k) for odd primes.\nSubgoal 2: Substitute parameters. Factor n = %d into prime powers and compute the exponent of each component.\nSubgoal 3: Evaluate and simplify. Taking the least common multiple across all components gives lambda(%d) = %s.", n, n, ansStr)
+
 	return generator.Problem{
-		Question: "What is the Carmichael function lambda(" + strconv.Itoa(c.n) +
-			"), the exponent of the multiplicative group modulo " + strconv.Itoa(c.n) + "? (enter a number)",
-		Answer:      c.answer,
-		Explanation: c.reason,
-		Facts:       map[string]string{"n": strconv.Itoa(c.n), "answer": c.answer},
+		Question:    question,
+		Answer:      ansStr,
+		Explanation: explanation,
+		Facts:       map[string]string{"n": strconv.Itoa(n), "answer": ansStr},
 	}
 }
 
@@ -317,52 +596,63 @@ func (g *millerRabinGen) Generate(ctx generator.GeneratorContext) generator.Prob
 
 type primeGapGen struct{}
 
+var smallPrimes = []int{
+	2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47,
+	53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109,
+	113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179,
+	181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241,
+}
+
 func (g *primeGapGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		kind     string
-		p        int
-		reason   string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	kind := "gap"
+	if rand.Intn(2) == 1 {
+		kind = "next"
 	}
-	claims := []claim{
-		{
-			question: "What is the gap between 23 and the next larger prime? (enter a number)",
-			answer:   "6", kind: "gap", p: 23,
-			reason: "The next prime after 23 is 29, so the gap is 29 - 23 = 6.",
-		},
-		{
-			question: "What is the smallest prime greater than 100? (enter a number)",
-			answer:   "101", kind: "next", p: 100,
-			reason: "101 has no divisor other than 1 and itself, and every number from 100 down is composite or below the bound.",
-		},
-		{
-			question: "What is the gap between 89 and the next larger prime? (enter a number)",
-			answer:   "8", kind: "gap", p: 89,
-			reason: "The next prime after 89 is 97, so the gap is 97 - 89 = 8.",
-		},
-		{
-			question: "What is the smallest prime greater than 200? (enter a number)",
-			answer:   "211", kind: "next", p: 200,
-			reason: "211 is prime, and every number from 201 to 210 has a proper factor.",
-		},
-		{
-			question: "What is the gap between 7 and the next larger prime? (enter a number)",
-			answer:   "4", kind: "gap", p: 7,
-			reason: "The next prime after 7 is 11, so the gap is 4.",
-		},
-		{
-			question: "What is the smallest prime greater than 50? (enter a number)",
-			answer:   "53", kind: "next", p: 50,
-			reason: "53 is prime, and 51 = 3*17 and 52 = 4*13 are composite.",
-		},
+
+	var pVal int
+	var ans int
+	var question string
+	var explanation string
+
+	if kind == "gap" {
+		var primePool []int
+		switch tier {
+		case 0:
+			primePool = smallPrimes[:15]
+		case 1:
+			primePool = smallPrimes[15:35]
+		default:
+			primePool = smallPrimes[25:]
+		}
+		pVal = primePool[rand.Intn(len(primePool))]
+		next := computeNextPrime(pVal)
+		ans = next - pVal
+		ansStr := strconv.Itoa(ans)
+
+		question = fmt.Sprintf("What is the gap between %d and the next larger prime? (enter a number)", pVal)
+		explanation = fmt.Sprintf("Subgoal 1: State governing formula. A prime gap g = p_{n+1} - p_n measures the difference between consecutive primes.\nSubgoal 2: Substitute parameters. Identify the prime immediately following %d.\nSubgoal 3: Evaluate and simplify. The next prime after %d is %d, giving gap %d - %d = %s.", pVal, pVal, next, next, pVal, ansStr)
+	} else {
+		minVal := mathutil.ScaleInt(ctx.Difficulty, 10, 80)
+		maxVal := mathutil.ScaleInt(ctx.Difficulty, 50, 250)
+		if maxVal <= minVal {
+			maxVal = minVal + 10
+		}
+		pVal = minVal + rand.Intn(maxVal-minVal+1)
+		next := computeNextPrime(pVal)
+		ans = next
+		ansStr := strconv.Itoa(ans)
+
+		question = fmt.Sprintf("What is the smallest prime greater than %d? (enter a number)", pVal)
+		explanation = fmt.Sprintf("Subgoal 1: State governing formula. Find the minimal integer p > n that has no positive divisors other than 1 and itself.\nSubgoal 2: Substitute parameters. Test sequential integers strictly greater than %d for primality.\nSubgoal 3: Evaluate and simplify. The first prime reached above %d is %s.", pVal, pVal, ansStr)
 	}
-	c := claims[rand.Intn(len(claims))]
+
+	ansStr := strconv.Itoa(ans)
 	return generator.Problem{
-		Question:    c.question,
-		Answer:      c.answer,
-		Explanation: c.reason,
-		Facts:       map[string]string{"kind": c.kind, "p": strconv.Itoa(c.p), "answer": c.answer},
+		Question:    question,
+		Answer:      ansStr,
+		Explanation: explanation,
+		Facts:       map[string]string{"kind": kind, "p": strconv.Itoa(pVal), "answer": ansStr},
 	}
 }
 
