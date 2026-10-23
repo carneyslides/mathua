@@ -53,7 +53,6 @@ var raBatch2MCIDs = []string{
 	"ra.deriv.darboux",
 	"ra.deriv.uniform_conv",
 	"ra.deriv.interchange",
-	"ra.metric.spaces",
 	"ra.metric.open_closed",
 	"ra.metric.closure",
 	"ra.metric.convergence",
