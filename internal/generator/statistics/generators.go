@@ -589,24 +589,90 @@ func (g *varianceGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type bernoulliGen struct{}
 
 func (g *bernoulliGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"A Bernoulli distribution models an experiment with how many possible outcomes?", "2", "Bernoulli: exactly two outcomes (success/failure)."},
-		{"What is the expected value (mean) of a Bernoulli(p) random variable?", "p", "E[X] = p for Bernoulli(p)."},
-		{"What is the variance of a Bernoulli(p) random variable?", "p(1-p)", "Var[X] = p(1-p) for Bernoulli(p)."},
-		{"What does X ~ Bernoulli(p) mean? Does X = 1 occur with probability p? (yes/no)", "yes", "Bernoulli random variable: P(X=1)=p, P(X=0)=1-p."},
-		{"A Binomial(7,p) experiment consists of how many Bernoulli trials?", "7", "A Binomial(n,p) is the sum of n independent Bernoulli(p) variables."},
-		{"For X ~ Bernoulli(0.3), what is P(X = 1) as a decimal?", "0.3", "PMF: P(X=1)=p=0.3, P(X=0)=1-p=0.7."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type param struct {
+			n int
+			p float64
+		}
+		params := []param{
+			{20, 0.3},
+			{50, 0.4},
+			{40, 0.5},
+			{100, 0.7},
+			{80, 0.25},
+			{60, 0.6},
+		}
+		item := params[rand.Intn(len(params))]
+		expected := int(math.Round(float64(item.n) * item.p))
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X_1, X_2, \\dots, X_{%d}\\) be independent Bernoulli random variables each with success probability \\(p = %.2f\\). Compute the expected total number of successes \\(E[\\sum_{i=1}^{%d} X_i]\\).", item.n, item.p, item.n),
+			Answer:   fmt.Sprintf("%d", expected),
+			Explanation: fmt.Sprintf("By linearity of expectation, the expected value of a sum of independent Bernoulli variables is \\(E[\\sum X_i] = %d \\times %.2f = %d\\).",
+				item.n, item.p, expected),
+		}
+	case 1:
+		type varParam struct {
+			n int
+			p float64
+			v int
+		}
+		varParams := []varParam{
+			{40, 0.5, 10},
+			{100, 0.5, 25},
+			{100, 0.2, 16},
+			{100, 0.1, 9},
+			{50, 0.2, 8},
+			{25, 0.2, 4},
+		}
+		vp := varParams[rand.Intn(len(varParams))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X_1, X_2, \\dots, X_{%d}\\) be independent Bernoulli random variables with parameter \\(p = %.1f\\). Find the variance \\(\\operatorname{Var}(\\sum_{i=1}^{%d} X_i)\\).", vp.n, vp.p, vp.n),
+			Answer:   fmt.Sprintf("%d", vp.v),
+			Explanation: fmt.Sprintf("For independent Bernoulli trials, the variance of the sum is \\(\\operatorname{Var}(\\sum X_i) = %d \\times p(1-p) = %d \\times %.1f \\times %.1f = %d\\).",
+				vp.n, vp.n, vp.p, 1-vp.p, vp.v),
+		}
+	case 2:
+		pPct := 10 * (1 + rand.Intn(8))
+		p := float64(pPct) / 100.0
+		failPct := 100 - pPct
+		return generator.Problem{
+			Question: fmt.Sprintf("A trial modeled as a Bernoulli random variable succeeds with probability \\(p = %.2f\\). What is the probability (expressed as an integer percentage from 0 to 100) that the trial fails?", p),
+			Answer:   fmt.Sprintf("%d", failPct),
+			Explanation: fmt.Sprintf("The probability of failure is \\(q = 1 - p = 1 - %.2f = %.2f\\), which equals %d percent.",
+				p, 1-p, failPct),
+		}
+	case 3:
+		oddsList := []int{1, 2, 3, 4, 9}
+		k := oddsList[rand.Intn(len(oddsList))]
+		p := float64(k) / float64(k+1)
+		return generator.Problem{
+			Question: fmt.Sprintf("A Bernoulli trial has success probability \\(p = %.2f\\). Compute the odds in favor of success, defined as the ratio \\(\\frac{p}{1-p}\\).", p),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("The odds in favor are given by \\(\\frac{p}{1-p} = \\frac{%.2f}{%.2f} = %d\\).",
+				p, 1-p, k),
+		}
+	default:
+		type scaleParam struct {
+			a   int
+			p   float64
+			ans int
+		}
+		scales := []scaleParam{
+			{5, 0.4, 10},
+			{10, 0.3, 30},
+			{4, 0.5, 8},
+			{6, 0.5, 18},
+			{5, 0.2, 5},
+			{10, 0.8, 80},
+		}
+		sp := scales[rand.Intn(len(scales))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Bernoulli}(%.1f)\\) and define \\(Y = %d X\\). Find the second moment \\(E[Y^2]\\).", sp.p, sp.a),
+			Answer:   fmt.Sprintf("%d", sp.ans),
+			Explanation: fmt.Sprintf("Because \\(X \\in \\{0, 1\\}\\), \\(X^2 = X\\) and \\(E[X^2] = p = %.1f\\). Therefore \\(E[Y^2] = %d^2 E[X^2] = %d \\times %.1f = %d\\).",
+				sp.p, sp.a, sp.a*sp.a, sp.p, sp.ans),
+		}
 	}
 }
 
