@@ -990,33 +990,77 @@ func (g *laplaceEqGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type volterraGen struct{}
 
 func (g *volterraGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct{ q, a, e string }
-	easy := []entry{
-		{"Does Volterra of second kind have unique continuous solution? (yes/no)", "yes", "Via Picard iteration."},
-		{"Is Volterra with K=1 solvable via differentiation? (yes/no)", "yes", "Differentiate to ODE."},
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Initial value y(0) = y0
+		y0 := smallInt(2, 20)
+		c := smallInt(1, 9)
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider the Volterra integral equation of the second kind \\(y(x) = %d + %dx + \\int_0^x (x - t)y(t)\\,dt\\). Evaluate the initial value \\(y(0)\\).", y0, c),
+			Answer:   fmt.Sprintf("%d", y0),
+			Explanation: fmt.Sprintf(
+				"Evaluating at the lower integration limit \\(x = 0\\), the definite integral \\(\\int_0^0 (0 - t)y(t)\\,dt = 0\\). Therefore \\(y(0) = %d + %d(0) + 0 = %d\\).",
+				y0, c, y0,
+			),
+		}
+
+	case 1:
+		// Initial derivative y'(0) = m + c * k
+		m := smallInt(1, 8)
+		c := smallInt(1, 5)
+		k := smallInt(1, 6)
+		ans := m + c*k
+		return generator.Problem{
+			Question: fmt.Sprintf("For the Volterra integral equation \\(y(x) = %d + %dx + \\int_0^x %dy(t)\\,dt\\), evaluate the derivative value \\(y'(0)\\).", k, m, c),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Differentiating both sides with respect to \\(x\\) via the Leibniz integral rule gives \\(y'(x) = %d + %dy(x)\\). Evaluating at \\(x = 0\\) with \\(y(0) = %d\\) yields \\(y'(0) = %d + %d(%d) = %d + %d = %d\\).",
+				m, c, k, m, c, k, m, c*k, ans,
+			),
+		}
+
+	case 2:
+		// Direct polynomial evaluation (a + c)*x0 + b
+		a := smallInt(1, 5)
+		b := smallInt(1, 9)
+		c := smallInt(1, 5)
+		x0 := smallInt(1, 6)
+		ans := (a+c)*x0 + b
+		return generator.Problem{
+			Question: fmt.Sprintf("For the integral equation \\(y(x) = %dx + %d + \\int_0^x %d\\,dt\\), evaluate \\(y(%d)\\).", a, b, c, x0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Evaluating the definite integral gives \\(\\int_0^x %d\\,dt = %dx\\). Thus \\(y(x) = %dx + %d + %dx = %dx + %d\\). Substituting \\(x = %d\\) yields \\(y(%d) = %d(%d) + %d = %d + %d = %d\\).",
+				c, c, a, b, c, a+c, b, x0, x0, a+c, x0, b, (a+c)*x0, b, ans,
+			),
+		}
+
+	case 3:
+		// Equivalent ODE growth rate constant a = k
+		y0 := smallInt(1, 9)
+		k := smallInt(2, 8)
+		return generator.Problem{
+			Question: fmt.Sprintf("Differentiating the Volterra integral equation \\(y(x) = %d + \\int_0^x %dy(t)\\,dt\\) converts it into the initial value problem \\(y' = ay\\) with \\(y(0) = %d\\). What is the value of coefficient \\(a\\)?", y0, k, y0),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf(
+				"By the fundamental theorem of calculus, differentiating \\(y(x) = %d + \\int_0^x %dy(t)\\,dt\\) yields \\(y'(x) = %dy(x)\\). Therefore the growth coefficient is \\(a = %d\\).",
+				y0, k, k, k,
+			),
+		}
+
+	default:
+		// Second derivative y''(0) = c * k
+		k := smallInt(2, 7)
+		c := smallInt(2, 6)
+		ans := c * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider the Volterra integral equation with displacement kernel \\(y(x) = %d + \\int_0^x %d(x - t)y(t)\\,dt\\). Evaluate the second derivative \\(y''(0)\\).", k, c),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Differentiating twice with respect to \\(x\\) via the Leibniz rule: \\(y'(x) = %d\\int_0^x y(t)\\,dt\\) and \\(y''(x) = %dy(x)\\). At \\(x = 0\\), the integral equation gives \\(y(0) = %d\\). Therefore \\(y''(0) = %dy(0) = %d(%d) = %d\\).",
+				c, c, k, c, c, k, ans,
+			),
+		}
 	}
-	// Parameterized production: y = 1 + ∫_0^x k·y dt gives y = e^{kx}; ask y(1).
-	ks := []int{1, 2, 3}
-	k := ks[rand.Intn(len(ks))]
-	ans := "e"
-	if k != 1 {
-		ans = fmt.Sprintf("e^%d", k)
-	}
-	exp := "e^x"
-	if k != 1 {
-		exp = fmt.Sprintf("e^{%dx}", k)
-	}
-	easy = append(easy, entry{
-		q: fmt.Sprintf("For y(x) = 1 + ∫_0^x %dy(t)dt, what is y(1)? (type like e^2)", k),
-		a: ans,
-		e: fmt.Sprintf("Differentiate: y' = %dy with y(0) = 1, so y = %s and y(1) = %s.", k, exp, ans),
-	})
-	hard := []entry{{"Does resolvent kernel give solution? (yes/no)", "yes", "Neumann series."}, {"Is Volterra compact operator? (yes/no)", "yes", "Integral compact."}, {"Does Laplace solve convolution Volterra? (yes/no)", "yes", "Transform."}}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
