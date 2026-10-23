@@ -1078,27 +1078,120 @@ func (g *expectedValueGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type gaussianFuncGen struct{}
 
 func (g *gaussianFuncGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
+	switch rand.Intn(5) {
+	case 0:
+		type peakItem struct {
+			a     int
+			mu    int
+			denom int
+		}
+		items := []peakItem{
+			{5, 12, 18},
+			{8, 25, 32},
+			{3, 7, 8},
+			{10, 40, 50},
+			{4, 15, 18},
+			{6, 30, 72},
+			{9, 18, 50},
+			{7, 22, 32},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("The Gaussian curve is given by \\(f(x) = %d \\exp\\left(-\\frac{(x - %d)^2}{%d}\\right)\\). At what value of \\(x\\) does the function reach its maximum peak?", it.a, it.mu, it.denom),
+			Answer:   fmt.Sprintf("%d", it.mu),
+			Explanation: fmt.Sprintf("A Gaussian function attains its global maximum at the center of symmetry \\(x = \\mu = %d\\).",
+				it.mu),
+		}
+	case 1:
+		type heightItem struct {
+			a     int
+			mu    int
+			denom int
+		}
+		items := []heightItem{
+			{24, 10, 18},
+			{45, 15, 32},
+			{80, 20, 50},
+			{15, 8, 8},
+			{60, 25, 72},
+			{36, 12, 18},
+			{50, 30, 98},
+			{90, 16, 50},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A bell-shaped Gaussian function is defined as \\(f(x) = %d \\exp\\left(-\\frac{(x - %d)^2}{%d}\\right)\\). What is the maximum peak height \\(f(%d)\\)?", it.a, it.mu, it.denom, it.mu),
+			Answer:   fmt.Sprintf("%d", it.a),
+			Explanation: fmt.Sprintf("Evaluating at the mean gives \\(f(%d) = %d \\exp(0) = %d \\cdot 1 = %d\\).",
+				it.mu, it.a, it.a, it.a),
+		}
+	case 2:
+		type convItem struct {
+			v1 int
+			v2 int
+		}
+		items := []convItem{
+			{12, 13},
+			{20, 16},
+			{35, 29},
+			{48, 52},
+			{18, 31},
+			{27, 54},
+			{60, 84},
+			{45, 55},
+		}
+		it := items[rand.Intn(len(items))]
+		sumV := it.v1 + it.v2
+		return generator.Problem{
+			Question: fmt.Sprintf("Two independent Gaussian random variables have variances \\(\\sigma_1^2 = %d\\) and \\(\\sigma_2^2 = %d\\). Under convolution, what is the variance of their sum \\(\\sigma_{\\text{sum}}^2\\)?", it.v1, it.v2),
+			Answer:   fmt.Sprintf("%d", sumV),
+			Explanation: fmt.Sprintf("The convolution of two independent Gaussians yields a Gaussian with variance equal to the sum of variances: \\(\\sigma_{\\text{sum}}^2 = \\sigma_1^2 + \\sigma_2^2 = %d + %d = %d\\).",
+				it.v1, it.v2, sumV),
+		}
+	case 3:
+		type inflItem struct {
+			sigma int
+		}
+		items := []inflItem{
+			{3},
+			{5},
+			{8},
+			{12},
+			{15},
+			{7},
+			{9},
+			{14},
+		}
+		it := items[rand.Intn(len(items))]
+		dist := 2 * it.sigma
+		return generator.Problem{
+			Question: fmt.Sprintf("A Gaussian distribution has standard deviation \\(\\sigma = %d\\). What is the distance between its two inflection points at \\(x = \\mu - \\sigma\\) and \\(x = \\mu + \\sigma\\)?", it.sigma),
+			Answer:   fmt.Sprintf("%d", dist),
+			Explanation: fmt.Sprintf("The distance between the inflection points is \\((\\mu + \\sigma) - (\\mu - \\sigma) = 2\\sigma = 2 \\cdot %d = %d\\).",
+				it.sigma, dist),
+		}
+	default:
+		type denomItem struct {
+			mu    int
+			d     int
+			sigma int
+		}
+		items := []denomItem{
+			{5, 8, 2},
+			{10, 18, 3},
+			{15, 32, 4},
+			{20, 50, 5},
+			{25, 72, 6},
+			{30, 98, 7},
+			{35, 128, 8},
+			{40, 200, 10},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A Gaussian curve has the form \\(f(x) = C \\exp\\left(-\\frac{(x - %d)^2}{%d}\\right)\\), where the denominator represents \\(2\\sigma^2\\). Determine the standard deviation \\(\\sigma\\).", it.mu, it.d),
+			Answer:   fmt.Sprintf("%d", it.sigma),
+			Explanation: fmt.Sprintf("Equating \\(2\\sigma^2 = %d\\) gives \\(\\sigma^2 = %d\\), so \\(\\sigma = \\sqrt{%d} = %d\\).",
+				it.d, it.d/2, it.d/2, it.sigma),
+		}
 	}
-	tableEasy := []entry{
-		{"Standard normal is Gaussian with mean? (enter a number)", "0", "Centered at zero by definition."},
-		{"Gaussian e^(-x^2): maximum at x = ? (enter a number)", "0", "Peak at the mean, x = 0."},
-		{"Is a Gaussian symmetric about its mean? (yes/no)", "yes", "Bell curve mirrors left-right."},
-		{"How many parameters define a Gaussian (mean and variance)? (enter a number)", "2", "Mean plus variance."},
-	}
-	tableHard := []entry{
-		{"Gaussian variance 4: standard deviation? (enter a number)", "2", "SD is the square root of variance."},
-		{"Wider bell: larger or smaller variance? (type larger or smaller)", "larger", "Variance spreads the curve."},
-		{"Is the sum of independent Gaussians Gaussian? (yes/no)", "yes", "Closed under convolution."},
-	}
-	pool := tableEasy
-	if scale > 3 {
-		pool = append(tableEasy, tableHard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }

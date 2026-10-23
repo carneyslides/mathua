@@ -510,7 +510,7 @@
    "label": "Gaussian function: moments, FWHM, convolution",
    "domain": "statistics",
    "subdomain": "statistics.distributions",
-   "grading_type": "symbolic",
+   "grading_type": "numeric",
    "prerequisites": [
     "stat.dist.normal",
     "alg.exp.concept"
