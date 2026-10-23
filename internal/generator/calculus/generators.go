@@ -569,26 +569,72 @@ func (g *integralFTCGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type integralAreaBetweenGen struct{}
 
 func (g *integralAreaBetweenGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Area between y = mx and y = 0 from x = 0 to x = L with m even
+		m := 2 * mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		L := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		ans := (m * L * L) / 2
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the area enclosed between \\(y = %d x\\) and the x-axis \\(y = 0\\) from \\(x = 0\\) to \\(x = %d\\).", m, L),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula for the area between curves: \\(A = \\int_{a}^{b} (f(x) - g(x))\\,dx\\).\n"+
+				"Subgoal 2: Substitute parameters \\(f(x) = %d x\\), \\(g(x) = 0\\), \\(a = 0\\) and \\(b = %d\\).\n"+
+				"Subgoal 3: Evaluate the definite integral: \\(\\int_{0}^{%d} %d x\\,dx = [%d x^2 / 2]_{0}^{%d} = %d\\).", m, L, L, m, m, L, ans),
+		}
+	case 1:
+		// Area between parabola y = r^2 - x^2 and y = 0 on [-r, r] with r = 3k
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		r := 3 * k
+		H := r * r
+		ans := (4 * r * r * r) / 3
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the area bounded by the parabola \\(y = %d - x^2\\) and the x-axis \\(y = 0\\).", H),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: find roots \\(\\pm %d\\) and integrate \\(A = \\int_{-%d}^{%d} (%d - x^2)\\,dx\\).\n"+
+				"Subgoal 2: Use symmetry: \\(A = 2 \\int_{0}^{%d} (%d - x^2)\\,dx\\).\n"+
+				"Subgoal 3: Evaluate and simplify: \\(2 [%d x - x^3 / 3]_{0}^{%d} = 2 (%d - %d) = %d\\).", r, r, r, H, r, H, H, r, H*r, (r*r*r)/3, ans),
+		}
+	case 2:
+		// Area between y = kx and y = x^2 from x = 0 to x = k with k = 6m
+		m := mathutil.ScaleInt(ctx.Difficulty, 1, 2)
+		k := 6 * m
+		ans := (k * k * k) / 6
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the area of the region bounded by \\(y = %d x\\) and \\(y = x^2\\).", k),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: intersections occur at \\(x = 0\\) and \\(x = %d\\), so \\(A = \\int_{0}^{%d} (%d x - x^2)\\,dx\\).\n"+
+				"Subgoal 2: Find antiderivative: \\([%d x^2 / 2 - x^3 / 3]_{0}^{%d}\\).\n"+
+				"Subgoal 3: Evaluate and simplify: \\(\\frac{%d \\cdot %d}{2} - \\frac{%d}{3} = %d\\).", k, k, k, k, k, k, k*k, k*k*k, ans),
+		}
+	case 3:
+		// Area between y = 3kx^2 and y = 0 from x = 0 to x = L
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		L := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		ans := k * L * L * L
+		coeff := 3 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the area under the curve \\(y = %d x^2\\) from \\(x = 0\\) to \\(x = %d\\).", coeff, L),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(A = \\int_{0}^{%d} %d x^2\\,dx\\).\n"+
+				"Subgoal 2: Find the antiderivative: \\([%d x^3]_{0}^{%d}\\).\n"+
+				"Subgoal 3: Evaluate and simplify: \\(%d \\cdot %d^3 = %d\\).", L, coeff, k, L, k, L, ans),
+		}
+	default:
+		// Area between two parallel lines y = mx + b and y = mx from x = 0 to x = L
+		m := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		b := mathutil.ScaleInt(ctx.Difficulty, 2, 8)
+		L := mathutil.ScaleInt(ctx.Difficulty, 1, 7)
+		ans := b * L
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the area between the lines \\(y = %d x + %d\\) and \\(y = %d x\\) over the interval [%d, %d].", m, b, m, 0, L),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(A = \\int_{a}^{b} (f(x) - g(x))\\,dx\\).\n"+
+				"Subgoal 2: Substitute \\(f(x) - g(x) = (%d x + %d) - %d x = %d\\).\n"+
+				"Subgoal 3: Evaluate: \\(\\int_{0}^{%d} %d\\,dx = %d \\cdot %d = %d\\).", m, b, m, b, L, b, b, L, ans),
+		}
 	}
-	tableEasy := []entry{
-		{"Find area between \\(y=x\\) and \\(y=x^{2}\\) from \\(x=0\\) to \\(x=1\\).", "0.1667", "∫(x-x²)dx from 0 to 1 = [x²/2-x³/3]₀¹ = 1/2-1/3 = 1/6 ≈ 0.1667."},
-		{"Find area between \\(y=2x\\) and \\(y=x\\) from \\(x=0\\) to \\(x=2\\).", "2", "∫(2x-x)dx from 0 to 2 = ∫x dx = [x²/2]₀² = 2."},
-		{"Find area between \\(y=x+2\\) and \\(y=x\\) from \\(x=0\\) to \\(x=3\\).", "6", "The gap is constant 2, so area = 2·3 = 6."},
-		{"Find area between \\(y=4x\\) and \\(y=3x\\) from \\(x=0\\) to \\(x=3\\).", "9/2", "∫(4x-3x)dx from 0 to 3 = ∫x dx = [x²/2]₀³ = 9/2."},
-	}
-	tableHard := []entry{
-		{"Find area between \\(y=x\\) and \\(y=x^{3}\\) from \\(x=0\\) to \\(x=1\\).", "1/4", "∫(x-x³)dx from 0 to 1 = [x²/2-x⁴/4]₀¹ = 1/2-1/4 = 1/4."},
-		{"Find area between \\(y=2x^{2}\\) and \\(y=x^{2}\\) from \\(x=0\\) to \\(x=2\\).", "8/3", "∫x²dx from 0 to 2 = [x³/3]₀² = 8/3."},
-	}
-	pool := tableEasy
-	if scale > 3 {
-		pool = append(tableEasy, tableHard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type integralVolumeGen struct{}
@@ -1984,17 +2030,77 @@ func (g *derivJacobianGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type integralNetChangeGen struct{}
 
 func (g *integralNetChangeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// v(t) = 3 k t^2 from t = 0 to t = T -> displacement = k T^3
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		T := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		ans := k * T * T * T
+		coeff := 3 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("A particle moves along a line with velocity \\(v(t) = %d t^2\\) m/s. Find the total displacement of the particle from \\(t = 0\\) to \\(t = %d\\) seconds.", coeff, T),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Net Change Theorem: displacement equals \\(\\int_{t_1}^{t_2} v(t)\\,dt\\).\n"+
+				"Subgoal 2: Substitute \\(v(t) = %d t^2\\), \\(t_1 = 0\\) and \\(t_2 = %d\\).\n"+
+				"Subgoal 3: Evaluate the definite integral: \\(\\int_{0}^{%d} %d t^2\\,dt = [%d t^3]_{0}^{%d} = %d\\).", coeff, T, T, coeff, k, T, ans),
+		}
+	case 1:
+		// r(t) = 2 k t + b from t = 0 to t = T -> net change = k T^2 + b T
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		T := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		ans := k*T*T + b*T
+		coeff := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Water flows into a tank at rate \\(r(t) = %d t + %d\\) L/min. How many liters of water enter the tank between \\(t = 0\\) and \\(t = %d\\) minutes?", coeff, b, T),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: net volume change is \\(\\int_{a}^{b} r(t)\\,dt\\).\n"+
+				"Subgoal 2: Substitute integrand \\(r(t) = %d t + %d\\) with limits from 0 to %d.\n"+
+				"Subgoal 3: Evaluate antiderivative: \\([%d t^2 + %d t]_{0}^{%d} = %d \\cdot %d + %d \\cdot %d = %d\\).", coeff, b, T, k, b, T, k, T*T, b, T, ans),
+		}
+	case 2:
+		// f'(x) = 2 k x and f(0) = c, find f(b) -> f(b) = c + k b^2
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		c := mathutil.ScaleInt(ctx.Difficulty, 1, 10)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		ans := c + k*b*b
+		coeff := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Given \\(f'(x) = %d x\\) and \\(f(0) = %d\\), determine the value of \\(f(%d)\\).", coeff, c, b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: Apply the Net Change Theorem: \\(f(b) = f(a) + \\int_{a}^{b} f'(x)\\,dx\\).\n"+
+				"Subgoal 2: Substitute parameters \\(f(0) = %d\\) and \\(\\int_{0}^{%d} %d x\\,dx\\).\n"+
+				"Subgoal 3: Evaluate and sum: \\(%d + [%d x^2]_{0}^{%d} = %d + %d = %d\\).", c, b, coeff, c, k, b, c, k*b*b, ans),
+		}
+	case 3:
+		// Inflow rate r(t) = 6 k t^2 from t = 0 to t = T -> volume = 2 k T^3
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		T := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		ans := 2 * k * T * T * T
+		coeff := 6 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("A chemical solution is added at rate \\(r(t) = %d t^2\\) mL/s. Compute the total amount added over the interval [0, %d].", coeff, T),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: net accumulation is \\(\\Delta V = \\int_{0}^{T} r(t)\\,dt\\).\n"+
+				"Subgoal 2: Integrate \\(\\int_{0}^{%d} %d t^2\\,dt = [%d t^3]_{0}^{%d}\\).\n"+
+				"Subgoal 3: Evaluate: \\(%d \\cdot %d = %d\\).", T, coeff, 2*k, T, 2*k, T*T*T, ans),
+		}
+	default:
+		// Acceleration a(t) = 2 k with v(0) = v0, find v(T) -> v(T) = v0 + 2 k T
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		v0 := mathutil.ScaleInt(ctx.Difficulty, 1, 15)
+		T := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		ans := v0 + 2*k*T
+		coeff := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("An accelerating object has constant acceleration \\(a(t) = %d\\) m/s\\(^2\\) and initial velocity \\(v(0) = %d\\) m/s. Find \\(v(%d)\\).", coeff, v0, T),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Net Change Theorem for acceleration: \\(v(T) = v(0) + \\int_{0}^{T} a(t)\\,dt\\).\n"+
+				"Subgoal 2: Substitute \\(v(0) = %d\\) and \\(\\int_{0}^{%d} %d\\,dt\\).\n"+
+				"Subgoal 3: Evaluate and compute: \\(%d + (%d \\cdot %d) = %d\\).", v0, T, coeff, v0, coeff, T, ans),
+		}
 	}
-	table := []entry{
-		{"If \\(v(t)=3t^{2}\\) is velocity, find displacement from \\(t=0\\) to \\(t=2\\).", "8", "Net change: \\(\\int_{0}^{2} 3t^{2}\\,dt = [t^{3}]_{0}^{2} = 8\\)."},
-		{"If \\(v(t)=2t\\) is velocity, find displacement from \\(t=0\\) to \\(t=3\\).", "9", "Net change theorem: integral of a rate gives net change. \\(\\int_{0}^{3} 2t\\,dt = [t^{2}]_{0}^{3} = 9\\)."},
-		{"If \\(f'(x)=2x\\) and \\(f(1)=5\\), find \\(f(3)\\).", "13", "\\(f(3)-f(1) = \\int_{1}^{3} 2x\\,dx = 8\\), so \\(f(3) = 13\\)."},
-		{"Water flows at \\(r(t)=4t\\) L/min; how much flows in from \\(t=0\\) to \\(t=3\\)?", "18", "\\(\\int_{0}^{3} 4t\\,dt = [2t^{2}]_{0}^{3} = 18\\) liters."},
-	}
-	e := table[rand.Intn(len(table))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type integralVariableLimitsGen struct{}
@@ -2016,49 +2122,217 @@ func (g *integralVariableLimitsGen) Generate(ctx generator.GeneratorContext) gen
 type integralMVTGen struct{}
 
 func (g *integralMVTGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Average value of f(x) = 2 k x on [0, b] -> f_avg = k b
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		ans := k * b
+		coeff := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the average value of \\(f(x) = %d x\\) on the interval [0, %d].", coeff, b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(f_{\\text{avg}} = \\frac{1}{b-a}\\int_{a}^{b} f(x)\\,dx\\).\n"+
+				"Subgoal 2: Substitute parameters \\(a = 0\\), \\(b = %d\\) and \\(f(x) = %d x\\).\n"+
+				"Subgoal 3: Evaluate: \\(\\frac{1}{%d}\\int_{0}^{%d} %d x\\,dx = \\frac{1}{%d} [%d x^2]_{0}^{%d} = \\frac{%d}{%d} = %d\\).", b, coeff, b, b, coeff, b, k, b, k*b*b, b, ans),
+		}
+	case 1:
+		// Average value of f(x) = 3 k x^2 on [0, b] -> f_avg = k b^2
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		ans := k * b * b
+		coeff := 3 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Compute the average value of \\(f(x) = %d x^2\\) on [0, %d].", coeff, b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the average value formula: \\(f_{\\text{avg}} = \\frac{1}{b-a}\\int_{a}^{b} f(x)\\,dx\\).\n"+
+				"Subgoal 2: Substitute limits from 0 to %d with integrand \\(%d x^2\\).\n"+
+				"Subgoal 3: Evaluate antiderivative: \\(\\frac{1}{%d} [%d x^3]_{0}^{%d} = \\frac{%d \\cdot %d}{%d} = %d\\).", b, coeff, b, k, b, k, b*b*b, b, ans),
+		}
+	case 2:
+		// Find c in (0, 2k) guaranteed by MVT for f(x) = 2x on [0, 2k] -> c = k
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		b := 2 * k
+		ans := k
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the value \\(c\\) guaranteed by the Mean Value Theorem for Integrals for \\(f(x) = 2x\\) on [0, %d].", b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the theorem: there exists \\(c \\in [a, b]\\) such that \\(f(c) = f_{\\text{avg}} = \\frac{1}{b-a}\\int_{a}^{b} f(x)\\,dx\\).\n"+
+				"Subgoal 2: Compute \\(f_{\\text{avg}} = \\frac{1}{%d} \\int_{0}^{%d} 2x\\,dx = \\frac{1}{%d} [x^2]_{0}^{%d} = %d\\).\n"+
+				"Subgoal 3: Set \\(f(c) = f_{\\text{avg}} \\implies 2c = %d \\implies c = %d\\).", b, b, b, b, b, b, ans),
+		}
+	case 3:
+		// Average value of linear f(x) = 2 k x + d on [0, b] -> f_avg = k b + d
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		d := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 7)
+		ans := k*b + d
+		coeff := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the average value of \\(f(x) = %d x + %d\\) over [0, %d].", coeff, d, b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(f_{\\text{avg}} = \\frac{1}{b-a}\\int_{a}^{b} f(x)\\,dx\\).\n"+
+				"Subgoal 2: Compute \\(\\int_{0}^{%d} (%d x + %d)\\,dx = [%d x^2 + %d x]_{0}^{%d} = %d\\).\n"+
+				"Subgoal 3: Divide by interval length %d: \\(\\frac{%d}{%d} = %d\\).", b, coeff, d, k, d, b, k*b*b+d*b, b, k*b*b+d*b, b, ans),
+		}
+	default:
+		// Average value of f(x) = 4 k x^3 on [0, b] -> f_avg = k b^3
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		ans := k * b * b * b
+		coeff := 4 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Compute the average value of \\(f(x) = %d x^3\\) on [0, %d].", coeff, b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(f_{\\text{avg}} = \\frac{1}{b-a}\\int_{a}^{b} f(x)\\,dx\\).\n"+
+				"Subgoal 2: Substitute integrand \\(%d x^3\\) on interval [0, %d].\n"+
+				"Subgoal 3: Evaluate: \\(\\frac{1}{%d} [k x^4]_{0}^{%d} = \\frac{%d \\cdot %d}{%d} = %d\\).", coeff, b, b, b, k, b*b*b*b, b, ans),
+		}
 	}
-	table := []entry{
-		{"Does the integral MVT guarantee some c with f(c) equal to the average value on [a,b]? (yes/no)", "yes", "Some \\(c \\in [a,b]\\) attains the average value: \\(f(c) = \\frac{1}{b-a}\\int_{a}^{b}f\\)."},
-		{"Find the average value of \\(f(x)=x^{2}\\) on \\([0,2]\\).", "4/3", "Average \\(= \\frac{1}{2}\\int_{0}^{2}x^{2}\\,dx = \\frac{1}{2}\\cdot\\frac{8}{3} = 4/3\\)."},
-		{"Find \\(c\\) guaranteed by the integral MVT for \\(f(x)=x\\) on \\([0,4]\\).", "2", "Average is 2; \\(f(c)=c=2\\) gives \\(c=2\\)."},
-		{"Find the average value of \\(f(x)=3x\\) on \\([1,3]\\).", "6", "Average \\(= \\frac{1}{2}\\int_{1}^{3}3x\\,dx = \\frac{1}{2}(12) = 6\\)."},
-	}
-	e := table[rand.Intn(len(table))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type integralWorkGen struct{}
 
 func (g *integralWorkGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Spring force F(x) = 2 k x stretched from 0 to D -> W = k D^2
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		D := mathutil.ScaleInt(ctx.Difficulty, 1, 7)
+		ans := k * D * D
+		coeff := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("A spring requires a force of \\(F(x) = %d x\\) N to stretch a distance of \\(x\\) meters. Calculate the work done in stretching the spring from \\(x = 0\\) to \\(x = %d\\) meters.", coeff, D),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula for work: \\(W = \\int_{a}^{b} F(x)\\,dx\\).\n"+
+				"Subgoal 2: Substitute \\(F(x) = %d x\\) with limits \\(a = 0\\) and \\(b = %d\\).\n"+
+				"Subgoal 3: Evaluate the integral: \\(\\int_{0}^{%d} %d x\\,dx = [%d x^2]_{0}^{%d} = %d \\cdot %d = %d\\) J.", coeff, D, D, coeff, k, D, k, D*D, ans),
+		}
+	case 1:
+		// Force F(x) = 3 k x^2 moving an object from 0 to D -> W = k D^3
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		D := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		ans := k * D * D * D
+		coeff := 3 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("A variable force \\(F(x) = %d x^2\\) N acts on an object moving along the x-axis. Find the work done in moving the object from \\(x = 0\\) to \\(x = %d\\) meters.", coeff, D),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(W = \\int_{0}^{D} F(x)\\,dx\\).\n"+
+				"Subgoal 2: Substitute force \\(F(x) = %d x^2\\) and distance \\(D = %d\\).\n"+
+				"Subgoal 3: Evaluate antiderivative: \\([%d x^3]_{0}^{%d} = %d \\cdot %d = %d\\) J.", coeff, D, k, D, k, D*D*D, ans),
+		}
+	case 2:
+		// Spring stretched from x1 to x2 with F(x) = 2 k x -> W = k(x2^2 - x1^2)
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		x1 := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		span := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		x2 := x1 + span
+		ans := k * (x2*x2 - x1*x1)
+		coeff := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the work done (in Joules) by a force \\(F(x) = %d x\\) N in moving an object from \\(x = %d\\) to \\(x = %d\\) meters.", coeff, x1, x2),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(W = \\int_{x_1}^{x_2} F(x)\\,dx\\).\n"+
+				"Subgoal 2: Substitute \\(F(x) = %d x\\), \\(x_1 = %d\\) and \\(x_2 = %d\\).\n"+
+				"Subgoal 3: Evaluate: \\([%d x^2]_{%d}^{%d} = %d (%d - %d) = %d\\) J.", coeff, x1, x2, k, x1, x2, k, x2*x2, x1*x1, ans),
+		}
+	case 3:
+		// Linear force F(x) = 2 k x + C from 0 to D -> W = k D^2 + C D
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		C := mathutil.ScaleInt(ctx.Difficulty, 2, 8)
+		D := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		ans := k*D*D + C*D
+		coeff := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Calculate the work done by a force \\(F(x) = %d x + %d\\) N in displacing a particle from \\(x = 0\\) to \\(x = %d\\) meters.", coeff, C, D),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(W = \\int_{0}^{D} (mx + C)\\,dx\\).\n"+
+				"Subgoal 2: Compute antiderivative \\([%d x^2 + %d x]_{0}^{%d}\\).\n"+
+				"Subgoal 3: Evaluate: \\(%d \\cdot %d + %d \\cdot %d = %d\\) J.", k, C, D, k, D*D, C, D, ans),
+		}
+	default:
+		// Constant force F0 over distance D -> W = F0 * D
+		F0 := mathutil.ScaleInt(ctx.Difficulty, 5, 25)
+		D := mathutil.ScaleInt(ctx.Difficulty, 2, 10)
+		ans := F0 * D
+		return generator.Problem{
+			Question: fmt.Sprintf("A constant force of %d N pushes a box across a frictionless floor for a distance of %d meters. Compute the total work done.", F0, D),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(W = F \\cdot d\\).\n"+
+				"Subgoal 2: Substitute constant force \\(F = %d\\) N and displacement \\(d = %d\\) m.\n"+
+				"Subgoal 3: Multiply: \\(%d \\cdot %d = %d\\) J.", F0, D, F0, D, ans),
+		}
 	}
-	table := []entry{
-		{"A force \\(F(x)=2x\\) moves an object from \\(x=0\\) to \\(x=3\\). Find the work.", "9", "Work \\(= \\int_{0}^{3}2x\\,dx = 9\\) J."},
-		{"A force \\(F(x)=x^{2}\\) moves an object from \\(x=1\\) to \\(x=2\\). Find the work.", "7/3", "Work \\(= \\int_{1}^{2}x^{2}\\,dx = (8-1)/3 = 7/3\\) J."},
-		{"A force \\(F(x)=3x\\) moves an object from \\(x=0\\) to \\(x=4\\). Find the work.", "24", "Work by a variable force is W = integral of F(x)dx: \\(\\int_{0}^{4}3x\\,dx = 24\\) J."},
-		{"A spring with \\(F(x)=4x\\) is stretched from 0 to 2. Find the work.", "8", "Work \\(= \\int_{0}^{2}4x\\,dx = 8\\) J."},
-	}
-	e := table[rand.Intn(len(table))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type integralCenterMassGen struct{}
 
 func (g *integralCenterMassGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Uniform rod on [0, 2k] -> xbar = k
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 9)
+		L := 2 * k
+		ans := k
+		return generator.Problem{
+			Question: fmt.Sprintf("A thin rod of uniform density occupies the interval [0, %d] on the x-axis. Find the x-coordinate of its center of mass.", L),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula for a uniform rod: \\(\\bar{x} = \\frac{a + b}{2}\\).\n"+
+				"Subgoal 2: Substitute endpoints \\(a = 0\\) and \\(b = %d\\).\n"+
+				"Subgoal 3: Evaluate: \\(\\bar{x} = \\frac{0 + %d}{2} = %d\\).", L, L, ans),
+		}
+	case 1:
+		// Non-uniform rod on [0, L] with rho(x) = k x, where L = 3 m -> xbar = 2 m
+		m := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		L := 3 * m
+		ans := 2 * m
+		return generator.Problem{
+			Question: fmt.Sprintf("A rod of length %d on [0, %d] has linear density \\(\\rho(x) = x\\). Find its center of mass \\(\\bar{x}\\).", L, L),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(\\bar{x} = \\frac{M_y}{M} = \\frac{\\int_{0}^{L} x \\rho(x)\\,dx}{\\int_{0}^{L} \\rho(x)\\,dx}\\).\n"+
+				"Subgoal 2: Compute total mass \\(M = \\int_{0}^{%d} x\\,dx = \\frac{%d^2}{2}\\) and moment \\(M_y = \\int_{0}^{%d} x^2\\,dx = \\frac{%d^3}{3}\\).\n"+
+				"Subgoal 3: Simplify the ratio: \\(\\bar{x} = \\frac{2}{3} L = \\frac{2}{3} (%d) = %d\\).", L, L, L, L, L, ans),
+		}
+	case 2:
+		// Rod on [0, L] with rho(x) = x^2, where L = 4 m -> xbar = 3 m
+		m := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		L := 4 * m
+		ans := 3 * m
+		return generator.Problem{
+			Question: fmt.Sprintf("A rod occupying [0, %d] has density \\(\\rho(x) = x^2\\). Determine the center of mass \\(\\bar{x}\\).", L),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(\\bar{x} = \\frac{\\int_{0}^{L} x^3\\,dx}{\\int_{0}^{L} x^2\\,dx}\\).\n"+
+				"Subgoal 2: Evaluate integrals: numerator is \\(L^4 / 4\\) and denominator is \\(L^3 / 3\\).\n"+
+				"Subgoal 3: Compute \\(\\bar{x} = \\frac{3}{4} L = \\frac{3}{4} (%d) = %d\\).", L, ans),
+		}
+	case 3:
+		// Uniform rod on [a, b] with same parity -> xbar = (a + b) / 2
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		span := 2 * mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		b := a + span
+		ans := (a + b) / 2
+		return generator.Problem{
+			Question: fmt.Sprintf("A uniform rod extends along the x-axis from \\(x = %d\\) to \\(x = %d\\). Find the center of mass \\(\\bar{x}\\).", a, b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: by symmetry, \\(\\bar{x} = \\frac{a + b}{2}\\).\n"+
+				"Subgoal 2: Substitute endpoints \\(a = %d\\) and \\(b = %d\\).\n"+
+				"Subgoal 3: Calculate: \\(\\bar{x} = \\frac{%d + %d}{2} = %d\\).", a, b, a, b, ans),
+		}
+	default:
+		// Two equal point masses m at x = 0 and x = 2d -> xbar = d
+		d := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		ans := d
+		return generator.Problem{
+			Question: fmt.Sprintf("Two equal point masses \\(m\\) are placed at positions \\(x = 0\\) and \\(x = %d\\). Find the center of mass of the system.", 2*d),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(\\bar{x} = \\frac{\\sum m_i x_i}{\\sum m_i}\\).\n"+
+				"Subgoal 2: Substitute \\(m_1 = m_2 = m\\), \\(x_1 = 0\\) and \\(x_2 = %d\\).\n"+
+				"Subgoal 3: Evaluate: \\(\\bar{x} = \\frac{m(0) + m(%d)}{2m} = \\frac{%d}{2} = %d\\).", 2*d, 2*d, 2*d, ans),
+		}
 	}
-	table := []entry{
-		{"A rod on \\([0,2]\\) has density \\(\\rho=1\\). Where is its center of mass?", "1", "Uniform rod: midpoint \\(\\bar{x} = 1\\)."},
-		{"A rod on \\([0,6]\\) has density \\(\\rho=1\\). Where is its center of mass?", "3", "Center of mass is total moment divided by total mass: xbar = (1/M) times integral of x·ρ(x)dx. Uniform rod: midpoint \\(\\bar{x} = 3\\)."},
-		{"A rod on \\([0,4]\\) has density \\(\\rho=2\\). Where is its center of mass?", "2", "Uniform density: midpoint \\(\\bar{x} = 2\\)."},
-		{"A rod on \\([0,1]\\) has density \\(\\rho(x)=x\\). Find its total mass.", "1/2", "Mass \\(= \\int_{0}^{1}x\\,dx = 1/2\\)."},
-	}
-	e := table[rand.Intn(len(table))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type integralSurfaceAreaGen struct{}
@@ -2079,31 +2353,140 @@ func (g *integralSurfaceAreaGen) Generate(ctx generator.GeneratorContext) genera
 type integralTrapezoidGen struct{}
 
 func (g *integralTrapezoidGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Trapezoidal approximation for f(x) = x^2 on [0, 2k] with n = 1 -> T_1 = 4 k^3
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b := 2 * k
+		ans := 4 * k * k * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Approximate \\(\\int_{0}^{%d} x^2\\,dx\\) using the Trapezoidal Rule with \\(n = 1\\) subinterval.", b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Trapezoidal Rule for \\(n = 1\\): \\(T_1 = \\frac{b-a}{2} (f(a) + f(b))\\).\n"+
+				"Subgoal 2: Substitute \\(a = 0\\), \\(b = %d\\), \\(f(0) = 0\\) and \\(f(%d) = %d\\).\n"+
+				"Subgoal 3: Evaluate: \\(T_1 = \\frac{%d}{2} (0 + %d) = %d \\cdot %d = %d\\).", b, b, b*b, b, b*b, k, b*b, ans),
+		}
+	case 1:
+		// Trapezoidal rule for linear function f(x) = 2mx + b0 on [0, L] with n = 2 -> exact integral m L^2 + b0 L
+		m := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b0 := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		L := 2 * mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		ans := m*L*L + b0*L
+		coeff := 2 * m
+		return generator.Problem{
+			Question: fmt.Sprintf("Approximate \\(\\int_{0}^{%d} (%d x + %d)\\,dx\\) using the Trapezoidal Rule with \\(n = 2\\).", L, coeff, b0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Trapezoidal Rule: \\(T_n = \\frac{\\Delta x}{2} [f(x_0) + 2f(x_1) + f(x_2)]\\).\n"+
+				"Subgoal 2: Note that the Trapezoidal Rule is exact for linear polynomials, so \\(T_2 = \\int_{0}^{%d} (%d x + %d)\\,dx\\).\n"+
+				"Subgoal 3: Evaluate the exact integral: \\([%d x^2 + %d x]_{0}^{%d} = %d\\).", L, coeff, b0, m, b0, L, ans),
+		}
+	case 2:
+		// Trapezoidal approximation for f(x) = x^2 on [0, 2k] with n = 2 -> T_2 = 3 k^3
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b := 2 * k
+		ans := 3 * k * k * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Use the Trapezoidal Rule with \\(n = 2\\) subintervals to approximate \\(\\int_{0}^{%d} x^2\\,dx\\).", b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(\\Delta x = \\frac{b-a}{n} = %d\\), \\(T_2 = \\frac{%d}{2} [f(0) + 2f(%d) + f(%d)]\\).\n"+
+				"Subgoal 2: Substitute function values \\(f(0) = 0\\), \\(f(%d) = %d\\) and \\(f(%d) = %d\\).\n"+
+				"Subgoal 3: Calculate: \\(\\frac{%d}{2} [0 + 2(%d) + %d] = \\frac{%d}{2} [%d] = %d\\).", k, k, k, b, k, k*k, b, b*b, k, k*k, b*b, k, 2*k*k+b*b, ans),
+		}
+	case 3:
+		// Subinterval count n given [a, b] and h -> n = (b - a) / h
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		h := mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+		n := mathutil.ScaleInt(ctx.Difficulty, 4, 12)
+		b := a + n*h
+		ans := n
+		return generator.Problem{
+			Question: fmt.Sprintf("If the interval \\([%d, %d]\\) is divided into subintervals of uniform width \\(\\Delta x = %d\\), how many subintervals \\(n\\) are created?", a, b, h),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: \\(\\Delta x = \\frac{b - a}{n} \\implies n = \\frac{b - a}{\\Delta x}\\).\n"+
+				"Subgoal 2: Substitute parameters \\(a = %d\\), \\(b = %d\\) and \\(\\Delta x = %d\\).\n"+
+				"Subgoal 3: Compute: \\(n = \\frac{%d - %d}{%d} = \\frac{%d}{%d} = %d\\).", a, b, h, b, a, h, b-a, h, ans),
+		}
+	default:
+		// Trapezoidal rule for f(x) = 2kx^2 on [0, 2] with n = 1 -> T_1 = 8k
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		ans := 8 * k
+		coeff := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Approximate \\(\\int_{0}^{2} %d x^2\\,dx\\) using the Trapezoidal Rule with \\(n = 1\\).", coeff),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Trapezoidal Rule: \\(T_1 = \\frac{b-a}{2} (f(a) + f(b))\\).\n"+
+				"Subgoal 2: For \\([0, 2]\\), \\(\\frac{b-a}{2} = 1\\), \\(f(0) = 0\\) and \\(f(2) = %d(4) = %d\\).\n"+
+				"Subgoal 3: Evaluate: \\(T_1 = 1 \\cdot (0 + %d) = %d\\).", coeff, 4*coeff, 4*coeff, ans),
+		}
 	}
-	table := []entry{
-		{"Approximate \\(\\int_{0}^{2}x^{2}\\,dx\\) with one trapezoid.", "4", "Trapezoidal rule: average height ((0+4)/2=2) times width 2 = 4 (true value 8/3). Endpoints count once, interior twice, scaled by Δx/2."},
-		{"Approximate \\(\\int_{0}^{2}x\\,dx\\) with one trapezoid.", "2", "Average height \\((0+2)/2=1\\) times width 2: 2."},
-		{"Approximate \\(\\int_{0}^{1}x^{2}\\,dx\\) with one trapezoid.", "1/2", "Average height \\((0+1)/2\\) times width 1: \\(1/2\\) (true value \\(1/3\\))."},
-	}
-	e := table[rand.Intn(len(table))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type integralSimpsonGen struct{}
 
 func (g *integralSimpsonGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Simpson's rule for cubic f(x) = x^3 on [0, 2k] with n = 2 -> exact integral (2k)^4 / 4 = 4 k^4
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b := 2 * k
+		ans := 4 * k * k * k * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Approximate \\(\\int_{0}^{%d} x^3\\,dx\\) using Simpson's Rule with \\(n = 2\\).", b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: Simpson's Rule is exact for polynomials of degree up to 3.\n"+
+				"Subgoal 2: Recognize that \\(S_2 = \\int_{0}^{%d} x^3\\,dx\\).\n"+
+				"Subgoal 3: Evaluate the exact integral: \\([\\frac{x^4}{4}]_{0}^{%d} = \\frac{%d^4}{4} = %d\\).", b, b, b, ans),
+		}
+	case 1:
+		// Simpson's rule for quadratic f(x) = 3 x^2 on [0, 2k] with n = 2 -> exact integral (2k)^3 = 8 k^3
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b := 2 * k
+		ans := 8 * k * k * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Use Simpson's Rule with \\(n = 2\\) subintervals to approximate \\(\\int_{0}^{%d} 3x^2\\,dx\\).", b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: Simpson's Rule is exact for quadratic polynomials.\n"+
+				"Subgoal 2: Evaluate \\(S_2 = \\int_{0}^{%d} 3x^2\\,dx = [x^3]_{0}^{%d}\\).\n"+
+				"Subgoal 3: Compute: \\(%d^3 = %d\\).", b, b, b, ans),
+		}
+	case 2:
+		// What is the smallest even number of subintervals n usable in Simpson's rule?
+		return generator.Problem{
+			Question: "What is the smallest number of subintervals \\(n\\) required to apply Simpson's Rule?",
+			Answer:   "2",
+			Explanation: "Subgoal 1: State the requirement for Simpson's Rule: parabolas are fit across pairs of adjacent subintervals.\n" +
+				"Subgoal 2: Deduce that \\(n\\) must be an even positive integer.\n" +
+				"Subgoal 3: Identify the smallest positive even integer: \\(n = 2\\).",
+		}
+	case 3:
+		// Simpson's rule for linear f(x) = 2mx on [0, 2k] with n = 2 -> exact integral 4 m k^2
+		m := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		b := 2 * k
+		ans := 4 * m * k * k
+		coeff := 2 * m
+		return generator.Problem{
+			Question: fmt.Sprintf("Approximate \\(\\int_{0}^{%d} %d x\\,dx\\) using Simpson's Rule with \\(n = 2\\).", b, coeff),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: Simpson's Rule \\(S_2 = \\frac{\\Delta x}{3} [f(x_0) + 4f(x_1) + f(x_2)]\\).\n"+
+				"Subgoal 2: Because the integrand is linear, Simpson's Rule gives the exact integral value \\(\\int_{0}^{%d} %d x\\,dx\\).\n"+
+				"Subgoal 3: Evaluate: \\([%d x^2]_{0}^{%d} = %d \\cdot %d = %d\\).", b, coeff, m, b, m, b*b, ans),
+		}
+	default:
+		// Simpson's rule for f(x) = x^2 on [0, 6k] with n = 2 -> exact value 72 k^3
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+		b := 6 * k
+		ans := 72 * k * k * k
+		return generator.Problem{
+			Question: fmt.Sprintf("Apply Simpson's Rule with \\(n = 2\\) subintervals to approximate \\(\\int_{0}^{%d} x^2\\,dx\\).", b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State governing formula: Simpson's Rule is exact for quadratic polynomials.\n"+
+				"Subgoal 2: Compute exact integral \\(\\int_{0}^{%d} x^2\\,dx = [\\frac{x^3}{3}]_{0}^{%d}\\).\n"+
+				"Subgoal 3: Calculate: \\(\\frac{%d^3}{3} = \\frac{%d}{3} = %d\\).", b, b, b, b*b*b, ans),
+		}
 	}
-	table := []entry{
-		{"Approximate \\(\\int_{0}^{4}x\\,dx\\) with Simpson's rule, \\(n=2\\).", "8", "Simpson coefficients alternate 4,2,4,... with endpoints once, scaled by Δx/3: (2/3)(0+4·2+4) = 8."},
-		{"What is the smallest even \\(n\\) usable in Simpson's rule? (enter a number)", "2", "Each parabola spans two subintervals, so n must be even; parabolas are fit over pairs of subintervals."},
-		{"Approximate \\(\\int_{0}^{2}x\\,dx\\) with Simpson's rule, \\(n=2\\).", "2", "Linear functions are integrated exactly: \\((1/3)(0+4\\cdot 1+2) = 2\\)."},
-	}
-	e := table[rand.Intn(len(table))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type integralImproperCompareGen struct{}
