@@ -259,3 +259,97 @@ func itoa(n int) string {
 	}
 	return string(b)
 }
+
+func TestAnomaliesAndErrorsFilters(t *testing.T) {
+	findings := []Finding{
+		{Severity: SeverityError, Kind: "err_one", Detail: "fatal condition"},
+		{Severity: SeverityAnomaly, Kind: "anom_one", Detail: "data anomaly"},
+		{Severity: SeverityError, Kind: "err_two", Detail: "another error"},
+	}
+
+	errs := Errors(findings)
+	if len(errs) != 2 || errs[0].Kind != "err_one" || errs[1].Kind != "err_two" {
+		t.Fatalf("expected 2 errors filtered, got %+v", errs)
+	}
+
+	anoms := Anomalies(findings)
+	if len(anoms) != 1 || anoms[0].Kind != "anom_one" {
+		t.Fatalf("expected 1 anomaly filtered, got %+v", anoms)
+	}
+}
+
+func TestLoadMasteryUnits_FileErrors(t *testing.T) {
+	// Missing file
+	if _, err := LoadMasteryUnits(filepath.Join(t.TempDir(), "nonexistent.json")); err == nil {
+		t.Fatal("expected error loading nonexistent file")
+	}
+
+	// Corrupt file
+	corruptPath := filepath.Join(t.TempDir(), "corrupt.json")
+	if err := os.WriteFile(corruptPath, []byte("not valid json"), 0644); err != nil {
+		t.Fatalf("write corrupt json: %v", err)
+	}
+	if _, err := LoadMasteryUnits(corruptPath); err == nil {
+		t.Fatal("expected error unmarshaling corrupt file")
+	}
+}
+
+func TestValidateMasteryUnits_InvalidBandWidth(t *testing.T) {
+	dag := testDAG(t)
+	mu := &MasteryUnits{
+		BandWidth: 0,
+	}
+	findings := ValidateMasteryUnits(dag, mu)
+	errs := Errors(findings)
+	if len(errs) != 1 || errs[0].Kind != "band_width" {
+		t.Fatalf("expected band_width error finding, got %+v", errs)
+	}
+}
+
+func TestValidateMasteryUnits_SchemaViolations(t *testing.T) {
+	dag := testDAG(t)
+	baseDraft, err := BuildMasteryUnitDraft(dag, 3)
+	if err != nil {
+		t.Fatalf("build base draft: %v", err)
+	}
+
+	// Create test units with schema violations
+	brokenUnits := make([]MasteryUnit, len(baseDraft.Units))
+	copy(brokenUnits, baseDraft.Units)
+
+	// 1. Duplicate unit ID
+	brokenUnits[1].ID = brokenUnits[0].ID
+
+	// 2. Dangling concept
+	brokenUnits[0].ConceptIDs = append(brokenUnits[0].ConceptIDs, "nonexistent.concept.id")
+
+	// 3. Stale count
+	brokenUnits[0].ConceptCount = len(brokenUnits[0].ConceptIDs) + 5
+
+	mu := &MasteryUnits{
+		Draft:        true,
+		BandWidth:    3,
+		ConceptCount: baseDraft.ConceptCount,
+		Units:        brokenUnits,
+	}
+
+	kinds := map[string]bool{}
+	for _, f := range ValidateMasteryUnits(dag, mu) {
+		kinds[f.Kind] = true
+	}
+
+	for _, expectedKind := range []string{"duplicate_unit_id", "dangling_concept", "stale_count"} {
+		if !kinds[expectedKind] {
+			t.Errorf("expected finding kind %q in findings, got: %+v", expectedKind, kinds)
+		}
+	}
+}
+
+func TestUnitTitle_Formatting(t *testing.T) {
+	if got := UnitTitle("differential_equations", 0); got != "Differential Equations · Stage 1" {
+		t.Errorf("unexpected UnitTitle: %q", got)
+	}
+	if got := UnitTitle("linear__algebra", 2); got != "Linear  Algebra · Stage 3" {
+		t.Errorf("unexpected UnitTitle with empty token: %q", got)
+	}
+}
