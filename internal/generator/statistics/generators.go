@@ -637,24 +637,126 @@ func (g *betaGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type binomialDistGen struct{}
 
 func (g *binomialDistGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"What is the expected value of Binomial(n,p)?", "np", "E[X] = np for Binomial(n,p)."},
-		{"What is the variance of Binomial(n,p)?", "np(1-p)", "Var[X] = np(1-p) for Binomial(n,p)."},
-		{"A Binomial distribution counts the number of ____ in n independent trials.", "successes", "Binomial: count of successes in n independent Bernoulli trials."},
-		{"In the Binomial PMF, what is C(5,2), the number of ways to get 2 successes in 5 trials?", "10", "The binomial PMF is C(n,k) p^k (1-p)^(n-k); here C(5,2) = 10."},
-		{"How many outcomes does a single Binomial trial have?", "2", "Each trial is Bernoulli with 2 outcomes (success/failure)."},
-		{"What condition must hold between trials in a Binomial experiment?", "independence", "Binomial trials must be independent of each other."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type item struct {
+			n int
+			p float64
+		}
+		items := []item{
+			{20, 0.25},
+			{50, 0.40},
+			{60, 0.15},
+			{80, 0.35},
+			{45, 0.20},
+			{30, 0.40},
+			{75, 0.60},
+			{120, 0.05},
+		}
+		it := items[rand.Intn(len(items))]
+		mean := int(math.Round(float64(it.n) * it.p))
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Binomial}(%d, %.2f)\\). Compute the expected value \\(E[X]\\).", it.n, it.p),
+			Answer:   fmt.Sprintf("%d", mean),
+			Explanation: fmt.Sprintf("The expected value of a binomial random variable is \\(E[X] = n p = %d \\times %.2f = %d\\).",
+				it.n, it.p, mean),
+		}
+	case 1:
+		type varItem struct {
+			n int
+			p float64
+			v int
+		}
+		items := []varItem{
+			{36, 0.50, 9},
+			{64, 0.50, 16},
+			{100, 0.50, 25},
+			{144, 0.50, 36},
+			{25, 0.20, 4},
+			{50, 0.20, 8},
+			{75, 0.20, 12},
+			{100, 0.20, 16},
+			{100, 0.10, 9},
+			{200, 0.10, 18},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Binomial}(%d, %.2f)\\). Calculate the variance \\(\\operatorname{Var}(X)\\).", it.n, it.p),
+			Answer:   fmt.Sprintf("%d", it.v),
+			Explanation: fmt.Sprintf("The variance of a binomial random variable is \\(\\operatorname{Var}(X) = n p (1 - p) = %d \\times %.2f \\times %.2f = %d\\).",
+				it.n, it.p, 1-it.p, it.v),
+		}
+	case 2:
+		type sdItem struct {
+			n  int
+			p  float64
+			v  int
+			sd int
+		}
+		items := []sdItem{
+			{36, 0.50, 9, 3},
+			{64, 0.50, 16, 4},
+			{100, 0.50, 25, 5},
+			{144, 0.50, 36, 6},
+			{25, 0.20, 4, 2},
+			{100, 0.20, 16, 4},
+			{225, 0.20, 36, 6},
+			{100, 0.10, 9, 3},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A random variable \\(X\\) follows a binomial distribution \\(\\operatorname{Binomial}(%d, %.2f)\\). Find the standard deviation \\(\\sigma\\).", it.n, it.p),
+			Answer:   fmt.Sprintf("%d", it.sd),
+			Explanation: fmt.Sprintf("The standard deviation is \\(\\sigma = \\sqrt{n p (1 - p)} = \\sqrt{%d \\times %.2f \\times %.2f} = \\sqrt{%d} = %d\\).",
+				it.n, it.p, 1-it.p, it.v, it.sd),
+		}
+	case 3:
+		type combItem struct {
+			n int
+			k int
+			c int
+		}
+		items := []combItem{
+			{5, 2, 10},
+			{6, 2, 15},
+			{6, 3, 20},
+			{7, 2, 21},
+			{7, 3, 35},
+			{8, 2, 28},
+			{8, 3, 56},
+			{9, 2, 36},
+			{10, 2, 45},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("In a binomial experiment with \\(n = %d\\) trials, how many distinct sequences contain exactly \\(k = %d\\) successes?", it.n, it.k),
+			Answer:   fmt.Sprintf("%d", it.c),
+			Explanation: fmt.Sprintf("The number of sequences is given by the binomial coefficient \\(\\binom{n}{k} = \\binom{%d}{%d} = \\frac{%d!}{%d!(%d - %d)!} = %d\\).",
+				it.n, it.k, it.n, it.k, it.n, it.k, it.c),
+		}
+	default:
+		type sumItem struct {
+			n1 int
+			n2 int
+			p  float64
+			e  int
+		}
+		items := []sumItem{
+			{30, 20, 0.40, 20},
+			{45, 35, 0.25, 20},
+			{25, 15, 0.50, 20},
+			{40, 60, 0.30, 30},
+			{70, 50, 0.15, 18},
+			{50, 50, 0.10, 10},
+		}
+		it := items[rand.Intn(len(items))]
+		nTotal := it.n1 + it.n2
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X_1 \\sim \\operatorname{Binomial}(%d, %.2f)\\) and \\(X_2 \\sim \\operatorname{Binomial}(%d, %.2f)\\) be independent random variables. Find the expected value of their sum \\(E[X_1 + X_2]\\).", it.n1, it.p, it.n2, it.p),
+			Answer:   fmt.Sprintf("%d", it.e),
+			Explanation: fmt.Sprintf("By linearity of expectation, \\(E[X_1 + X_2] = E[X_1] + E[X_2] = (n_1 + n_2)p = (%d + %d) \\times %.2f = %d \\times %.2f = %d\\).",
+				it.n1, it.n2, it.p, nTotal, it.p, it.e),
+		}
 	}
 }
 
