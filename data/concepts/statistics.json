@@ -370,7 +370,7 @@
   "label": "Uniform distribution",
   "domain": "statistics",
   "subdomain": "statistics.distributions",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "stat.prob.continuous_rv"
   ],

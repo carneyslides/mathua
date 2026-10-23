@@ -880,24 +880,123 @@ func (g *studentTGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type uniformDistGen struct{}
 
 func (g *uniformDistGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"What is the mean of Uniform(a,b)?", "(a+b)/2", "E[X] = (a+b)/2 for Uniform(a,b)."},
-		{"For Uniform(0,12), what is the variance?", "12", "Var = (b-a)^2/12 = 144/12."},
-		{"For Uniform(2,6), what is the density value as a decimal?", "0.25", "Density = 1/(b-a) = 1/4 on the interval, 0 otherwise."},
-		{"Is Uniform(0,1) the same as Beta(1,1)? (yes/no)", "yes", "Beta(1,1) = Uniform(0,1)."},
-		{"In a Uniform distribution, all outcomes are ____.", "equally likely", "Uniform: constant probability density over the interval."},
-		{"For Uniform(3,9), what is the length of the support interval?", "6", "Uniform is defined on the interval from a to b, here length 9-3."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type meanItem struct {
+			a int
+			b int
+		}
+		items := []meanItem{
+			{4, 16},
+			{10, 34},
+			{6, 26},
+			{12, 48},
+			{5, 35},
+			{8, 40},
+			{14, 50},
+		}
+		it := items[rand.Intn(len(items))]
+		mean := (it.a + it.b) / 2
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Uniform}(%d, %d)\\) be a continuous uniform random variable. Find the expected value \\(E[X]\\).", it.a, it.b),
+			Answer:   fmt.Sprintf("%d", mean),
+			Explanation: fmt.Sprintf("The expected value of a uniform random variable on interval \\([a, b]\\) is \\(E[X] = \\frac{a + b}{2} = \\frac{%d + %d}{2} = %d\\).",
+				it.a, it.b, mean),
+		}
+	case 1:
+		type varItem struct {
+			a int
+			b int
+		}
+		items := []varItem{
+			{0, 12},
+			{2, 14},
+			{1, 19},
+			{0, 24},
+			{4, 16},
+			{5, 11},
+			{10, 40},
+			{7, 25},
+		}
+		it := items[rand.Intn(len(items))]
+		diff := it.b - it.a
+		v := diff * diff / 12
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Uniform}(%d, %d)\\). Calculate the variance \\(\\operatorname{Var}(X)\\).", it.a, it.b),
+			Answer:   fmt.Sprintf("%d", v),
+			Explanation: fmt.Sprintf("The variance of a uniform distribution on \\([a, b]\\) is \\(\\operatorname{Var}(X) = \\frac{(b - a)^2}{12} = \\frac{(%d - %d)^2}{12} = \\frac{%d}{12} = %d\\).",
+				it.b, it.a, diff*diff, v),
+		}
+	case 2:
+		type cdfItem struct {
+			a   int
+			b   int
+			x   int
+			pct int
+		}
+		items := []cdfItem{
+			{0, 20, 8, 40},
+			{10, 50, 20, 25},
+			{5, 25, 15, 50},
+			{0, 50, 35, 70},
+			{20, 60, 50, 75},
+			{10, 35, 30, 80},
+			{0, 40, 24, 60},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A random variable \\(X\\) is uniformly distributed on the interval \\([%d, %d]\\). What is the probability \\(P(X \\le %d)\\) expressed as an integer percentage from 0 to 100?", it.a, it.b, it.x),
+			Answer:   fmt.Sprintf("%d", it.pct),
+			Explanation: fmt.Sprintf("For a uniform distribution on \\([a, b]\\), the cumulative probability is \\(P(X \\le %d) = \\frac{%d - %d}{%d - %d} = \\frac{%d}{%d} = %.2f\\), which equals %d percent.",
+				it.x, it.x, it.a, it.b, it.a, it.x-it.a, it.b-it.a, float64(it.pct)/100.0, it.pct),
+		}
+	case 3:
+		type subItem struct {
+			a   int
+			b   int
+			c   int
+			d   int
+			pct int
+		}
+		items := []subItem{
+			{0, 100, 25, 65, 40},
+			{10, 60, 20, 45, 50},
+			{0, 50, 15, 30, 30},
+			{20, 70, 30, 60, 60},
+			{0, 80, 16, 56, 50},
+			{0, 100, 15, 85, 70},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Uniform}(%d, %d)\\). Find the probability \\(P(%d \\le X \\le %d)\\) expressed as an integer percentage from 0 to 100.", it.a, it.b, it.c, it.d),
+			Answer:   fmt.Sprintf("%d", it.pct),
+			Explanation: fmt.Sprintf("The probability that \\(X\\) falls in sub-interval \\([%d, %d]\\) is \\(P(%d \\le X \\le %d) = \\frac{%d - %d}{%d - %d} = \\frac{%d}{%d} = %.2f\\), which equals %d percent.",
+				it.c, it.d, it.c, it.d, it.d, it.c, it.b, it.a, it.d-it.c, it.b-it.a, float64(it.pct)/100.0, it.pct),
+		}
+	default:
+		type m2Item struct {
+			a  int
+			b  int
+			m2 int
+		}
+		items := []m2Item{
+			{0, 6, 12},
+			{0, 9, 27},
+			{0, 12, 48},
+			{0, 15, 75},
+			{3, 6, 21},
+			{2, 8, 28},
+			{3, 9, 39},
+			{4, 10, 52},
+		}
+		it := items[rand.Intn(len(items))]
+		sumSq := it.a*it.a + it.a*it.b + it.b*it.b
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Uniform}(%d, %d)\\). Compute the second moment \\(E[X^2]\\).", it.a, it.b),
+			Answer:   fmt.Sprintf("%d", it.m2),
+			Explanation: fmt.Sprintf("The second moment of a continuous uniform distribution on \\([a, b]\\) is \\(E[X^2] = \\frac{a^2 + ab + b^2}{3} = \\frac{%d}{3} = %d\\).",
+				sumSq, it.m2),
+		}
 	}
 }
 
