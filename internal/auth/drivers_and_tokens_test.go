@@ -1,8 +1,12 @@
 package auth
 
 import (
+	"context"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -242,5 +246,192 @@ func TestApple_IsRelayAddress(t *testing.T) {
 		if got != c.isRelay {
 			t.Errorf("isRelayAddress(%q) = %v, want %v", c.email, got, c.isRelay)
 		}
+	}
+}
+
+func TestOAuth_HTTPHelpers(t *testing.T) {
+	ctx := context.Background()
+
+	// Server handling GET with bearer auth and POST with form body
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if r.URL.Path == "/error" {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			if r.Header.Get("Authorization") != "Bearer secret-token" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"status":"ok","value":42}`)
+
+		case http.MethodPost:
+			if r.URL.Path == "/fail" {
+				http.Error(w, "server error", http.StatusInternalServerError)
+				return
+			}
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if r.FormValue("code") != "auth-code-123" {
+				http.Error(w, "missing code", http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"access_token":"tok-abc"}`)
+		}
+	}))
+	defer ts.Close()
+
+	// Test oauthGetJSON success
+	var getResult struct {
+		Status string `json:"status"`
+		Value  int    `json:"value"`
+	}
+	if err := oauthGetJSON(ctx, ts.URL+"/get", "secret-token", &getResult); err != nil {
+		t.Fatalf("oauthGetJSON success case failed: %v", err)
+	}
+	if getResult.Status != "ok" || getResult.Value != 42 {
+		t.Errorf("unexpected getResult: %+v", getResult)
+	}
+
+	// Test oauthGetJSON non-200 error
+	if err := oauthGetJSON(ctx, ts.URL+"/error", "", &getResult); err == nil {
+		t.Fatal("expected error on non-200 GET, got nil")
+	}
+
+	// Test oauthPostForm success
+	form := url.Values{"code": {"auth-code-123"}}
+	var postResult struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := oauthPostForm(ctx, ts.URL+"/post", form, &postResult); err != nil {
+		t.Fatalf("oauthPostForm success case failed: %v", err)
+	}
+	if postResult.AccessToken != "tok-abc" {
+		t.Errorf("unexpected postResult token: %q", postResult.AccessToken)
+	}
+
+	// Test oauthPostForm non-200 error
+	if err := oauthPostForm(ctx, ts.URL+"/fail", form, &postResult); err == nil {
+		t.Fatal("expected error on non-200 POST, got nil")
+	}
+}
+
+func TestGoogle_RedirectURL_Variations(t *testing.T) {
+	// Explicit GOOGLE_REDIRECT_URL env override
+	t.Setenv("GOOGLE_REDIRECT_URL", "https://override.example.com/callback")
+	if got := googleRedirectURL(nil); got != "https://override.example.com/callback" {
+		t.Errorf("expected override URL, got %q", got)
+	}
+	t.Setenv("GOOGLE_REDIRECT_URL", "")
+
+	// Inferred from request headers
+	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/login", nil)
+	req.Host = "localhost:8080"
+	if got := googleRedirectURL(req); got != "http://localhost:8080/api/auth/google/callback" {
+		t.Errorf("expected localhost http URL, got %q", got)
+	}
+
+	// Forwarded proto
+	reqForwarded := httptest.NewRequest(http.MethodGet, "/login", nil)
+	reqForwarded.Host = "mathua.org"
+	reqForwarded.Header.Set("X-Forwarded-Proto", "https")
+	if got := googleRedirectURL(reqForwarded); got != "https://mathua.org/api/auth/google/callback" {
+		t.Errorf("expected forwarded https URL, got %q", got)
+	}
+
+	// Fallback to GOOGLE_REDIRECT_HOST
+	t.Setenv("GOOGLE_REDIRECT_HOST", "custom-host.org")
+	if got := googleRedirectURL(nil); got != "https://custom-host.org/api/auth/google/callback" {
+		t.Errorf("expected host fallback URL, got %q", got)
+	}
+	t.Setenv("GOOGLE_REDIRECT_HOST", "")
+
+	// Empty when no host available
+	if got := googleRedirectURL(nil); got != "" {
+		t.Errorf("expected empty string when unconfigured and request nil, got %q", got)
+	}
+}
+
+func TestExchange_UnconfiguredProviders(t *testing.T) {
+	ctx := context.Background()
+
+	// Clear provider environment variables for test isolation
+	t.Setenv("GITHUB_CLIENT_ID", "")
+	t.Setenv("GITHUB_OAUTH_CLIENT_ID", "")
+	t.Setenv("GITHUB_CLIENT_SECRET", "")
+	t.Setenv("GITHUB_OAUTH_CLIENT_SECRET", "")
+
+	t.Setenv("FACEBOOK_APP_ID", "")
+	t.Setenv("FACEBOOK_CLIENT_ID", "")
+	t.Setenv("FACEBOOK_APP_SECRET", "")
+	t.Setenv("FACEBOOK_CLIENT_SECRET", "")
+
+	t.Setenv("MICROSOFT_CLIENT_ID", "")
+	t.Setenv("MICROSOFT_CLIENT_SECRET", "")
+
+	t.Setenv("APPLE_CLIENT_ID", "")
+	t.Setenv("APPLE_SERVICES_ID", "")
+
+	t.Setenv("GOOGLE_CLIENT_ID", "")
+	t.Setenv("GOOGLE_OAUTH_CLIENT_ID", "")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "")
+	t.Setenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
+
+	if _, err := ExchangeGithubCode(ctx, "c", "r"); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Errorf("expected unconfigured error from ExchangeGithubCode, got %v", err)
+	}
+
+	if _, err := ExchangeFacebookCode(ctx, "c", "r"); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Errorf("expected unconfigured error from ExchangeFacebookCode, got %v", err)
+	}
+
+	if _, err := ExchangeMicrosoftCode(ctx, "c", "r"); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Errorf("expected unconfigured error from ExchangeMicrosoftCode, got %v", err)
+	}
+
+	if _, err := ExchangeAppleCode(ctx, "c", "r", ""); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Errorf("expected unconfigured error from ExchangeAppleCode, got %v", err)
+	}
+
+	if _, err := VerifyGoogleIDToken(ctx, "fake-tok"); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Errorf("expected unconfigured error from VerifyGoogleIDToken, got %v", err)
+	}
+
+	if _, err := ExchangeGoogleCode(ctx, "c", nil); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Errorf("expected unconfigured error from ExchangeGoogleCode, got %v", err)
+	}
+}
+
+func TestSecretMinLength(t *testing.T) {
+	if minLen := SecretMinLength(); minLen != 32 {
+		t.Errorf("expected SecretMinLength 32, got %d", minLen)
+	}
+}
+
+func TestReset_SMTPConfiguredAndFrontendBase(t *testing.T) {
+	// SMTPConfigured checks SMTP_HOST
+	t.Setenv("SMTP_HOST", "")
+	if SMTPConfigured() {
+		t.Error("expected SMTPConfigured false when empty")
+	}
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	if !SMTPConfigured() {
+		t.Error("expected SMTPConfigured true when populated")
+	}
+
+	// frontendBase reads FRONTEND_URL
+	t.Setenv("FRONTEND_URL", "  https://frontend.example.com  ")
+	if got := frontendBase(); got != "https://frontend.example.com" {
+		t.Errorf("expected trimmed FRONTEND_URL, got %q", got)
+	}
+
+	t.Setenv("FRONTEND_URL", "")
+	if got := frontendBase(); got != "" {
+		t.Errorf("expected empty string when unconfigured, got %q", got)
 	}
 }
