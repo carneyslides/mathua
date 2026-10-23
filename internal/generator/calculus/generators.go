@@ -777,95 +777,429 @@ func formatPoly(terms []term) string {
 type rolleGen struct{}
 
 func (g *rolleGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Quadratic f(x) = x^2 - (r1+r2)x + r1*r2 on [r1, r2] with r1, r2 same parity
+		r1 := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		span := 2 * mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		r2 := r1 + span
+		b := r1 + r2
+		cVal := r1 * r2
+		cMid := b / 2
+		return generator.Problem{
+			Question: fmt.Sprintf("For the function \\(f(x) = x^2 - %d x + %d\\) on the interval \\([%d, %d]\\), find the value \\(c \\in (%d, %d)\\) guaranteed by Rolle's Theorem such that \\(f'(c) = 0\\).", b, cVal, r1, r2, r1, r2),
+			Answer:   fmt.Sprintf("%d", cMid),
+			Explanation: fmt.Sprintf("Subgoal 1: State Rolle's Theorem: if \\(f\\) is continuous on \\([a, b]\\), differentiable on \\((a, b)\\) and \\(f(a) = f(b)\\), there exists \\(c \\in (a, b)\\) with \\(f'(c) = 0\\).\n"+
+				"Subgoal 2: Compute the derivative \\(f'(x) = 2x - %d\\) and set it to zero.\n"+
+				"Subgoal 3: Solve for \\(c\\): \\(2c - %d = 0 \\implies c = %d\\).", b, b, cMid),
+		}
+	case 1:
+		// Inverted quadratic f(x) = -x^2 + 2kx on [0, 2k]
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		b := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = -x^2 + %d x\\) on \\([0, %d]\\), find the critical point \\(c\\) guaranteed by Rolle's Theorem.", b, b),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("Subgoal 1: Confirm the boundary condition \\(f(0) = 0\\) and \\(f(%d) = -(%d)^2 + %d(%d) = 0\\).\n"+
+				"Subgoal 2: Compute \\(f'(x) = -2x + %d\\) and equate to zero.\n"+
+				"Subgoal 3: Solve \\(-2c + %d = 0 \\implies c = %d\\).", b, b, b, b, b, b, k),
+		}
+	case 2:
+		// Shifted quadratic f(x) = -(x - c0)^2 + d^2 on [c0-d, c0+d]
+		c0 := mathutil.ScaleInt(ctx.Difficulty, 2, 8)
+		d := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		aEnd := c0 - d
+		bEnd := c0 + d
+		lin := 2 * c0
+		constTerm := d*d - c0*c0
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = -x^2 + %d x + (%d)\\) on \\([%d, %d]\\), find the point \\(c\\) guaranteed by Rolle's Theorem.", lin, constTerm, aEnd, bEnd),
+			Answer:   fmt.Sprintf("%d", c0),
+			Explanation: fmt.Sprintf("Subgoal 1: State Rolle's Theorem: since \\(f(%d) = f(%d) = 0\\), a point \\(c \\in (%d, %d)\\) satisfies \\(f'(c) = 0\\).\n"+
+				"Subgoal 2: Differentiate: \\(f'(x) = -2x + %d\\).\n"+
+				"Subgoal 3: Set \\(-2c + %d = 0\\) and solve for \\(c = %d\\).", aEnd, bEnd, aEnd, bEnd, lin, lin, c0),
+		}
+	case 3:
+		// Value of derivative guaranteed by Rolle
+		x1 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		x2 := x1 + mathutil.ScaleInt(ctx.Difficulty, 2, 6)
+		return generator.Problem{
+			Question: fmt.Sprintf("If a differentiable function \\(f(x)\\) satisfies \\(f(%d) = f(%d)\\) on \\([%d, %d]\\), what is the value of \\(f'(c)\\) at the point \\(c\\) guaranteed by Rolle's Theorem?", x1, x2, x1, x2),
+			Answer:   "0",
+			Explanation: "Subgoal 1: State the conclusion of Rolle's Theorem: the derivative must vanish at some interior point \\(c \\in (a, b)\\).\n" +
+				"Subgoal 2: Identify the critical condition: \\(f'(c) = 0\\).\n" +
+				"Subgoal 3: Conclude that the derivative value is 0.",
+		}
+	default:
+		// Scaled quadratic f(x) = 2x^2 - 4cx + K on [c-d, c+d]
+		c := mathutil.ScaleInt(ctx.Difficulty, 2, 7)
+		d := mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+		x1 := c - d
+		x2 := c + d
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = 2x^2 - %d x\\) on \\([%d, %d]\\), find the value \\(c\\) where \\(f'(c) = 0\\) as guaranteed by Rolle's Theorem.", 4*c, x1, x2),
+			Answer:   fmt.Sprintf("%d", c),
+			Explanation: fmt.Sprintf("Subgoal 1: State Rolle's Theorem: since \\(f(%d) = f(%d)\\), there exists \\(c \\in (%d, %d)\\) with \\(f'(c) = 0\\).\n"+
+				"Subgoal 2: Differentiate \\(f(x)\\): \\(f'(x) = 4x - %d\\).\n"+
+				"Subgoal 3: Solve \\(4c - %d = 0 \\implies c = %d\\).", x1, x2, x1, x2, 4*c, 4*c, c),
+		}
 	}
-	table := []entry{
-		{"If f(a)=f(b) and f is continuous on [a,b], differentiable on (a,b), must some c in (a,b) have f'(c)=0? (yes/no)", "yes", "Rolle's theorem: there exists c∈(a,b) such that f'(c)=0."},
-		{"Does f(x)=x²-4 on [-2,2] satisfy Rolle's theorem?", "yes", "f(-2)=4-4=0, f(2)=4-4=0. f is continuous on [-2,2] and differentiable on (-2,2). So Rolle applies: f'(0)=0."},
-		{"Does f(x)=|x| on [-1,1] satisfy Rolle's theorem?", "no", "f(-1)=f(1)=1, but f(x)=|x| is not differentiable at x=0, so Rolle's theorem does not apply."},
-		{"Does f(x)=1/x on [1,2] satisfy Rolle's theorem?", "no", "f(1)=f(2)=1/2, but f is not continuous on the closed interval [1,2]? Well, 1/x is continuous on [1,2], actually wait — the condition fails because... Actually, Rolle would say there is a c with f'(c)=0, but f'(x)=-1/x² ≠ 0, so... Actually, f(1)=1≠1/2=f(2), so f(1)≠f(2). Rolle does not apply."},
-		{"If f(0)=f(6)=0 and f is differentiable everywhere, how many points with f'(c)=0 are guaranteed?", "at least one", "Rolle's theorem guarantees at least one c∈(0,6) with f'(c)=0 when f is continuous on [0,6] and differentiable on (0,6)."},
-	}
-	e := table[rand.Intn(len(table))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type mvtGen struct{}
 
 func (g *mvtGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Quadratic f(x) = x^2 on [a, b] with same parity
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		span := 2 * mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b := a + span
+		cMid := (a + b) / 2
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = x^2\\) on the interval \\([%d, %d]\\), find the value \\(c \\in (%d, %d)\\) satisfying the Mean Value Theorem.", a, b, a, b),
+			Answer:   fmt.Sprintf("%d", cMid),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Mean Value Theorem formula: \\(f'(c) = \\frac{f(b) - f(a)}{b - a}\\).\n"+
+				"Subgoal 2: Compute the average rate of change: \\(\\frac{(%d)^2 - (%d)^2}{%d - %d} = \\frac{%d - %d}{%d} = %d\\).\n"+
+				"Subgoal 3: Equate to \\(f'(c) = 2c = %d\\) and solve for \\(c = %d\\).", b, a, b, a, b*b, a*a, b-a, a+b, a+b, cMid),
+		}
+	case 1:
+		// General quadratic f(x) = kx^2 + mx on [a, b]
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		m := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		a := mathutil.ScaleInt(ctx.Difficulty, 0, 5)
+		span := 2 * mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+		b := a + span
+		cMid := (a + b) / 2
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = %d x^2 + %d x\\) on \\([%d, %d]\\), find the point \\(c\\) guaranteed by the Mean Value Theorem.", k, m, a, b),
+			Answer:   fmt.Sprintf("%d", cMid),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Mean Value Theorem: \\(f'(c) = \\frac{f(b) - f(a)}{b - a}\\).\n"+
+				"Subgoal 2: For any quadratic function, the instantaneous rate of change equals the average rate of change at the midpoint \\(c = \\frac{a + b}{2}\\).\n"+
+				"Subgoal 3: Calculate the midpoint: \\(c = \\frac{%d + %d}{2} = %d\\).", a, b, cMid),
+		}
+	case 2:
+		// Average rate of change on [0, b]
+		b := mathutil.ScaleInt(ctx.Difficulty, 2, 8)
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		ans := b + k
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the average rate of change \\(\\frac{f(b) - f(a)}{b - a}\\) of \\(f(x) = x^2 + %d x\\) on \\([0, %d]\\).", k, b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the average rate of change formula: \\(\\frac{f(b) - f(a)}{b - a}\\).\n"+
+				"Subgoal 2: Evaluate \\(f(%d) = (%d)^2 + %d(%d) = %d\\) and \\(f(0) = 0\\).\n"+
+				"Subgoal 3: Divide by interval width: \\(\\frac{%d - 0}{%d} = %d\\).", b, b, k, b, b*b+k*b, b*b+k*b, b, ans),
+		}
+	case 3:
+		// Kinematics velocity interpretation
+		hours := 2
+		if ctx.Difficulty > 0.5 {
+			hours = 3
+		}
+		speed := mathutil.ScaleInt(ctx.Difficulty, 45, 80)
+		miles := speed * hours
+		return generator.Problem{
+			Question: fmt.Sprintf("A car travels %d miles in %d hours. By the Mean Value Theorem, at what instantaneous speed (in mph) was the car traveling at some moment during the journey?", miles, hours),
+			Answer:   fmt.Sprintf("%d", speed),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Mean Value Theorem in kinematics: \\(v_{\\text{avg}} = \\frac{s(t_2) - s(t_1)}{t_2 - t_1} = s'(c)\\).\n"+
+				"Subgoal 2: Substitute distance \\(\\Delta s = %d\\) and time \\(\\Delta t = %d\\): \\(\\frac{%d}{%d}\\).\n"+
+				"Subgoal 3: Divide to obtain the instantaneous speed %d mph.", miles, hours, miles, hours, speed),
+		}
+	default:
+		// Cubic f(x) = x^3 on [0, 3k] derivative value f'(c)
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b := 3 * k
+		derivVal := b * b
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = x^3\\) on \\([0, %d]\\), what is the value of the derivative \\(f'(c)\\) guaranteed by the Mean Value Theorem?", b),
+			Answer:   fmt.Sprintf("%d", derivVal),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Mean Value Theorem: \\(f'(c) = \\frac{f(b) - f(a)}{b - a}\\).\n"+
+				"Subgoal 2: Evaluate \\(f(%d) = (%d)^3 = %d\\) and \\(f(0) = 0\\).\n"+
+				"Subgoal 3: Calculate \\(f'(c) = \\frac{%d}{%d} = %d\\).", b, b, b*b*b, b*b*b, b, derivVal),
+		}
 	}
-	table := []entry{
-		{"If f is continuous on [a,b] and differentiable on (a,b), does the MVT guarantee a point c in (a,b) with f'(c)=(f(b)-f(a))/(b-a)? (yes/no)", "yes", "MVT: there exists c in (a,b) such that f'(c)=(f(b)-f(a))/(b-a)."},
-		{"For f(x)=x² on [1,3], find c satisfying the MVT.", "2", "f(3)-f(1)=9-1=8, b-a=2. f'(c)=2c=8/2=4 → c=2."},
-		{"For f(x)=√x on [1,4], find c satisfying the MVT.", "2.25", "f(4)-f(1)=2-1=1, b-a=3. f'(c)=1/(2√c)=1/3 → 2√c=3 → c=9/4=2.25."},
-		{"If a police car travels 120 km in 1 hour, what does the MVT say?", "at some instant the speed was 120 km/h", "By MVT, average speed = 120 km/h. There must have been at least one instant with exactly 120 km/h."},
-	}
-	e := table[rand.Intn(len(table))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type cauchyMVTGen struct{}
 
 func (g *cauchyMVTGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// f(x) = x^2, g(x) = x on [a, b]
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		span := 2 * mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+		b := a + span
+		cMid := (a + b) / 2
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = x^2\\) and \\(g(x) = x\\) on \\([%d, %d]\\), find the value \\(c\\) satisfying Cauchy's Mean Value Theorem: \\(\\frac{f(b)-f(a)}{g(b)-g(a)} = \\frac{f'(c)}{g'(c)}\\).", a, b),
+			Answer:   fmt.Sprintf("%d", cMid),
+			Explanation: fmt.Sprintf("Subgoal 1: State Cauchy's Mean Value Theorem: \\(\\frac{f(b) - f(a)}{g(b) - g(a)} = \\frac{f'(c)}{g'(c)}\\).\n"+
+				"Subgoal 2: Differentiate \\(f'(x) = 2x\\) and \\(g'(x) = 1\\), giving quotient \\(\\frac{2c}{1} = \\frac{(%d)^2 - (%d)^2}{%d - %d} = %d\\).\n"+
+				"Subgoal 3: Solve for \\(c\\): \\(2c = %d \\implies c = %d\\).", a, b, a, b, a+b, a+b, cMid),
+		}
+	case 1:
+		// f(x) = x^3, g(x) = x^2 on [0, 3k] -> c = 2k
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		b := 3 * k
+		cVal := 2 * k
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = x^3\\) and \\(g(x) = x^2\\) on \\([0, %d]\\), find \\(c\\) satisfying Cauchy's Mean Value Theorem.", b),
+			Answer:   fmt.Sprintf("%d", cVal),
+			Explanation: fmt.Sprintf("Subgoal 1: State Cauchy's Mean Value Theorem: \\(\\frac{f(b) - f(a)}{g(b) - g(a)} = \\frac{f'(c)}{g'(c)}\\).\n"+
+				"Subgoal 2: Substitute derivatives \\(f'(c) = 3c^2\\) and \\(g'(c) = 2c\\), so \\(\\frac{3c^2}{2c} = \\frac{3}{2}c\\).\n"+
+				"Subgoal 3: Compute quotient \\(\\frac{(%d)^3 - 0}{(%d)^2 - 0} = %d\\) and solve \\(\\frac{3}{2}c = %d \\implies c = %d\\).", b, b, b, b, cVal),
+		}
+	case 2:
+		// Cauchy quotient evaluation for f(x) = kx^2 and g(x) = x on [0, b]
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		b := mathutil.ScaleInt(ctx.Difficulty, 2, 7)
+		ans := k * b
+		return generator.Problem{
+			Question: fmt.Sprintf("Compute the Cauchy quotient \\(\\frac{f(b)-f(a)}{g(b)-g(a)}\\) for \\(f(x) = %d x^2\\) and \\(g(x) = x\\) on \\([0, %d]\\).", k, b),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the Cauchy difference quotient: \\(\\frac{f(b) - f(a)}{g(b) - g(a)}\\).\n"+
+				"Subgoal 2: Evaluate \\(f(%d) = %d(%d)^2 = %d\\) and \\(g(%d) = %d\\).\n"+
+				"Subgoal 3: Divide: \\(\\frac{%d - 0}{%d - 0} = %d\\).", b, k, b, k*b*b, b, b, k*b*b, b, ans),
+		}
+	case 3:
+		// Cauchy ratio for f(x) = a*x, g(x) = b*x
+		m2 := mathutil.ScaleInt(ctx.Difficulty, 2, 4)
+		q := mathutil.ScaleInt(ctx.Difficulty, 2, 5)
+		m1 := m2 * q
+		return generator.Problem{
+			Question: fmt.Sprintf("For linear functions \\(f(x) = %d x\\) and \\(g(x) = %d x\\) on any interval \\([a, b]\\), what is the value of \\(\\frac{f'(c)}{g'(c)}\\)?", m1, m2),
+			Answer:   fmt.Sprintf("%d", q),
+			Explanation: fmt.Sprintf("Subgoal 1: Differentiate the linear functions: \\(f'(x) = %d\\) and \\(g'(x) = %d\\).\n"+
+				"Subgoal 2: Form the derivative ratio: \\(\\frac{f'(c)}{g'(c)} = \\frac{%d}{%d}\\).\n"+
+				"Subgoal 3: Divide to obtain %d.", m1, m2, m1, m2, q),
+		}
+	default:
+		// Denominator reduction when g(x) = x
+		x1 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		x2 := x1 + mathutil.ScaleInt(ctx.Difficulty, 2, 7)
+		width := x2 - x1
+		return generator.Problem{
+			Question: fmt.Sprintf("In Cauchy's Mean Value Theorem on \\([%d, %d]\\) with \\(g(x) = x\\), what is the denominator value \\(g(b) - g(a)\\)?", x1, x2),
+			Answer:   fmt.Sprintf("%d", width),
+			Explanation: fmt.Sprintf("Subgoal 1: Substitute \\(g(x) = x\\) into the denominator \\(g(b) - g(a)\\).\n"+
+				"Subgoal 2: Compute \\(b - a = %d - %d\\).\n"+
+				"Subgoal 3: Evaluate the difference: %d.", x2, x1, width),
+		}
 	}
-	table := []entry{
-		{"What does Cauchy's MVT generalize?", "the ordinary MVT", "Cauchy's MVT: (f(b)-f(a))/(g(b)-g(a)) = f'(c)/g'(c) for some c. It generalizes MVT (take g(x)=x)."},
-		{"Cauchy's MVT with g(x)=x gives what theorem?", "the ordinary MVT", "With g(x)=x, Cauchy says (f(b)-f(a))/(b-a)=f'(c)/1, which is the ordinary MVT."},
-		{"Must g prime of x be nonzero on (a,b) for Cauchy's MVT? (yes/no)", "yes", "The theorem requires g'(x) nonzero on (a,b) so the ratio f'(c)/g'(c) is defined."},
-	}
-	e := table[rand.Intn(len(table))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type fermatGen struct{}
 
 func (g *fermatGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		q, a, e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Parabola vertex local extremum c
+		h := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+		b := 2 * a * h
+		k := mathutil.ScaleInt(ctx.Difficulty, 1, 10)
+		cConst := a*h*h + k
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the critical point \\(c\\) where \\(f(x) = %d x^2 - %d x + %d\\) attains its local extremum according to Fermat's Theorem.", a, b, cConst),
+			Answer:   fmt.Sprintf("%d", h),
+			Explanation: fmt.Sprintf("Subgoal 1: State Fermat's Theorem: differentiable local extrema satisfy \\(f'(c) = 0\\).\n"+
+				"Subgoal 2: Differentiate: \\(f'(x) = 2(%d)x - %d = %d x - %d\\).\n"+
+				"Subgoal 3: Set \\(%d c - %d = 0\\) and solve for \\(c = %d\\).", a, b, 2*a, b, 2*a, b, h),
+		}
+	case 1:
+		// Value of derivative at local extremum
+		x0 := mathutil.ScaleInt(ctx.Difficulty, 1, 12)
+		return generator.Problem{
+			Question: fmt.Sprintf("If a differentiable function \\(f(x)\\) attains a local extremum at \\(x = %d\\), what is the value of \\(f'(%d)\\) by Fermat's Theorem?", x0, x0),
+			Answer:   "0",
+			Explanation: "Subgoal 1: State Fermat's Theorem on stationary points: if \\(f\\) has a local extremum at \\(c\\) and \\(f'(c)\\) exists, then \\(f'(c) = 0\\).\n" +
+				"Subgoal 2: Identify that \\(f\\) is differentiable at the local extremum.\n" +
+				"Subgoal 3: Conclude that \\(f'(c) = 0\\).",
+		}
+	case 2:
+		// Smaller critical point of cubic
+		h1 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		h2 := h1 + mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b := 3 * (h1 + h2)
+		cVal := 6 * h1 * h2
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the smaller critical point of \\(f(x) = 2x^3 - %d x^2 + %d x\\) where a local extremum may occur.", b, cVal),
+			Answer:   fmt.Sprintf("%d", h1),
+			Explanation: fmt.Sprintf("Subgoal 1: Differentiate \\(f(x)\\): \\(f'(x) = 6x^2 - %d x + %d = 6(x - %d)(x - %d)\\).\n"+
+				"Subgoal 2: Set \\(f'(x) = 0\\) to find stationary points \\(x = %d\\) and \\(x = %d\\).\n"+
+				"Subgoal 3: Select the smaller critical point: %d.", 2*b, cVal, h1, h2, h1, h2, h1),
+		}
+	case 3:
+		// Maximum value at stationary point for f(x) = -(x - h)^2 + K
+		h := mathutil.ScaleInt(ctx.Difficulty, 1, 7)
+		k := mathutil.ScaleInt(ctx.Difficulty, 5, 25)
+		return generator.Problem{
+			Question: fmt.Sprintf("The function \\(f(x) = -(x - %d)^2 + %d\\) attains its local maximum at its stationary point. What is this maximum value?", h, k),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("Subgoal 1: Apply Fermat's Theorem: the stationary point occurs where \\(f'(x) = -2(x - %d) = 0 \\implies x = %d\\).\n"+
+				"Subgoal 2: Substitute \\(x = %d\\) into \\(f(x)\\): \\(f(%d) = -(%d - %d)^2 + %d\\).\n"+
+				"Subgoal 3: Evaluate: \\(0 + %d = %d\\).", h, h, h, h, h, h, k, k, k),
+		}
+	default:
+		// Count of stationary points for non-degenerate quadratic
+		return generator.Problem{
+			Question: "How many stationary points (where \\(f'(c) = 0\\)) does a non-degenerate quadratic polynomial \\(f(x) = ax^2 + bx + c\\) possess?",
+			Answer:   "1",
+			Explanation: "Subgoal 1: Compute the derivative of a quadratic: \\(f'(x) = 2ax + b\\).\n" +
+				"Subgoal 2: Set \\(2ax + b = 0\\).\n" +
+				"Subgoal 3: Since \\(a \\ne 0\\), there is exactly one unique solution \\(x = -\\frac{b}{2a}\\), so the count is 1.",
+		}
 	}
-	table := []entry{
-		{"If f has a local extremum at c and f'(c) exists, what must f'(c) be?", "0", "Fermat's theorem: differentiable local extrema occur at critical points where f'(c)=0."},
-		{"Does Fermat's theorem apply to f(x)=|x| at x=0?", "no", "f'(0) does not exist, so Fermat's theorem does not apply, even though x=0 is a local minimum."},
-		{"Does Fermat's theorem apply to f(x)=x³ at x=0?", "no", "f'(0)=0 exists, but x=0 is not a local extremum — it's an inflection point. Fermat says if there IS an extremum AND derivative exists, then f'=0. The converse is not true."},
-		{"If f has a local max at c and f'(c) exists, must f'(c) equal 0? (yes/no)", "yes", "If f has a local max or min at c and f is differentiable at c, then f'(c)=0."},
-	}
-	e := table[rand.Intn(len(table))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type differenceQuotientGen struct{}
 
 func (g *differenceQuotientGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
-	h := rand.Intn(max(1, scale)) + 1
-	x0 := rand.Intn(max(1, scale*2)) + 1
-	fx := x0 * x0
-	fxh := (x0 + h) * (x0 + h)
-	ans := (fxh - fx) / h
-	return generator.Problem{
-		Question:    fmt.Sprintf("For \\(f(x)=x^{2}\\), what is the difference quotient \\(\\frac{f(%d+h)-f(%d)}{h}\\) for \\(h=%d\\)?", x0, x0, h),
-		Answer:      fmt.Sprintf("%d", ans),
-		Explanation: fmt.Sprintf("(f(%d+h)-f(%d))/h = ((%d+h)²-%d²)/h = (%d²+2·%d·h+h²-%d²)/h = (2·%d·h+h²)/h = 2·%d+h = %d.", x0, x0, x0, x0, x0, x0, x0, x0, x0, ans),
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// f(x) = a x^2 + b x
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		x0 := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		h := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		fx0 := a*x0*x0 + b*x0
+		x1 := x0 + h
+		fx1 := a*x1*x1 + b*x1
+		ans := (fx1 - fx0) / h
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = %d x^2 + %d x\\), compute the difference quotient \\(\\frac{f(%d + %d) - f(%d)}{%d}\\).", a, b, x0, h, x0, h),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: State the difference quotient formula: \\(\\frac{f(x_0 + h) - f(x_0)}{h}\\).\n"+
+				"Subgoal 2: Evaluate \\(f(%d) = %d\\) and \\(f(%d) = %d\\), so \\(f(%d) - f(%d) = %d - %d = %d\\).\n"+
+				"Subgoal 3: Divide by \\(h = %d\\): \\(\\frac{%d}{%d} = %d\\).", x1, fx1, x0, fx0, x1, x0, fx1, fx0, fx1-fx0, h, fx1-fx0, h, ans),
+		}
+	case 1:
+		// Linear function f(x) = m x + b
+		m := mathutil.ScaleInt(ctx.Difficulty, 2, 8)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 10)
+		x0 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		h := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		return generator.Problem{
+			Question: fmt.Sprintf("For linear function \\(f(x) = %d x + %d\\), compute the difference quotient \\(\\frac{f(%d + %d) - f(%d)}{%d}\\).", m, b, x0, h, x0, h),
+			Answer:   fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf("Subgoal 1: State the difference quotient for a linear function: \\(\\frac{f(x + h) - f(x)}{h}\\).\n"+
+				"Subgoal 2: Substitute \\(f(x + h) - f(x) = [%d(x + h) + %d] - [%d x + %d] = %d h\\).\n"+
+				"Subgoal 3: Divide by \\(h\\): \\(\\frac{%d h}{h} = %d\\).", m, b, m, b, m, m, m),
+		}
+	case 2:
+		// f(x) = x^3 at x0 = 1
+		h := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		ans := 3 + 3*h + h*h
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = x^3\\), compute the difference quotient \\(\\frac{f(1 + %d) - f(1)}{%d}\\).", h, h),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: Expand \\(f(1 + h) = (1 + h)^3 = 1 + 3h + 3h^2 + h^3\\).\n"+
+				"Subgoal 2: Subtract \\(f(1) = 1\\) to get \\(3h + 3h^2 + h^3\\), and divide by \\(h\\) to obtain \\(3 + 3h + h^2\\).\n"+
+				"Subgoal 3: Substitute \\(h = %d\\): \\(3 + 3(%d) + (%d)^2 = 3 + %d + %d = %d\\).", h, h, h, 3*h, h*h, ans),
+		}
+	case 3:
+		// Limit of difference quotient (instantaneous derivative)
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		x0 := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		ans := 2 * a * x0
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the limit of the difference quotient \\(\\lim_{h \\to 0} \\frac{f(%d + h) - f(%d)}{h}\\) for \\(f(x) = %d x^2\\)?", x0, x0, a),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: Recognize that the limit of the difference quotient defines the derivative: \\(f'(x_0) = \\lim_{h \\to 0} \\frac{f(x_0 + h) - f(x_0)}{h}\\).\n"+
+				"Subgoal 2: Differentiate \\(f(x) = %d x^2\\): \\(f'(x) = 2(%d)x = %d x\\).\n"+
+				"Subgoal 3: Evaluate at \\(x = %d\\): \\(f'(%d) = %d(%d) = %d\\).", a, a, 2*a, x0, x0, 2*a, x0, ans),
+		}
+	default:
+		// Quadratic difference quotient at x0 = 0
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		h := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		ans := a*h + b
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = %d x^2 + %d x\\), compute \\(\\frac{f(%d) - f(0)}{%d}\\).", a, b, h, h),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: Substitute \\(x = %d\\) into \\(f(x)\\): \\(f(%d) = %d(%d)^2 + %d(%d) = %d\\).\n"+
+				"Subgoal 2: Subtract \\(f(0) = 0\\), giving numerator %d.\n"+
+				"Subgoal 3: Divide by %d: \\(\\frac{%d}{%d} = %d\\).", h, h, a, h, b, h, a*h*h+b*h, a*h*h+b*h, h, a*h*h+b*h, h, ans),
+		}
 	}
 }
 
 type differentialGen struct{}
 
 func (g *differentialGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
-	x0 := rand.Intn(max(1, scale*2)) + 1
-	dx := 0.1 + float64(rand.Intn(5))/10.0
-	fpx := float64(2 * x0)
-	dy := fpx * dx
-	return generator.Problem{
-		Question:    fmt.Sprintf("If \\(y=x^{2}\\) at \\(x=%d\\), approximate \\(\\Delta y\\) using the differential \\(dy\\) when \\(dx=%.1f\\).", x0, dx),
-		Answer:      fmt.Sprintf("%.2f", dy),
-		Explanation: fmt.Sprintf("dy = f'(x)dx = 2x·dx = 2·%d·%.1f = %.2f. The actual Δy is (%.1f)²-%d² = %.2f-%d = %.2f.", x0, dx, dy, float64(x0)+dx, x0, (float64(x0)+dx)*(float64(x0)+dx), x0*x0, (float64(x0)+dx)*(float64(x0)+dx)-float64(x0*x0)),
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Differential dy = f'(x) dx for y = a x^2
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		x0 := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		dx := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		dy := 2 * a * x0 * dx
+		return generator.Problem{
+			Question: fmt.Sprintf("If \\(y = %d x^2\\) at \\(x = %d\\), compute the differential \\(dy\\) for \\(dx = %d\\).", a, x0, dx),
+			Answer:   fmt.Sprintf("%d", dy),
+			Explanation: fmt.Sprintf("Subgoal 1: State the differential definition: \\(dy = f'(x) dx\\).\n"+
+				"Subgoal 2: Compute derivative \\(f'(x) = 2(%d)x = %d x\\) and evaluate at \\(x = %d\\): \\(f'(%d) = %d\\).\n"+
+				"Subgoal 3: Multiply by \\(dx = %d\\): \\(dy = (%d)(%d) = %d\\).", a, 2*a, x0, x0, 2*a*x0, dx, 2*a*x0, dx, dy),
+		}
+	case 1:
+		// Differential for y = a x^3
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+		x0 := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		dx := mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+		dy := 3 * a * x0 * x0 * dx
+		return generator.Problem{
+			Question: fmt.Sprintf("If \\(y = %d x^3\\) at \\(x = %d\\), compute the differential \\(dy\\) for \\(dx = %d\\).", a, x0, dx),
+			Answer:   fmt.Sprintf("%d", dy),
+			Explanation: fmt.Sprintf("Subgoal 1: State the differential formula: \\(dy = f'(x) dx\\).\n"+
+				"Subgoal 2: Differentiate \\(f'(x) = 3(%d)x^2 = %d x^2\\) and evaluate at \\(x = %d\\): \\(f'(%d) = %d(%d)^2 = %d\\).\n"+
+				"Subgoal 3: Multiply by \\(dx = %d\\): \\(dy = (%d)(%d) = %d\\).", a, 3*a, x0, x0, 3*a, x0, 3*a*x0*x0, dx, 3*a*x0*x0, dx, dy),
+		}
+	case 2:
+		// Linear approximation change Delta y approx f'(x) dx for f(x) = a x^2 + b x
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		x0 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		dx := mathutil.ScaleInt(ctx.Difficulty, 1, 3)
+		dy := (2*a*x0 + b) * dx
+		return generator.Problem{
+			Question: fmt.Sprintf("For \\(f(x) = %d x^2 + %d x\\) at \\(x = %d\\), compute the differential approximation \\(dy\\) for \\(dx = %d\\).", a, b, x0, dx),
+			Answer:   fmt.Sprintf("%d", dy),
+			Explanation: fmt.Sprintf("Subgoal 1: State the linear approximation differential: \\(dy = f'(x) dx\\).\n"+
+				"Subgoal 2: Compute \\(f'(x) = 2(%d)x + %d = %d x + %d\\) and evaluate at \\(x = %d\\): \\(f'(%d) = %d\\).\n"+
+				"Subgoal 3: Multiply by \\(dx = %d\\): \\(dy = (%d)(%d) = %d\\).", a, b, 2*a, b, x0, x0, 2*a*x0+b, dx, 2*a*x0+b, dx, dy),
+		}
+	case 3:
+		// Ratio of differentials dy / dx = f'(x)
+		a := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		b := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		x0 := mathutil.ScaleInt(ctx.Difficulty, 1, 6)
+		ans := 2*a*x0 + b
+		return generator.Problem{
+			Question: fmt.Sprintf("What is the ratio of differentials \\(\\frac{dy}{dx}\\) for \\(y = %d x^2 + %d x\\) evaluated at \\(x = %d\\)?", a, b, x0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Subgoal 1: Recall that the ratio of differentials equals the derivative: \\(\\frac{dy}{dx} = f'(x)\\).\n"+
+				"Subgoal 2: Differentiate \\(f'(x) = 2(%d)x + %d = %d x + %d\\).\n"+
+				"Subgoal 3: Evaluate at \\(x = %d\\): \\(f'(%d) = %d(%d) + %d = %d\\).", a, b, 2*a, b, x0, x0, 2*a, x0, b, ans),
+		}
+	default:
+		// Differential for affine function y = m x + c
+		m := mathutil.ScaleInt(ctx.Difficulty, 2, 9)
+		dx := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		dy := m * dx
+		return generator.Problem{
+			Question: fmt.Sprintf("If \\(y = %d x + 7\\), compute \\(dy\\) for \\(dx = %d\\).", m, dx),
+			Answer:   fmt.Sprintf("%d", dy),
+			Explanation: fmt.Sprintf("Subgoal 1: State the differential rule: \\(dy = f'(x) dx\\).\n"+
+				"Subgoal 2: Since \\(f(x) = %d x + 7\\), its derivative is constant: \\(f'(x) = %d\\).\n"+
+				"Subgoal 3: Multiply by \\(dx = %d\\): \\(dy = %d \\times %d = %d\\).", m, m, dx, m, dx, dy),
+		}
 	}
 }
 

@@ -603,7 +603,7 @@
   "label": "Difference quotient",
   "domain": "calculus",
   "subdomain": "calculus.derivatives",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "calc.limit.concept"
   ],
@@ -617,7 +617,7 @@
   "label": "Differential of a function",
   "domain": "calculus",
   "subdomain": "calculus.derivatives",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "calc.deriv.concept"
   ],
@@ -659,7 +659,7 @@
   "label": "Rolle's theorem",
   "domain": "calculus",
   "subdomain": "calculus.derivatives",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "calc.limit.continuity",
    "calc.deriv.concept"
@@ -674,7 +674,7 @@
   "label": "Mean value theorem (Lagrange)",
   "domain": "calculus",
   "subdomain": "calculus.derivatives",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "calc.deriv.rolle"
   ],
@@ -688,7 +688,7 @@
   "label": "Cauchy's mean value theorem",
   "domain": "calculus",
   "subdomain": "calculus.advanced",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "calc.deriv.mvt"
   ],
@@ -702,7 +702,7 @@
   "label": "Fermat's theorem on stationary points",
   "domain": "calculus",
   "subdomain": "calculus.derivatives",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "calc.deriv.concept"
   ],
