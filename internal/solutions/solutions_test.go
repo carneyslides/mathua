@@ -272,3 +272,105 @@ func TestLoad_DuplicateAndInferredID(t *testing.T) {
 		t.Errorf("expected inferred.concept loaded, got %+v (ok=%v)", s, ok)
 	}
 }
+func TestLoader_NilReceiverAndMissingCases(t *testing.T) {
+	var l *Loader
+	if got := l.Concepts(); got != nil {
+		t.Errorf("nil Loader.Concepts() = %v, want nil", got)
+	}
+	if s, ok := l.Schema("any"); ok || s != nil {
+		t.Errorf("nil Loader.Schema() = (%v, %v), want (nil, false)", s, ok)
+	}
+	if got := l.Assemble("any", nil, "fallback"); got != "fallback" {
+		t.Errorf("nil Loader.Assemble() = %q, want 'fallback'", got)
+	}
+
+	valid := load(t, map[string]string{
+		"concept_b.json": `{"concept":"concept_b","answer":"done_b"}`,
+		"concept_a.json": `{"concept":"concept_a","answer":"done_a"}`,
+	})
+	concepts := valid.Concepts()
+	if len(concepts) != 2 || concepts[0] != "concept_a" || concepts[1] != "concept_b" {
+		t.Errorf("Concepts() = %v, want [concept_a concept_b]", concepts)
+	}
+
+	if got := valid.Assemble("nonexistent", nil, "fallback"); got != "fallback" {
+		t.Errorf("nonexistent Assemble() = %q, want 'fallback'", got)
+	}
+
+	// Schema with no setup and multiple steps without fact conditions
+	noSetupSchema := &Schema{
+		Steps: []Step{
+			{Say: "Step one"},
+			{Say: "Step two"},
+		},
+		Answer: "Final answer",
+	}
+	rendered, missing := Render(noSetupSchema, map[string]string{})
+	if len(missing) != 0 {
+		t.Errorf("unexpected missing: %v", missing)
+	}
+	if !strings.Contains(rendered, "Step one\n\nStep two") {
+		t.Errorf("rendered without setup =\n%s", rendered)
+	}
+}
+
+func TestLoad_SubdirectoriesAndDuplicates(t *testing.T) {
+	dir := t.TempDir()
+	// Subdirectory must be skipped
+	if err := os.Mkdir(filepath.Join(dir, "subdir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Non-json file must be skipped
+	write(t, dir, "notes.txt", "some notes")
+
+	// Schema without explicit "concept" falls back to filename stem
+	write(t, dir, "implicit_id.json", `{"answer":"implicit answer"}`)
+
+	// Two schemas declaring the same concept ID must yield duplicate error
+	write(t, dir, "dup1.json", `{"concept":"dup_id","answer":"first"}`)
+	write(t, dir, "dup2.json", `{"concept":"dup_id","answer":"second"}`)
+
+	l, err := Load(dir)
+	if err == nil {
+		t.Fatal("expected error on duplicate concept schema")
+	}
+	if !strings.Contains(err.Error(), "duplicate schema for \"dup_id\"") {
+		t.Errorf("error = %v, want duplicate mention", err)
+	}
+
+	// Implicit ID must have loaded properly
+	if s, ok := l.Schema("implicit_id"); !ok || s.Answer != "implicit answer" {
+		t.Errorf("expected implicit_id to load, got ok=%v s=%+v", ok, s)
+	}
+}
+
+func TestLoad_ReadDirError(t *testing.T) {
+	// Passing a regular file instead of a directory triggers os.ReadDir error
+	tmpFile := filepath.Join(t.TempDir(), "file.txt")
+	if err := os.WriteFile(tmpFile, []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(tmpFile)
+	if err == nil {
+		t.Fatal("expected ReadDir error when path is not a directory")
+	}
+	if !strings.Contains(err.Error(), "read solutions dir") {
+		t.Errorf("error = %v, want read solutions dir prefix", err)
+	}
+}
+
+func TestLookup_EdgeCases(t *testing.T) {
+	noted := []string{}
+	noteFn := func(name string) {
+		noted = append(noted, name)
+	}
+
+	// Unclosed placeholder bracket
+	text := "Formula with [[unclosed bracket text"
+	if got := lookup(text, nil, noteFn); got != text {
+		t.Errorf("unclosed lookup = %q, want %q", got, text)
+	}
+	if len(noted) != 0 {
+		t.Errorf("unexpected note: %v", noted)
+	}
+}
