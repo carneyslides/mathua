@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/chuma-beep/mathua/internal/concepts"
+	"github.com/chuma-beep/mathua/internal/fsrs"
 	"github.com/chuma-beep/mathua/internal/mastery"
 )
 
@@ -64,6 +65,11 @@ type ConceptSnapshot struct {
 	LearningSpeed float64
 	// Encompassed marks whether this concept is encompassed by other concepts in the curriculum.
 	Encompassed bool
+
+	// FSRS-6 fields.
+	FSRSStability  *float64
+	FSRSDifficulty *float64
+	FSRSLastReview *time.Time
 }
 
 // Next picks the next concept for a student to work on.
@@ -222,6 +228,30 @@ func AdvanceSnapshotInterval(snap *ConceptSnapshot, now time.Time) int {
 	if stepDays < 1 {
 		stepDays = 1
 	}
+
+	if snap.FSRSStability != nil && *snap.FSRSStability > 0 {
+		params := fsrs.DefaultParameters()
+		diff := params.InitialDifficulty(fsrs.Good)
+		if snap.FSRSDifficulty != nil && *snap.FSRSDifficulty > 0 {
+			diff = *snap.FSRSDifficulty
+		}
+		var elapsed float64
+		if snap.FSRSLastReview != nil && !snap.FSRSLastReview.IsZero() {
+			elapsed = now.Sub(*snap.FSRSLastReview).Hours() / 24.0
+		}
+		if elapsed < 0 {
+			elapsed = 0
+		}
+		r := params.Retrievability(elapsed, *snap.FSRSStability)
+		nextStab := params.NextStability(*snap.FSRSStability, diff, r, fsrs.Good)
+		snap.FSRSStability = &nextStab
+		fsrsInterval := params.Interval(nextStab)
+		if fsrsInterval > stepDays {
+			stepDays = fsrsInterval
+		}
+		snap.FSRSLastReview = &now
+	}
+
 	baseline := now
 	if snap.NextReviewDue != nil && !snap.NextReviewDue.IsZero() {
 		baseline = *snap.NextReviewDue
@@ -279,6 +309,24 @@ func effectiveState(snap *ConceptSnapshot, now time.Time) (mastery.Status, bool)
 	if snap.Status == mastery.StatusMastered && snap.NextReviewDue != nil && !snap.NextReviewDue.After(now) {
 		isReview = true
 	}
+	if snap.Status == mastery.StatusMastered && snap.FSRSStability != nil && *snap.FSRSStability > 0 {
+		var elapsedDays float64
+		if snap.FSRSLastReview != nil && !snap.FSRSLastReview.IsZero() {
+			elapsedDays = now.Sub(*snap.FSRSLastReview).Hours() / 24.0
+		} else if !snap.LastReviewed.IsZero() {
+			elapsedDays = now.Sub(snap.LastReviewed).Hours() / 24.0
+		}
+		if elapsedDays < 0 {
+			elapsedDays = 0
+		}
+		r := fsrs.DefaultParameters().Retrievability(elapsedDays, *snap.FSRSStability)
+		if r < fsrs.DefaultRetention {
+			isReview = true
+			if status == mastery.StatusMastered {
+				status = "DECAYING"
+			}
+		}
+	}
 	return status, isReview
 }
 
@@ -325,6 +373,19 @@ func computePriority(snap *ConceptSnapshot, now time.Time, isDecaying bool) floa
 	if isDecaying {
 		if snap == nil || snap.BankedOrdinals == 0 || !snap.Encompassed {
 			priority += 5.0
+		}
+		if snap != nil && snap.FSRSStability != nil && *snap.FSRSStability > 0 {
+			var elapsedDays float64
+			if snap.FSRSLastReview != nil && !snap.FSRSLastReview.IsZero() {
+				elapsedDays = now.Sub(*snap.FSRSLastReview).Hours() / 24.0
+			} else if !snap.LastReviewed.IsZero() {
+				elapsedDays = now.Sub(snap.LastReviewed).Hours() / 24.0
+			}
+			if elapsedDays < 0 {
+				elapsedDays = 0
+			}
+			r := fsrs.DefaultParameters().Retrievability(elapsedDays, *snap.FSRSStability)
+			priority += (1.0 - r) * 5.0
 		}
 	}
 	if snap != nil && snap.Status == mastery.StatusMastered && weakness >= weaknessPracticeFloor {

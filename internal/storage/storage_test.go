@@ -235,6 +235,123 @@ func TestUpsertProgress_ProvisionalRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFSRSProgress_RoundTripAndSeed(t *testing.T) {
+	store := newTestStore(t)
+	st, _ := store.CreateStudent("fsrs-student")
+	now := time.Now().UTC().Truncate(time.Second)
+
+	stab := 4.5
+	diff := 2.8
+	lastRev := now.Add(-2 * 24 * time.Hour)
+	p := &ConceptProgress{
+		StudentID:      st.ID,
+		ConceptID:      "fsrs.concept",
+		Status:         "MASTERED",
+		FSRSStability:  &stab,
+		FSRSDifficulty: &diff,
+		FSRSLastReview: &lastRev,
+	}
+	if err := store.UpsertProgress(p); err != nil {
+		t.Fatalf("upsert fsrs progress: %v", err)
+	}
+
+	got, err := store.GetProgress(st.ID, "fsrs.concept")
+	if err != nil {
+		t.Fatalf("get fsrs progress: %v", err)
+	}
+	if got.FSRSStability == nil || *got.FSRSStability != stab {
+		t.Fatalf("expected stability %f, got %v", stab, got.FSRSStability)
+	}
+	if got.FSRSDifficulty == nil || *got.FSRSDifficulty != diff {
+		t.Fatalf("expected difficulty %f, got %v", diff, got.FSRSDifficulty)
+	}
+	if got.FSRSLastReview == nil || !got.FSRSLastReview.Equal(lastRev) {
+		t.Fatalf("expected last review %v, got %v", lastRev, got.FSRSLastReview)
+	}
+
+	// Test SeedFSRSFromSM2
+	dueA := now.Add(3 * 24 * time.Hour)
+	pUnseeded := &ConceptProgress{
+		StudentID:     st.ID,
+		ConceptID:     "seed.a",
+		Status:        "MASTERED",
+		SM2Interval:   3,
+		NextReviewDue: &dueA,
+		LastReviewed:  &now,
+	}
+	if err := store.UpsertProgress(pUnseeded); err != nil {
+		t.Fatalf("upsert seed.a: %v", err)
+	}
+
+	dueB := now.Add(7 * 24 * time.Hour)
+	existingStab := 12.0
+	pAlreadySeeded := &ConceptProgress{
+		StudentID:     st.ID,
+		ConceptID:     "seed.b",
+		Status:        "MASTERED",
+		SM2Interval:   7,
+		NextReviewDue: &dueB,
+		FSRSStability: &existingStab,
+	}
+	if err := store.UpsertProgress(pAlreadySeeded); err != nil {
+		t.Fatalf("upsert seed.b: %v", err)
+	}
+
+	pNoInterval := &ConceptProgress{
+		StudentID:   st.ID,
+		ConceptID:   "seed.c",
+		Status:      "LEARNING",
+		SM2Interval: 0,
+	}
+	if err := store.UpsertProgress(pNoInterval); err != nil {
+		t.Fatalf("upsert seed.c: %v", err)
+	}
+
+	count, err := store.SeedFSRSFromSM2(now)
+	if err != nil {
+		t.Fatalf("seed fsrs from sm2: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 seeded row, got %d", count)
+	}
+
+	gotA, err := store.GetProgress(st.ID, "seed.a")
+	if err != nil {
+		t.Fatalf("get seed.a: %v", err)
+	}
+	if gotA.FSRSStability == nil || *gotA.FSRSStability <= 0 {
+		t.Fatalf("expected positive stability for seed.a, got %v", gotA.FSRSStability)
+	}
+	if gotA.FSRSDifficulty == nil || *gotA.FSRSDifficulty <= 0 {
+		t.Fatalf("expected positive difficulty for seed.a, got %v", gotA.FSRSDifficulty)
+	}
+
+	gotB, err := store.GetProgress(st.ID, "seed.b")
+	if err != nil {
+		t.Fatalf("get seed.b: %v", err)
+	}
+	if gotB.FSRSStability == nil || *gotB.FSRSStability != existingStab {
+		t.Fatalf("expected seed.b to keep stability %f, got %v", existingStab, gotB.FSRSStability)
+	}
+
+	gotC, err := store.GetProgress(st.ID, "seed.c")
+	if err != nil {
+		t.Fatalf("get seed.c: %v", err)
+	}
+	if gotC.FSRSStability != nil {
+		t.Fatalf("expected seed.c to have nil stability, got %v", gotC.FSRSStability)
+	}
+
+	// Idempotent second pass
+	count2, err := store.SeedFSRSFromSM2(now)
+	if err != nil {
+		t.Fatalf("seed fsrs second pass: %v", err)
+	}
+	if count2 != 0 {
+		t.Fatalf("expected 0 seeded rows on second pass, got %d", count2)
+	}
+}
+
 func TestGetAllProgress(t *testing.T) {
 	store := newTestStore(t)
 	st, _ := store.CreateStudent("frank")

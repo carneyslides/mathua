@@ -2336,3 +2336,81 @@ func TestEngine_ProvisionalFallback_StudyAnchorPath(t *testing.T) {
 		t.Errorf("status a = %q, want LEARNING", pA.Status)
 	}
 }
+
+func TestEngine_FSRS_LiveStateTransitions(t *testing.T) {
+	e := testEngine(t)
+	st, err := e.CreateStudent("fsrs-learner")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+	sess, err := e.repo.CreateSession(st.ID)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	// First question on concept a
+	q1, err := e.NextQuestion(sess.ID, st.ID)
+	if err != nil {
+		t.Fatalf("next question: %v", err)
+	}
+	ans1, err := e.SubmitAnswer(sess.ID, st.ID, q1.AttemptID, "42", 3.0)
+	if err != nil {
+		t.Fatalf("submit answer 1: %v", err)
+	}
+	if !ans1.Correct {
+		t.Fatalf("expected answer 1 correct")
+	}
+
+	p1, err := e.repo.GetProgress(st.ID, q1.ConceptID)
+	if err != nil {
+		t.Fatalf("get progress 1: %v", err)
+	}
+	if p1.FSRSStability == nil || *p1.FSRSStability <= 0 {
+		t.Fatalf("expected valid FSRSStability after first correct attempt, got %v", p1.FSRSStability)
+	}
+	if p1.FSRSDifficulty == nil || *p1.FSRSDifficulty <= 0 {
+		t.Fatalf("expected valid FSRSDifficulty after first correct attempt, got %v", p1.FSRSDifficulty)
+	}
+	stab1 := *p1.FSRSStability
+
+	// Second question on concept a
+	q2, err := e.NextQuestion(sess.ID, st.ID)
+	if err != nil {
+		t.Fatalf("next question 2: %v", err)
+	}
+	ans2, err := e.SubmitAnswer(sess.ID, st.ID, q2.AttemptID, "42", 2.5)
+	if err != nil {
+		t.Fatalf("submit answer 2: %v", err)
+	}
+	if !ans2.Correct {
+		t.Fatalf("expected answer 2 correct")
+	}
+
+	p2, err := e.repo.GetProgress(st.ID, q2.ConceptID)
+	if err != nil {
+		t.Fatalf("get progress 2: %v", err)
+	}
+	stab2 := *p2.FSRSStability
+	if stab2 <= stab1 {
+		t.Errorf("expected stability to increase on repeated correct recall: stab1=%f stab2=%f", stab1, stab2)
+	}
+
+	// Test decay detection via retrievability
+	now := time.Now().UTC()
+	past := now.Add(-30 * 24 * time.Hour)
+	p2.Status = string(mastery.StatusMastered)
+	p2.FSRSLastReview = &past
+	futureDue := now.Add(10 * 24 * time.Hour)
+	p2.NextReviewDue = &futureDue
+	if err := e.repo.UpsertProgress(p2); err != nil {
+		t.Fatalf("upsert progress past review: %v", err)
+	}
+
+	dueCount, err := e.ReviewsDue(st.ID)
+	if err != nil {
+		t.Fatalf("reviews due: %v", err)
+	}
+	if dueCount < 1 {
+		t.Errorf("expected at least 1 review due when FSRS retrievability decays, got %d", dueCount)
+	}
+}

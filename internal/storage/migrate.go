@@ -93,6 +93,9 @@ CREATE TABLE IF NOT EXISTS concept_progress (
     weakness_score   REAL    NOT NULL DEFAULT 0,
     placement_seeded INTEGER NOT NULL DEFAULT 0,
     is_provisional   INTEGER NOT NULL DEFAULT 0,
+    fsrs_stability   REAL,
+    fsrs_difficulty  REAL,
+    fsrs_last_review TEXT,
     PRIMARY KEY (student_id, concept_id),
     FOREIGN KEY (student_id) REFERENCES students(id)
 );

@@ -102,7 +102,7 @@ func (g *AddSingleGen) Generate(ctx generator.GeneratorContext) generator.Proble
 
 - Use `ctx.Difficulty` (0.0 trivial → 1.0 challenging) to scale operand sizes.
 - Always return an `Explanation` — shown when a student asks to see the solution.
-- Use the global `math/rand`, seeded per request (`Registry.GenerateContext` in `internal/generator/registry.go`). Do not hardcode problems. `ctx.Seed` is deterministic: `hashSeed(student|cid|attemptID)` (`engine.go:389`). Do not use `UnixNano`.
+- Use the global `math/rand`, seeded per request (`Registry.GenerateContext` in `internal/generator/registry.go`). Do not hardcode problems. `ctx.Seed` is deterministic: `hashSeed(student|cid|attemptID)` (`engine.go:2467`). Do not use `UnixNano`.
 
 ### 3. Prove it works
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/chuma-beep/mathua/internal/concepts"
 	"github.com/chuma-beep/mathua/internal/diagnostic"
+	"github.com/chuma-beep/mathua/internal/fsrs"
 	"github.com/chuma-beep/mathua/internal/generator"
 	"github.com/chuma-beep/mathua/internal/grader"
 	"github.com/chuma-beep/mathua/internal/leaderboard"
@@ -2785,6 +2786,54 @@ func (e *Engine) applyGradedAttempt(progress *storage.ConceptProgress, o gradedA
 		log.Printf("warning: upsert topic speed %s/%s: %v", o.studentID, o.conceptID, err)
 	}
 
+	// FSRS-6 update: compute continuous stability and difficulty
+	fsrsParams := fsrs.DefaultParameters()
+	fsrsRating := fsrs.NativeRating(o.correct)
+	var prevStab, prevDiff float64
+	if progress.FSRSStability != nil && *progress.FSRSStability > 0 {
+		prevStab = *progress.FSRSStability
+	} else if progress.SM2Interval >= 1 {
+		due := nowUTC().AddDate(0, 0, progress.SM2Interval)
+		if progress.NextReviewDue != nil && !progress.NextReviewDue.IsZero() {
+			due = *progress.NextReviewDue
+		}
+		if s, err := fsrs.SeedFromInterval(progress.SM2Interval, due, nowUTC()); err == nil {
+			prevStab = s.Stability
+		} else {
+			prevStab = fsrsParams.InitialStability(fsrsRating)
+		}
+	} else {
+		prevStab = fsrsParams.InitialStability(fsrsRating)
+	}
+
+	if progress.FSRSDifficulty != nil && *progress.FSRSDifficulty > 0 {
+		prevDiff = *progress.FSRSDifficulty
+	} else {
+		prevDiff = fsrsParams.InitialDifficulty(fsrsRating)
+	}
+
+	var elapsedDays float64
+	if progress.FSRSLastReview != nil && !progress.FSRSLastReview.IsZero() {
+		elapsedDays = nowUTC().Sub(*progress.FSRSLastReview).Hours() / 24.0
+	} else if progress.LastReviewed != nil && !progress.LastReviewed.IsZero() {
+		elapsedDays = nowUTC().Sub(*progress.LastReviewed).Hours() / 24.0
+	}
+	if elapsedDays < 0 {
+		elapsedDays = 0
+	}
+
+	var nextStab, nextDiff float64
+	if progress.FSRSStability == nil && progress.SM2Interval < 1 {
+		nextStab = fsrsParams.InitialStability(fsrsRating)
+		nextDiff = fsrsParams.InitialDifficulty(fsrsRating)
+	} else {
+		retrievability := fsrsParams.Retrievability(elapsedDays, prevStab)
+		nextStab = fsrsParams.NextStability(prevStab, prevDiff, retrievability, fsrsRating)
+		nextDiff = fsrsParams.NextDifficulty(prevDiff, fsrsRating)
+	}
+	progress.FSRSStability = &nextStab
+	progress.FSRSDifficulty = &nextDiff
+
 	if newStatus == mastery.StatusMastered && mastery.Status(oldStatus) != mastery.StatusMastered {
 		now := nowUTC()
 		progress.MasteredAt = &now
@@ -2819,7 +2868,16 @@ func (e *Engine) applyGradedAttempt(progress *storage.ConceptProgress, o gradedA
 	if advanced || (progress.Streak >= o.requiredStreak && progress.AvgResponseTime <= o.timeThreshold) {
 		now := nowUTC()
 		progress.LastReviewed = &now
-		nextReview := now.AddDate(0, 0, nextSM2.Interval)
+		progress.FSRSLastReview = &now
+		fsrsInterval := fsrsParams.Interval(nextStab)
+		reviewInterval := nextSM2.Interval
+		if fsrsInterval > reviewInterval {
+			reviewInterval = fsrsInterval
+		}
+		if reviewInterval < 1 {
+			reviewInterval = 1
+		}
+		nextReview := now.AddDate(0, 0, reviewInterval)
 		progress.NextReviewDue = &nextReview
 	}
 

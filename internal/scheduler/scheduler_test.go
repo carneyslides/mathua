@@ -493,3 +493,39 @@ func TestNextSmart_FallsBackWithoutPrev(t *testing.T) {
 		t.Errorf("expected root a first with no history, got %+v", cands)
 	}
 }
+
+func TestEffectiveState_FSRS(t *testing.T) {
+	now := time.Now().UTC()
+	stab := 2.0
+	// 5 days elapsed with stability 2.0 means retrievability is well below 0.90
+	pastReview := now.Add(-5 * 24 * time.Hour)
+	snap := &ConceptSnapshot{
+		Status:         mastery.StatusMastered,
+		FSRSStability:  &stab,
+		FSRSLastReview: &pastReview,
+		LastReviewed:   now, // even if LastReviewed is recent, FSRS elapsed time flags decay
+	}
+	status, isReview := effectiveState(snap, now)
+	if !isReview {
+		t.Errorf("expected isReview=true when FSRS retrievability decays below threshold")
+	}
+	if status != "DECAYING" {
+		t.Errorf("expected status DECAYING, got %v", status)
+	}
+
+	// Recent review with high retrievability
+	recentReview := now.Add(-1 * time.Hour)
+	snapFresh := &ConceptSnapshot{
+		Status:         mastery.StatusMastered,
+		FSRSStability:  &stab,
+		FSRSLastReview: &recentReview,
+		LastReviewed:   now,
+	}
+	statusFresh, isReviewFresh := effectiveState(snapFresh, now)
+	if isReviewFresh {
+		t.Errorf("expected isReview=false for fresh FSRS review")
+	}
+	if statusFresh != mastery.StatusMastered {
+		t.Errorf("expected status MASTERED, got %v", statusFresh)
+	}
+}

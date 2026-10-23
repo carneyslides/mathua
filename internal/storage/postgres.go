@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/chuma-beep/mathua/internal/ai"
+	"github.com/chuma-beep/mathua/internal/fsrs"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -114,6 +115,9 @@ CREATE TABLE IF NOT EXISTS concept_progress (
     weakness_score   DOUBLE PRECISION NOT NULL DEFAULT 0,
     placement_seeded INTEGER NOT NULL DEFAULT 0,
     is_provisional   INTEGER NOT NULL DEFAULT 0,
+    fsrs_stability   DOUBLE PRECISION,
+    fsrs_difficulty  DOUBLE PRECISION,
+    fsrs_last_review TEXT,
     PRIMARY KEY (student_id, concept_id)
 );
 
@@ -432,6 +436,9 @@ func pgAuthMigrate(db *sql.DB) error {
 		"ALTER TABLE concept_progress ADD COLUMN IF NOT EXISTS weakness_score DOUBLE PRECISION NOT NULL DEFAULT 0",
 		"ALTER TABLE concept_progress ADD COLUMN IF NOT EXISTS placement_seeded INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE concept_progress ADD COLUMN IF NOT EXISTS is_provisional INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE concept_progress ADD COLUMN IF NOT EXISTS fsrs_stability DOUBLE PRECISION",
+		"ALTER TABLE concept_progress ADD COLUMN IF NOT EXISTS fsrs_difficulty DOUBLE PRECISION",
+		"ALTER TABLE concept_progress ADD COLUMN IF NOT EXISTS fsrs_last_review TEXT",
 		"ALTER TABLE active_sessions ADD COLUMN IF NOT EXISTS last_concept_id TEXT NOT NULL DEFAULT ''",
 		"ALTER TABLE active_sessions ADD COLUMN IF NOT EXISTS session_review INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE active_sessions ADD COLUMN IF NOT EXISTS session_new INTEGER NOT NULL DEFAULT 0",
@@ -1145,7 +1152,8 @@ func (s *PostgresStore) GetProgress(studentID, conceptID string) (*ConceptProgre
 		SELECT student_id, concept_id, status, streak, best_streak,
 		       avg_response_time, attempts, last_attempted, last_reviewed,
 		       next_review_due, sm2_repetitions, sm2_interval, sm2_efactor,
-		       mastered_at, weakness_score, placement_seeded, is_provisional
+		       mastered_at, weakness_score, placement_seeded, is_provisional,
+		       fsrs_stability, fsrs_difficulty, fsrs_last_review
 		FROM concept_progress
 		WHERE student_id = $1 AND concept_id = $2
 	`, studentID, conceptID)
@@ -1162,7 +1170,8 @@ func (s *PostgresStore) GetAllProgress(studentID string) (map[string]*ConceptPro
 		SELECT student_id, concept_id, status, streak, best_streak,
 		       avg_response_time, attempts, last_attempted, last_reviewed,
 		       next_review_due, sm2_repetitions, sm2_interval, sm2_efactor,
-		       mastered_at, weakness_score, placement_seeded, is_provisional
+		       mastered_at, weakness_score, placement_seeded, is_provisional,
+		       fsrs_stability, fsrs_difficulty, fsrs_last_review
 		FROM concept_progress
 		WHERE student_id = $1
 	`, studentID)
@@ -1188,8 +1197,9 @@ func (s *PostgresStore) UpsertProgress(p *ConceptProgress) error {
 			(student_id, concept_id, status, streak, best_streak,
 			 avg_response_time, attempts, last_attempted, last_reviewed,
 			 next_review_due, sm2_repetitions, sm2_interval, sm2_efactor,
-			 mastered_at, weakness_score, placement_seeded, is_provisional)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+			 mastered_at, weakness_score, placement_seeded, is_provisional,
+			 fsrs_stability, fsrs_difficulty, fsrs_last_review)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 		ON CONFLICT(student_id, concept_id) DO UPDATE SET
 			status            = EXCLUDED.status,
 			streak            = EXCLUDED.streak,
@@ -1205,7 +1215,10 @@ func (s *PostgresStore) UpsertProgress(p *ConceptProgress) error {
 			mastered_at       = EXCLUDED.mastered_at,
 			weakness_score    = EXCLUDED.weakness_score,
 			placement_seeded  = EXCLUDED.placement_seeded,
-			is_provisional    = EXCLUDED.is_provisional
+			is_provisional    = EXCLUDED.is_provisional,
+			fsrs_stability    = EXCLUDED.fsrs_stability,
+			fsrs_difficulty   = EXCLUDED.fsrs_difficulty,
+			fsrs_last_review  = EXCLUDED.fsrs_last_review
 	`,
 		p.StudentID, p.ConceptID, p.Status, p.Streak, p.BestStreak,
 		p.AvgResponseTime, p.Attempts,
@@ -1213,6 +1226,7 @@ func (s *PostgresStore) UpsertProgress(p *ConceptProgress) error {
 		nullTime(p.NextReviewDue), p.SM2Repetitions, p.SM2Interval,
 		p.SM2EFactor, nullTime(p.MasteredAt), p.WeaknessScore, boolToInt(p.PlacementSeeded),
 		boolToInt(p.IsProvisional),
+		nullFloat(p.FSRSStability), nullFloat(p.FSRSDifficulty), nullTime(p.FSRSLastReview),
 	)
 	if err != nil {
 		return fmt.Errorf("upsert progress: %w", err)
@@ -1233,8 +1247,9 @@ func (s *PostgresStore) UpsertProgressBatch(ps []*ConceptProgress) error {
 			(student_id, concept_id, status, streak, best_streak,
 			 avg_response_time, attempts, last_attempted, last_reviewed,
 			 next_review_due, sm2_repetitions, sm2_interval, sm2_efactor,
-			 mastered_at, weakness_score, placement_seeded, is_provisional)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+			 mastered_at, weakness_score, placement_seeded, is_provisional,
+			 fsrs_stability, fsrs_difficulty, fsrs_last_review)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 		ON CONFLICT(student_id, concept_id) DO UPDATE SET
 			status            = EXCLUDED.status,
 			streak            = EXCLUDED.streak,
@@ -1250,7 +1265,10 @@ func (s *PostgresStore) UpsertProgressBatch(ps []*ConceptProgress) error {
 			mastered_at       = EXCLUDED.mastered_at,
 			weakness_score    = EXCLUDED.weakness_score,
 			placement_seeded  = EXCLUDED.placement_seeded,
-			is_provisional    = EXCLUDED.is_provisional
+			is_provisional    = EXCLUDED.is_provisional,
+			fsrs_stability    = EXCLUDED.fsrs_stability,
+			fsrs_difficulty   = EXCLUDED.fsrs_difficulty,
+			fsrs_last_review  = EXCLUDED.fsrs_last_review
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -1265,6 +1283,7 @@ func (s *PostgresStore) UpsertProgressBatch(ps []*ConceptProgress) error {
 			nullTime(p.NextReviewDue), p.SM2Repetitions, p.SM2Interval,
 			p.SM2EFactor, nullTime(p.MasteredAt), p.WeaknessScore, boolToInt(p.PlacementSeeded),
 			boolToInt(p.IsProvisional),
+			nullFloat(p.FSRSStability), nullFloat(p.FSRSDifficulty), nullTime(p.FSRSLastReview),
 		); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("exec progress batch: %w", err)
@@ -2494,4 +2513,78 @@ func (s *PostgresStore) DiagnosticAttemptResponse(attemptID string) (string, boo
 		return "", false, fmt.Errorf("read diagnostic attempt: %w", err)
 	}
 	return response, true, nil
+}
+
+// SeedFSRSFromSM2 backfills FSRS state from existing SM-2 intervals for unseeded rows.
+// It is idempotent: only rows where fsrs_stability is NULL are seeded.
+func (s *PostgresStore) SeedFSRSFromSM2(now time.Time) (int, error) {
+	rows, err := s.db.Query(`
+		SELECT student_id, concept_id, sm2_interval, next_review_due, last_reviewed
+		FROM concept_progress
+		WHERE fsrs_stability IS NULL AND sm2_interval >= 1 AND next_review_due IS NOT NULL AND next_review_due != ''
+		ORDER BY student_id, concept_id
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("query unseeded fsrs rows: %w", err)
+	}
+	defer rows.Close()
+
+	type toSeed struct {
+		studentID string
+		conceptID string
+		interval  int
+		nextDue   string
+		lastRev   sql.NullString
+	}
+	var batch []toSeed
+	for rows.Next() {
+		var item toSeed
+		if err := rows.Scan(&item.studentID, &item.conceptID, &item.interval, &item.nextDue, &item.lastRev); err != nil {
+			return 0, fmt.Errorf("scan unseeded fsrs row: %w", err)
+		}
+		batch = append(batch, item)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate unseeded fsrs rows: %w", err)
+	}
+
+	params := fsrs.DefaultParameters()
+	defaultDiff := params.InitialDifficulty(fsrs.Good)
+
+	stmt, err := s.db.Prepare(`
+		UPDATE concept_progress
+		SET fsrs_stability = $1, fsrs_difficulty = $2, fsrs_last_review = $3
+		WHERE student_id = $4 AND concept_id = $5 AND fsrs_stability IS NULL
+	`)
+	if err != nil {
+		return 0, fmt.Errorf("prepare update fsrs seed: %w", err)
+	}
+	defer stmt.Close()
+
+	count := 0
+	for _, item := range batch {
+		due, err := time.Parse(time.RFC3339, item.nextDue)
+		if err != nil {
+			due, err = time.Parse("2006-01-02 15:04:05", item.nextDue)
+		}
+		if err != nil {
+			continue
+		}
+		seeded, err := fsrs.SeedFromInterval(item.interval, due, now)
+		if err != nil {
+			continue
+		}
+		lastReview := now.Format(time.RFC3339)
+		if item.lastRev.Valid && item.lastRev.String != "" {
+			lastReview = item.lastRev.String
+		}
+		res, err := stmt.Exec(seeded.Stability, defaultDiff, lastReview, item.studentID, item.conceptID)
+		if err != nil {
+			return count, fmt.Errorf("seed fsrs progress: %w", err)
+		}
+		affected, _ := res.RowsAffected()
+		count += int(affected)
+	}
+
+	return count, nil
 }

@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/chuma-beep/mathua/internal/fsrs"
 	"github.com/chuma-beep/mathua/internal/mastery"
 	"github.com/chuma-beep/mathua/internal/repetition"
 	"github.com/chuma-beep/mathua/internal/scheduler"
@@ -49,6 +50,20 @@ func (e *Engine) SatisfyImplicitReviews(studentID string) error {
 		if p.LastReviewed != nil && daysSinceReview(p.LastReviewed) >= mastery.DecayDays {
 			isDue = true
 		}
+		if p.FSRSStability != nil && *p.FSRSStability > 0 {
+			var elapsed float64
+			if p.FSRSLastReview != nil && !p.FSRSLastReview.IsZero() {
+				elapsed = now.Sub(*p.FSRSLastReview).Hours() / 24.0
+			} else if p.LastReviewed != nil && !p.LastReviewed.IsZero() {
+				elapsed = now.Sub(*p.LastReviewed).Hours() / 24.0
+			}
+			if elapsed < 0 {
+				elapsed = 0
+			}
+			if fsrs.DefaultParameters().Retrievability(elapsed, *p.FSRSStability) < fsrs.DefaultRetention {
+				isDue = true
+			}
+		}
 		if !isDue {
 			continue
 		}
@@ -87,6 +102,24 @@ func (e *Engine) SatisfyImplicitReviews(studentID string) error {
 		p.SM2Interval = stepDays
 		if p.Status == "DECAYING" {
 			p.Status = string(mastery.StatusMastered)
+		}
+		if p.FSRSStability != nil && *p.FSRSStability > 0 {
+			params := fsrs.DefaultParameters()
+			diff := params.InitialDifficulty(fsrs.Good)
+			if p.FSRSDifficulty != nil && *p.FSRSDifficulty > 0 {
+				diff = *p.FSRSDifficulty
+			}
+			var elapsed float64
+			if p.FSRSLastReview != nil && !p.FSRSLastReview.IsZero() {
+				elapsed = now.Sub(*p.FSRSLastReview).Hours() / 24.0
+			}
+			if elapsed < 0 {
+				elapsed = 0
+			}
+			r := params.Retrievability(elapsed, *p.FSRSStability)
+			nextStab := params.NextStability(*p.FSRSStability, diff, r, fsrs.Good)
+			p.FSRSStability = &nextStab
+			p.FSRSLastReview = &now
 		}
 		if err := e.repo.UpsertProgress(p); err != nil {
 			log.Printf("warning: upsert progress after credit projection %s/%s: %v", studentID, cid, err)
@@ -154,6 +187,9 @@ func (e *Engine) conceptSnapshotsFrom(studentID string, progress map[string]*sto
 			EFactor:        p.SM2EFactor,
 			LearningSpeed:  speed,
 			Encompassed:    isEncompassed,
+			FSRSStability:  p.FSRSStability,
+			FSRSDifficulty: p.FSRSDifficulty,
+			FSRSLastReview: p.FSRSLastReview,
 		}
 	}
 	// Concepts never attempted still need a snapshot: prereqsMet returns false for a missing
@@ -196,19 +232,27 @@ func (e *Engine) ReviewsDue(studentID string) (int, error) {
 	now := time.Now()
 	count := 0
 	for _, p := range progress {
-		if p.NextReviewDue == nil {
-			continue
+		isDue := false
+		if p.NextReviewDue != nil && !p.NextReviewDue.After(now) {
+			isDue = true
 		}
-		if p.NextReviewDue.After(now) {
-			continue
+		if p.FSRSStability != nil && *p.FSRSStability > 0 {
+			var elapsed float64
+			if p.FSRSLastReview != nil && !p.FSRSLastReview.IsZero() {
+				elapsed = now.Sub(*p.FSRSLastReview).Hours() / 24.0
+			} else if p.LastReviewed != nil && !p.LastReviewed.IsZero() {
+				elapsed = now.Sub(*p.LastReviewed).Hours() / 24.0
+			}
+			if elapsed < 0 {
+				elapsed = 0
+			}
+			if fsrs.DefaultParameters().Retrievability(elapsed, *p.FSRSStability) < fsrs.DefaultRetention {
+				isDue = true
+			}
 		}
-		// A stored MASTERED row with a due review IS due a review — scheduler.effectiveState
-		// says so explicitly, which is what put it in the review bucket in the first place.
-		// The old guard skipped exactly those rows, so the count and the candidates disagreed
-		// and selectTasks never took the review bucket for a learner whose only debt was a
-		// decayed concept. Any NextReviewDue at or before now is a due review; that is the
-		// whole condition.
-		count++
+		if isDue {
+			count++
+		}
 	}
 	return count, nil
 }

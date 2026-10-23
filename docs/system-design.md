@@ -103,6 +103,9 @@ Eighteen tables. The five that carry the learning loop are `students`, `concept_
 | `sm2_efactor` | REAL | Easiness factor (≥ 1.3) |
 | `next_review_due` | TEXT | ISO 8601 date for spaced repetition |
 | `weakness_score` | REAL | 0.0–1.0, propagated to dependents |
+| `fsrs_stability` | REAL | FSRS-6 stability in days |
+| `fsrs_difficulty` | REAL | FSRS-6 difficulty (1.0–10.0) |
+| `fsrs_last_review` | TEXT | ISO 8601 timestamp of last review |
 
 **`sessions`**  --  Practice sessions
 

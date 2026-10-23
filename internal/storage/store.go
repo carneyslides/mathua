@@ -75,6 +75,10 @@ type ConceptProgress struct {
 	// When a learner struggles on a dependent concept, provisional prerequisites
 	// demote to LEARNING and schedule for remedial review.
 	IsProvisional bool `json:"is_provisional,omitempty"`
+	// FSRS-6 state fields
+	FSRSStability  *float64   `json:"fsrs_stability,omitempty"`
+	FSRSDifficulty *float64   `json:"fsrs_difficulty,omitempty"`
+	FSRSLastReview *time.Time `json:"fsrs_last_review,omitempty"`
 }
 
 type Session struct {
@@ -521,6 +525,8 @@ type Repository interface {
 	// UpsertProgressBatch persists many rows in one transaction — the
 	// N+1 antidote for PropagateWeakness and ApplyGoalResults.
 	UpsertProgressBatch(ps []*ConceptProgress) error
+	// SeedFSRSFromSM2 backfills FSRS state from existing SM-2 intervals for unseeded rows.
+	SeedFSRSFromSM2(now time.Time) (int, error)
 
 	CreateSession(studentID string) (*Session, error)
 	GetSession(id string) (*Session, error)
