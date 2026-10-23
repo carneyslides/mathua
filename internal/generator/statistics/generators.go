@@ -807,24 +807,86 @@ func (g *normalDistGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type poissonGen struct{}
 
 func (g *poissonGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"A Poisson process averages 3 events per hour. How many events on average in 2 hours?", "6", "Mean = rate times time = 3 times 2."},
-		{"For X ~ Poisson(4), what is the variance?", "4", "For Poisson, variance = mean."},
-		{"Does a Poisson model count events in a fixed interval? (yes/no)", "yes", "Poisson models the number of events occurring in a fixed time or space."},
-		{"Is P(X=k) = e^(-L) L^k / k! the Poisson PMF? (yes/no)", "yes", "Poisson PMF: P(X=k) = e^(-L)L^k/k! for k = 0, 1, 2, ..."},
-		{"Is 3 a possible value of a Poisson random variable? (yes/no)", "yes", "Poisson is defined for non-negative integers 0, 1, 2, ..."},
-		{"What is the relationship between Poisson and Exponential?", "inter-arrival times are Exponential", "In a Poisson process, the time between events follows Exponential(rate)."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type sdItem struct {
+			lambda int
+			sd     int
+		}
+		items := []sdItem{
+			{4, 2},
+			{9, 3},
+			{16, 4},
+			{25, 5},
+			{36, 6},
+			{49, 7},
+			{64, 8},
+			{81, 9},
+			{100, 10},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A random variable \\(X\\) follows a Poisson distribution \\(\\operatorname{Poisson}(%d)\\). Find the standard deviation \\(\\sigma\\).", it.lambda),
+			Answer:   fmt.Sprintf("%d", it.sd),
+			Explanation: fmt.Sprintf("For a Poisson distribution, the variance equals the parameter: \\(\\operatorname{Var}(X) = \\lambda = %d\\). Therefore, the standard deviation is \\(\\sigma = \\sqrt{\\lambda} = \\sqrt{%d} = %d\\).",
+				it.lambda, it.lambda, it.sd),
+		}
+	case 1:
+		rates := []int{2, 3, 4, 5, 6, 7, 8}
+		times := []int{2, 3, 4, 5}
+		lambda := rates[rand.Intn(len(rates))]
+		t := times[rand.Intn(len(times))]
+		total := lambda * t
+		return generator.Problem{
+			Question: fmt.Sprintf("Events occur according to a Poisson process at an average rate of %d events per hour. How many events are expected to occur over a %d-hour interval?", lambda, t),
+			Answer:   fmt.Sprintf("%d", total),
+			Explanation: fmt.Sprintf("For a Poisson process with rate \\(\\lambda = %d\\), the expected number of events in \\(t = %d\\) hours is \\(E[N(t)] = \\lambda t = %d \\times %d = %d\\).",
+				lambda, t, lambda, t, total),
+		}
+	case 2:
+		l1List := []int{3, 5, 7, 10, 12, 15}
+		l2List := []int{4, 6, 8, 11, 14, 20}
+		l1 := l1List[rand.Intn(len(l1List))]
+		l2 := l2List[rand.Intn(len(l2List))]
+		sum := l1 + l2
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X_1 \\sim \\operatorname{Poisson}(%d)\\) and \\(X_2 \\sim \\operatorname{Poisson}(%d)\\) be independent random variables. Find the variance of their sum \\(\\operatorname{Var}(X_1 + X_2)\\).", l1, l2),
+			Answer:   fmt.Sprintf("%d", sum),
+			Explanation: fmt.Sprintf("Since \\(X_1\\) and \\(X_2\\) are independent, \\(\\operatorname{Var}(X_1 + X_2) = \\operatorname{Var}(X_1) + \\operatorname{Var}(X_2) = \\lambda_1 + \\lambda_2 = %d + %d = %d\\).",
+				l1, l2, sum),
+		}
+	case 3:
+		type ratioItem struct {
+			k      int
+			lambda int
+			ratio  int
+		}
+		items := []ratioItem{
+			{2, 6, 3},
+			{2, 8, 4},
+			{2, 10, 5},
+			{3, 12, 4},
+			{3, 15, 5},
+			{4, 20, 5},
+			{4, 24, 6},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Poisson}(%d)\\). Find the probability ratio \\(\\frac{P(X = %d)}{P(X = %d)}\\).", it.lambda, it.k, it.k-1),
+			Answer:   fmt.Sprintf("%d", it.ratio),
+			Explanation: fmt.Sprintf("From the Poisson PMF, consecutive terms satisfy \\(\\frac{P(X = k)}{P(X = k-1)} = \\frac{\\lambda}{k}\\). Here \\(\\frac{P(X = %d)}{P(X = %d)} = \\frac{%d}{%d} = %d\\).",
+				it.k, it.k-1, it.lambda, it.k, it.ratio),
+		}
+	default:
+		lambdas := []int{2, 3, 4, 5, 6, 7, 8, 10}
+		lam := lambdas[rand.Intn(len(lambdas))]
+		m2 := lam + lam*lam
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Poisson}(%d)\\). Compute the second moment \\(E[X^2]\\).", lam),
+			Answer:   fmt.Sprintf("%d", m2),
+			Explanation: fmt.Sprintf("Using \\(\\operatorname{Var}(X) = E[X^2] - (E[X])^2\\), we find \\(E[X^2] = \\lambda + \\lambda^2 = %d + %d = %d\\).",
+				lam, lam*lam, m2),
+		}
 	}
 }
 

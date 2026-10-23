@@ -356,7 +356,7 @@
   "label": "Poisson distribution",
   "domain": "statistics",
   "subdomain": "statistics.distributions",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "stat.dist.binomial"
   ],
