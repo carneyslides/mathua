@@ -98,7 +98,7 @@ func (g *jointDensityGen) Generate(ctx generator.GeneratorContext) generator.Pro
 	x := 1 + rand.Intn(a)
 	y := 1 + rand.Intn(b)
 
-	answer := decimal6(float64(x*y) / float64(a*b))
+	answer := decimal6(float64(x) / float64(a) * float64(y) / float64(b))
 	p := generator.Problem{
 		Question: fmt.Sprintf("A pair (X, Y) is uniform on the rectangle from 0 to %d in x and 0 to %d in y. What is P(X ≤ %d and Y ≤ %d)? (enter a decimal)",
 			a, b, x, y),
