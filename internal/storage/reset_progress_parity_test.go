@@ -52,9 +52,13 @@ func TestResetProgress_RoundTrip_Parity(t *testing.T) {
 		run("seed plan", store.UpsertServerSession("study_plan", st.ID, `{"destination":"d"}`, time.Now().UTC().Add(time.Hour).Format(time.RFC3339)))
 		run("seed prefs", store.UpsertServerSession("study_plan_prefs", st.ID, `{"pace":"steady"}`, time.Now().UTC().Add(time.Hour).Format(time.RFC3339)))
 		run("seed admin", store.UpsertServerSession("admin_login", st.ID, "tok", time.Now().UTC().Add(time.Hour).Format(time.RFC3339)))
+		run("seed remedial", store.EnqueueRemedial(st.ID, "a", "b"))
 
 		run("reset", store.ResetProgress(st.ID))
 
+		if rem, _ := store.GetRemedialQueue(st.ID); len(rem) != 0 {
+			t.Errorf("[%s] remedial queue survives: %d rows", tag, len(rem))
+		}
 		if p, _ := store.GetAllProgress(st.ID); len(p) != 0 {
 			t.Errorf("[%s] progress survives: %d rows", tag, len(p))
 		}

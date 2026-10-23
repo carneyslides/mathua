@@ -409,6 +409,18 @@ CREATE TABLE IF NOT EXISTS implicit_credit_ordinals (
     PRIMARY KEY (student_id, target_concept_id, credit_epoch, ordinal)
 );
 
+-- Targeted remedial queue: 2-miss halt remedial prerequisites survive Fly.io restarts.
+CREATE TABLE IF NOT EXISTS student_remedial_queue (
+    student_id TEXT NOT NULL,
+    concept_id TEXT NOT NULL,
+    priority   INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (student_id, concept_id),
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_remedial_queue_student ON student_remedial_queue(student_id, priority, created_at);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    INTEGER PRIMARY KEY,
     applied_at TEXT NOT NULL DEFAULT (datetime('now'))

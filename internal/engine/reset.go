@@ -59,7 +59,6 @@ func (e *Engine) ResetAccountProgress(studentID, phrase string) error {
 	e.mu.Lock()
 	delete(e.studySessions, studentID)
 	delete(e.quizRemedial, studentID)
-	delete(e.remedialQueue, studentID)
 	delete(e.activePath, studentID)
 	// A wipe retires the student's write generation and evicts their
 	// in-flight practice questions: a submit snapshotted before this point
@@ -112,7 +111,6 @@ func (e *Engine) DeleteAccount(studentID, phrase string) error {
 	e.mu.Lock()
 	delete(e.studySessions, studentID)
 	delete(e.quizRemedial, studentID)
-	delete(e.remedialQueue, studentID)
 	delete(e.activePath, studentID)
 	// Same retirement as the reset path: in-flight practice questions must
 	// not outlive the account they belong to.

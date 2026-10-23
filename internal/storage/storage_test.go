@@ -1313,3 +1313,133 @@ func TestGetAdminUser_Lookup(t *testing.T) {
 		t.Errorf("expected nil for missing admin user, got %+v", missing)
 	}
 }
+
+func TestRemedialQueue_CRUD(t *testing.T) {
+	store := newTestStore(t)
+	st, err := store.CreateStudent("remedial-tester")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+
+	// Initial queue must be empty
+	q, err := store.GetRemedialQueue(st.ID)
+	if err != nil {
+		t.Fatalf("get remedial queue: %v", err)
+	}
+	if len(q) != 0 {
+		t.Fatalf("expected empty queue, got %v", q)
+	}
+
+	// Enqueue empty list is a no-op
+	if err := store.EnqueueRemedial(st.ID); err != nil {
+		t.Fatalf("enqueue empty: %v", err)
+	}
+
+	// Enqueue items in order
+	if err := store.EnqueueRemedial(st.ID, "c1", "c2", "c3"); err != nil {
+		t.Fatalf("enqueue items: %v", err)
+	}
+
+	q, err = store.GetRemedialQueue(st.ID)
+	if err != nil {
+		t.Fatalf("get queue: %v", err)
+	}
+	if len(q) != 3 || q[0] != "c1" || q[1] != "c2" || q[2] != "c3" {
+		t.Fatalf("expected [c1 c2 c3], got %v", q)
+	}
+
+	// Duplicates are ignored; new items are appended
+	if err := store.EnqueueRemedial(st.ID, "c2", "c4"); err != nil {
+		t.Fatalf("enqueue duplicate: %v", err)
+	}
+
+	q, err = store.GetRemedialQueue(st.ID)
+	if err != nil {
+		t.Fatalf("get queue after deduplication: %v", err)
+	}
+	if len(q) != 4 || q[0] != "c1" || q[1] != "c2" || q[2] != "c3" || q[3] != "c4" {
+		t.Fatalf("expected [c1 c2 c3 c4], got %v", q)
+	}
+
+	// Capping at MaxRemedialQueue (10 items)
+	var many []string
+	for i := 5; i <= 20; i++ {
+		many = append(many, fmt.Sprintf("c%d", i))
+	}
+	if err := store.EnqueueRemedial(st.ID, many...); err != nil {
+		t.Fatalf("enqueue many: %v", err)
+	}
+
+	q, err = store.GetRemedialQueue(st.ID)
+	if err != nil {
+		t.Fatalf("get capped queue: %v", err)
+	}
+	if len(q) != MaxRemedialQueue {
+		t.Fatalf("expected queue capped at %d, got %d", MaxRemedialQueue, len(q))
+	}
+
+	// Remove single item
+	if err := store.RemoveRemedial(st.ID, "c2"); err != nil {
+		t.Fatalf("remove remedial: %v", err)
+	}
+	q, err = store.GetRemedialQueue(st.ID)
+	if err != nil {
+		t.Fatalf("get queue after removal: %v", err)
+	}
+	for _, id := range q {
+		if id == "c2" {
+			t.Fatalf("c2 was not removed from queue: %v", q)
+		}
+	}
+
+	// Clear queue
+	if err := store.ClearRemedialQueue(st.ID); err != nil {
+		t.Fatalf("clear remedial queue: %v", err)
+	}
+	q, err = store.GetRemedialQueue(st.ID)
+	if err != nil {
+		t.Fatalf("get queue after clear: %v", err)
+	}
+	if len(q) != 0 {
+		t.Fatalf("expected empty queue after clear, got %v", q)
+	}
+}
+
+func TestRemedialQueue_ResetProgressAndAccountDelete(t *testing.T) {
+	store := newTestStore(t)
+	st, err := store.CreateStudent("wipe-tester")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+
+	if err := store.EnqueueRemedial(st.ID, "rem1", "rem2"); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	// ResetProgress must clear remedial queue
+	if err := store.ResetProgress(st.ID); err != nil {
+		t.Fatalf("reset progress: %v", err)
+	}
+	q, err := store.GetRemedialQueue(st.ID)
+	if err != nil {
+		t.Fatalf("get queue: %v", err)
+	}
+	if len(q) != 0 {
+		t.Fatalf("expected empty remedial queue after reset, got %v", q)
+	}
+
+	// Seed again and verify DeleteAccount clears remedial queue
+	if err := store.EnqueueRemedial(st.ID, "rem3"); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if err := store.DeleteAccount(st.ID); err != nil {
+		t.Fatalf("delete account: %v", err)
+	}
+	q, err = store.GetRemedialQueue(st.ID)
+	if err != nil {
+		t.Fatalf("get queue: %v", err)
+	}
+	if len(q) != 0 {
+		t.Fatalf("expected empty remedial queue after delete account, got %v", q)
+	}
+}

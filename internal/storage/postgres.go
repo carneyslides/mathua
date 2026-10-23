@@ -334,6 +334,17 @@ CREATE TABLE IF NOT EXISTS implicit_credit_ordinals (
     PRIMARY KEY (student_id, target_concept_id, credit_epoch, ordinal)
 );
 
+-- Targeted remedial queue: 2-miss halt remedial prerequisites survive restarts.
+CREATE TABLE IF NOT EXISTS student_remedial_queue (
+    student_id TEXT NOT NULL,
+    concept_id TEXT NOT NULL,
+    priority   INTEGER NOT NULL,
+    created_at BIGINT NOT NULL,
+    PRIMARY KEY (student_id, concept_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_remedial_queue_student ON student_remedial_queue(student_id, priority, created_at);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    INTEGER PRIMARY KEY,
     applied_at TEXT NOT NULL DEFAULT (now()::text)
@@ -1541,6 +1552,7 @@ func (s *PostgresStore) ResetProgress(studentID string) error {
 		{"DELETE FROM concept_progress WHERE student_id = $1", []interface{}{studentID}},
 		{"DELETE FROM student_topic_speed WHERE student_id = $1", []interface{}{studentID}},
 		{"DELETE FROM quiz_completions WHERE student_id = $1", []interface{}{studentID}},
+		{"DELETE FROM student_remedial_queue WHERE student_id = $1", []interface{}{studentID}},
 		{"DELETE FROM server_sessions WHERE kind IN ('study_expected','study_plan') AND (key = $1 OR key LIKE $1 || '|%')", []interface{}{studentID}},
 		{`UPDATE students SET xp_total = 0, xp_today = 0, diagnostic_completed = 0, diagnostic_completed_at = '',
 			league = 'bronze', league_week = '', league_moved = 0 WHERE id = $1`, []interface{}{studentID}},
@@ -1584,6 +1596,7 @@ func (s *PostgresStore) DeleteAccount(studentID string) error {
 		{"DELETE FROM concept_progress WHERE student_id = $1", []interface{}{studentID}},
 		{"DELETE FROM student_topic_speed WHERE student_id = $1", []interface{}{studentID}},
 		{"DELETE FROM quiz_completions WHERE student_id = $1", []interface{}{studentID}},
+		{"DELETE FROM student_remedial_queue WHERE student_id = $1", []interface{}{studentID}},
 		{"DELETE FROM server_sessions WHERE kind IN ('study_expected','study_plan','study_plan_prefs') AND (key = $1 OR key LIKE $1 || '|%')", []interface{}{studentID}},
 		{"DELETE FROM question_reports WHERE reporter_id = $1", []interface{}{studentID}},
 		{"DELETE FROM ai_usage WHERE usage_key = $1", []interface{}{studentID}},
@@ -2494,4 +2507,96 @@ func (s *PostgresStore) DiagnosticAttemptResponse(attemptID string) (string, boo
 		return "", false, fmt.Errorf("read diagnostic attempt: %w", err)
 	}
 	return response, true, nil
+}
+
+// EnqueueRemedial mirrors the SQLite method; see the schema comment.
+func (s *PostgresStore) EnqueueRemedial(studentID string, conceptIDs ...string) error {
+	if len(conceptIDs) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin enqueue remedial: %w", err)
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Query(`SELECT concept_id, priority FROM student_remedial_queue WHERE student_id = $1 ORDER BY priority ASC, created_at ASC FOR UPDATE`, studentID)
+	if err != nil {
+		return fmt.Errorf("query remedial queue: %w", err)
+	}
+	seen := make(map[string]bool)
+	maxPriority := -1
+	count := 0
+	for rows.Next() {
+		var cid string
+		var pri int
+		if err := rows.Scan(&cid, &pri); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan remedial queue: %w", err)
+		}
+		seen[cid] = true
+		if pri > maxPriority {
+			maxPriority = pri
+		}
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate remedial queue: %w", err)
+	}
+
+	now := time.Now().Unix()
+	stmt, err := tx.Prepare(`INSERT INTO student_remedial_queue (student_id, concept_id, priority, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT (student_id, concept_id) DO NOTHING`)
+	if err != nil {
+		return fmt.Errorf("prepare insert remedial: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, cid := range conceptIDs {
+		if seen[cid] || count >= MaxRemedialQueue {
+			continue
+		}
+		seen[cid] = true
+		maxPriority++
+		count++
+		if _, err := stmt.Exec(studentID, cid, maxPriority, now); err != nil {
+			return fmt.Errorf("insert remedial queue: %w", err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// GetRemedialQueue mirrors the SQLite method; see the schema comment.
+func (s *PostgresStore) GetRemedialQueue(studentID string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT concept_id FROM student_remedial_queue WHERE student_id = $1 ORDER BY priority ASC, created_at ASC`, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("get remedial queue: %w", err)
+	}
+	defer rows.Close()
+
+	var result []string
+	for rows.Next() {
+		var cid string
+		if err := rows.Scan(&cid); err != nil {
+			return nil, fmt.Errorf("scan remedial queue item: %w", err)
+		}
+		result = append(result, cid)
+	}
+	return result, rows.Err()
+}
+
+// RemoveRemedial mirrors the SQLite method; see the schema comment.
+func (s *PostgresStore) RemoveRemedial(studentID, conceptID string) error {
+	if _, err := s.db.Exec(`DELETE FROM student_remedial_queue WHERE student_id = $1 AND concept_id = $2`, studentID, conceptID); err != nil {
+		return fmt.Errorf("remove remedial: %w", err)
+	}
+	return nil
+}
+
+// ClearRemedialQueue mirrors the SQLite method; see the schema comment.
+func (s *PostgresStore) ClearRemedialQueue(studentID string) error {
+	if _, err := s.db.Exec(`DELETE FROM student_remedial_queue WHERE student_id = $1`, studentID); err != nil {
+		return fmt.Errorf("clear remedial queue: %w", err)
+	}
+	return nil
 }

@@ -1279,6 +1279,7 @@ func (s *SQLiteStore) ResetProgress(studentID string) error {
 		{"DELETE FROM concept_progress WHERE student_id = ?", []interface{}{studentID}},
 		{"DELETE FROM student_topic_speed WHERE student_id = ?", []interface{}{studentID}},
 		{"DELETE FROM quiz_completions WHERE student_id = ?", []interface{}{studentID}},
+		{"DELETE FROM student_remedial_queue WHERE student_id = ?", []interface{}{studentID}},
 		{"DELETE FROM server_sessions WHERE kind IN ('study_expected','study_plan') AND (key = ? OR key LIKE ? || '|%')", []interface{}{studentID, studentID}},
 		{`UPDATE students SET xp_total = 0, xp_today = 0, diagnostic_completed = 0, diagnostic_completed_at = '',
 			league = 'bronze', league_week = '', league_moved = 0 WHERE id = ?`, []interface{}{studentID}},
@@ -1324,6 +1325,7 @@ func (s *SQLiteStore) DeleteAccount(studentID string) error {
 		{"DELETE FROM concept_progress WHERE student_id = ?", []interface{}{studentID}},
 		{"DELETE FROM student_topic_speed WHERE student_id = ?", []interface{}{studentID}},
 		{"DELETE FROM quiz_completions WHERE student_id = ?", []interface{}{studentID}},
+		{"DELETE FROM student_remedial_queue WHERE student_id = ?", []interface{}{studentID}},
 		{"DELETE FROM server_sessions WHERE kind IN ('study_expected','study_plan','study_plan_prefs') AND (key = ? OR key LIKE ? || '|%')", []interface{}{studentID, studentID}},
 		{"DELETE FROM question_reports WHERE reporter_id = ?", []interface{}{studentID}},
 		{"DELETE FROM ai_usage WHERE usage_key = ?", []interface{}{studentID}},
@@ -2352,4 +2354,97 @@ func (s *SQLiteStore) DiagnosticAttemptResponse(attemptID string) (string, bool,
 		return "", false, fmt.Errorf("read diagnostic attempt: %w", err)
 	}
 	return response, true, nil
+}
+
+// EnqueueRemedial appends concepts to a student remedial queue up to MaxRemedialQueue.
+// Duplicates within the student queue are skipped.
+func (s *SQLiteStore) EnqueueRemedial(studentID string, conceptIDs ...string) error {
+	if len(conceptIDs) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin enqueue remedial: %w", err)
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.Query(`SELECT concept_id, priority FROM student_remedial_queue WHERE student_id = ? ORDER BY priority ASC, created_at ASC`, studentID)
+	if err != nil {
+		return fmt.Errorf("query remedial queue: %w", err)
+	}
+	seen := make(map[string]bool)
+	maxPriority := -1
+	count := 0
+	for rows.Next() {
+		var cid string
+		var pri int
+		if err := rows.Scan(&cid, &pri); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan remedial queue: %w", err)
+		}
+		seen[cid] = true
+		if pri > maxPriority {
+			maxPriority = pri
+		}
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate remedial queue: %w", err)
+	}
+
+	now := time.Now().Unix()
+	stmt, err := tx.Prepare(`INSERT OR IGNORE INTO student_remedial_queue (student_id, concept_id, priority, created_at) VALUES (?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("prepare insert remedial: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, cid := range conceptIDs {
+		if seen[cid] || count >= MaxRemedialQueue {
+			continue
+		}
+		seen[cid] = true
+		maxPriority++
+		count++
+		if _, err := stmt.Exec(studentID, cid, maxPriority, now); err != nil {
+			return fmt.Errorf("insert remedial queue: %w", err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// GetRemedialQueue returns pending remedial concepts for a student, ordered by priority and creation time.
+func (s *SQLiteStore) GetRemedialQueue(studentID string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT concept_id FROM student_remedial_queue WHERE student_id = ? ORDER BY priority ASC, created_at ASC`, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("get remedial queue: %w", err)
+	}
+	defer rows.Close()
+
+	var result []string
+	for rows.Next() {
+		var cid string
+		if err := rows.Scan(&cid); err != nil {
+			return nil, fmt.Errorf("scan remedial queue item: %w", err)
+		}
+		result = append(result, cid)
+	}
+	return result, rows.Err()
+}
+
+// RemoveRemedial removes one concept from a student remedial queue.
+func (s *SQLiteStore) RemoveRemedial(studentID, conceptID string) error {
+	if _, err := s.db.Exec(`DELETE FROM student_remedial_queue WHERE student_id = ? AND concept_id = ?`, studentID, conceptID); err != nil {
+		return fmt.Errorf("remove remedial: %w", err)
+	}
+	return nil
+}
+
+// ClearRemedialQueue removes all remedial concepts for a student.
+func (s *SQLiteStore) ClearRemedialQueue(studentID string) error {
+	if _, err := s.db.Exec(`DELETE FROM student_remedial_queue WHERE student_id = ?`, studentID); err != nil {
+		return fmt.Errorf("clear remedial queue: %w", err)
+	}
+	return nil
 }

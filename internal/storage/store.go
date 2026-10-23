@@ -240,6 +240,17 @@ type QuizCompletion struct {
 	XPTotal     int    `json:"xp_total"`
 }
 
+// MaxRemedialQueue caps the per-student remedial queue.
+const MaxRemedialQueue = 10
+
+// RemedialQueueEntry records one concept queued for targeted remediation.
+type RemedialQueueEntry struct {
+	StudentID string `json:"student_id"`
+	ConceptID string `json:"concept_id"`
+	Priority  int    `json:"priority"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 // QuestionReport is a user complaint about a question, explanation,
 // lesson body, worked example, or diagram.
 //
@@ -704,6 +715,13 @@ type Repository interface {
 	DeleteDiagnosticSession(id string) error
 	DeleteDiagnosticSessionsForStudent(studentID string) error
 	SweepDiagnosticSessions(before time.Time) (int, error)
+
+	// Remedial queue persistence: 2-miss halt remedial items survive server restarts.
+	EnqueueRemedial(studentID string, conceptIDs ...string) error
+	GetRemedialQueue(studentID string) ([]string, error)
+	RemoveRemedial(studentID, conceptID string) error
+	ClearRemedialQueue(studentID string) error
+
 	// ListUnsettledReportIDsForConcept returns the ids of a concept's reports
 	// that are still open or under review, oldest first. Bulk moderation closes
 	// a fixed bug's reports as a set, and selecting that set by concept is what

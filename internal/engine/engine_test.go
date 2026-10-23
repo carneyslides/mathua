@@ -674,6 +674,122 @@ func TestEngine_Halt_KeyPrerequisites_TargetedRemediation(t *testing.T) {
 	}
 }
 
+func TestEngine_RemedialQueue_PersistenceAcrossRestart(t *testing.T) {
+	d, err := concepts.Build([]concepts.Concept{
+		{
+			ID: "a", Label: "Concept A", Domain: "d",
+			GradingType: "numeric", Prerequisites: []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 2, AvgTimeSeconds: 60},
+		},
+		{
+			ID: "b", Label: "Concept B", Domain: "d",
+			GradingType: "numeric", Prerequisites: []string{"a"},
+			KeyPrerequisites: []string{"a"},
+			Variants: []concepts.Variant{
+				{Difficulty: 0.3, TimeThresh: 60.0, Label: "b-easy"},
+			},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 2, AvgTimeSeconds: 60},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build DAG: %v", err)
+	}
+	store, err := storage.NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+	reg := generator.NewRegistry()
+	reg.Register("a", &testGen{answer: "42"})
+	reg.Register("b", &testGen{answer: "99"})
+
+	// First server instance
+	e1 := New(store, d, reg, nil, nil)
+	st, _ := e1.CreateStudent("persistent-student")
+	sess, _ := e1.repo.CreateSession(st.ID)
+
+	now := time.Now().UTC()
+	if err := e1.repo.UpsertProgress(&storage.ConceptProgress{
+		StudentID:     st.ID,
+		ConceptID:     "a",
+		Status:        string(mastery.StatusMastered),
+		Streak:        3,
+		LastAttempted: &now,
+		LastReviewed:  &now,
+	}); err != nil {
+		t.Fatalf("upsert progress: %v", err)
+	}
+
+	q1, err := e1.NextQuestion(sess.ID, st.ID)
+	if err != nil || q1 == nil {
+		t.Fatalf("q1: %v", err)
+	}
+	_, _ = e1.SubmitAnswer(sess.ID, st.ID, q1.AttemptID, "wrong", 5.0)
+
+	q2, err := e1.NextQuestion(sess.ID, st.ID)
+	if err != nil || q2 == nil {
+		t.Fatalf("q2: %v", err)
+	}
+	res2, err := e1.SubmitAnswer(sess.ID, st.ID, q2.AttemptID, "wrong", 5.0)
+	if err != nil || !res2.Halted {
+		t.Fatalf("expected halt on second miss, res: %+v, err: %v", res2, err)
+	}
+
+	// Verify remedial queue is in storage
+	storedRem, err := store.GetRemedialQueue(st.ID)
+	if err != nil {
+		t.Fatalf("get stored remedial: %v", err)
+	}
+	if len(storedRem) != 1 || storedRem[0] != "a" {
+		t.Fatalf("expected stored remedial queue [a], got %v", storedRem)
+	}
+
+	// Simulate server restart by creating a completely new engine instance sharing the same store
+	e2 := New(store, d, reg, nil, nil)
+
+	// e2 must read the persistent remedial queue from storage
+	remAfterRestart := e2.RemedialQueue(st.ID)
+	if len(remAfterRestart) != 1 || remAfterRestart[0] != "a" {
+		t.Fatalf("expected remedial queue [a] after restart, got %v", remAfterRestart)
+	}
+
+	// Recommendations on new engine must place the remedial prerequisite at the front
+	rec, err := e2.RecommendNext(st.ID, nil)
+	if err != nil {
+		t.Fatalf("recommend on restarted engine: %v", err)
+	}
+	if rec.Primary == nil || rec.Primary.ConceptID != "a" {
+		t.Fatalf("expected primary recommendation 'a', got %+v", rec.Primary)
+	}
+	if rec.Primary.Badge != "Remediation" {
+		t.Errorf("expected badge Remediation, got %s", rec.Primary.Badge)
+	}
+
+	// Fresh session on the restarted server must serve the persistent remedial prerequisite
+	sess2, _ := e2.repo.CreateSession(st.ID)
+	qRem, err := e2.NextQuestion(sess2.ID, st.ID)
+	if err != nil || qRem == nil {
+		t.Fatalf("next question on restarted server: %v", err)
+	}
+	if qRem.ConceptID != "a" {
+		t.Fatalf("expected remedial concept 'a', got %s", qRem.ConceptID)
+	}
+
+	// Answering correctly drains the remedial queue in storage
+	resRem, err := e2.SubmitAnswer(sess2.ID, st.ID, qRem.AttemptID, "42", 5.0)
+	if err != nil || !resRem.Correct {
+		t.Fatalf("submit remedial answer: %v", err)
+	}
+
+	storedRemAfterSolve, err := store.GetRemedialQueue(st.ID)
+	if err != nil {
+		t.Fatalf("get stored remedial after solve: %v", err)
+	}
+	if len(storedRemAfterSolve) != 0 {
+		t.Fatalf("expected empty remedial queue after solving prerequisite, got %v", storedRemAfterSolve)
+	}
+}
+
 func TestEngine_Halt_DistinctConceptMissesDoNotHalt(t *testing.T) {
 	d, err := concepts.Build([]concepts.Concept{
 		{

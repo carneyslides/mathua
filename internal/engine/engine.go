@@ -202,8 +202,6 @@ type Engine struct {
 	// In-memory by design, same as diag/quiz sessions: a restart just means
 	// a retake; weakness propagation (+0.2/miss) is the durable signal.
 	quizRemedial map[string][]string
-	// Targeted remedial queue (studentID → conceptIDs).
-	remedialQueue map[string][]string
 	// resetGen counts account wipes per student. A submit snapshots the
 	// counter with the served question and re-checks it after grading, so an
 	// answer graded across a reset is refused instead of resurrecting wiped
@@ -242,7 +240,6 @@ func New(repo storage.Repository, dag *concepts.DAG, reg *generator.Registry, ll
 		studySessions: make(map[string]string),
 		studyAnchor:   make(map[string]string),
 		quizRemedial:  make(map[string][]string),
-		remedialQueue: make(map[string][]string),
 		resetGen:      make(map[string]uint64),
 	}
 }
@@ -569,6 +566,11 @@ func (e *Engine) NextQuestion(sessionID, studentID string) (*Question, error) {
 	as := e.sessions[sessionID]
 	if as == nil {
 		as = &activeSession{studentID: studentID}
+		if rem, err := e.repo.GetRemedialQueue(studentID); err == nil && len(rem) > 0 {
+			as.halted = true
+			as.remedialQueue = append([]string(nil), rem...)
+		}
+		e.sessions[sessionID] = as
 	}
 
 	// PR 1.5 halt: after 2 consecutive misses, serve the remedial queue first
@@ -1264,9 +1266,7 @@ func (e *Engine) SubmitAnswer(sessionID, studentID, attemptID, answer string, el
 							validKPs = append(validKPs, kp)
 						}
 					}
-					e.mu.Lock()
-					e.enqueueRemedialLocked(studentID, validKPs)
-					e.mu.Unlock()
+					_ = e.repo.EnqueueRemedial(studentID, validKPs...)
 				}
 			}
 			as.remedialQueue = append(as.remedialQueue, sessionFields.conceptID)
@@ -1294,9 +1294,7 @@ func (e *Engine) SubmitAnswer(sessionID, studentID, attemptID, answer string, el
 	} else {
 		as.consecutiveMisses = 0
 		as.missConceptID = ""
-		e.mu.Lock()
-		e.removeRemedialLocked(studentID, sessionFields.conceptID)
-		e.mu.Unlock()
+		_ = e.repo.RemoveRemedial(studentID, sessionFields.conceptID)
 		// Remedial recovery: clear the halt once the queue is drained.
 		if as.halted && len(as.remedialQueue) == 0 {
 			as.halted = false
@@ -1558,7 +1556,7 @@ func (e *Engine) submitAnswerWithTask(studentID, conceptID, answer, expected str
 						remedial = append(remedial, kp)
 					}
 				}
-				e.enqueueRemedialLocked(studentID, validKPs)
+				_ = e.repo.EnqueueRemedial(studentID, validKPs...)
 				remedial = append(remedial, conceptID)
 			}
 		}
@@ -1583,7 +1581,7 @@ func (e *Engine) submitAnswerWithTask(studentID, conceptID, answer, expected str
 	} else {
 		delete(e.studyMisses, missKey)
 		delete(e.studyRush, missKey)
-		e.removeRemedialLocked(studentID, conceptID)
+		_ = e.repo.RemoveRemedial(studentID, conceptID)
 	}
 	e.mu.Unlock()
 	if xp != 0 {
@@ -1750,60 +1748,30 @@ func (e *Engine) ClearQuizRemedial(studentID string) {
 
 // RemedialQueue returns a snapshot of pending remedial concepts for a student.
 func (e *Engine) RemedialQueue(studentID string) []string {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return append([]string(nil), e.remedialQueue[studentID]...)
+	q, err := e.repo.GetRemedialQueue(studentID)
+	if err != nil {
+		return nil
+	}
+	return q
 }
 
 // ClearRemedial drains the remedial queue for a student.
 func (e *Engine) ClearRemedial(studentID string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	delete(e.remedialQueue, studentID)
+	_ = e.repo.ClearRemedialQueue(studentID)
 }
 
 // EnqueueRemedial queues concepts for targeted remediation.
 func (e *Engine) EnqueueRemedial(studentID string, conceptIDs ...string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.enqueueRemedialLocked(studentID, conceptIDs)
-}
-
-func (e *Engine) enqueueRemedialLocked(studentID string, conceptIDs []string) {
-	queue := e.remedialQueue[studentID]
-	seen := make(map[string]bool, len(queue)+len(conceptIDs))
-	for _, id := range queue {
-		seen[id] = true
-	}
+	var valid []string
 	for _, id := range conceptIDs {
-		if seen[id] || len(queue) >= maxRemedialQueue {
-			continue
+		if e.dag.Concept(id) != nil {
+			valid = append(valid, id)
 		}
-		if e.dag.Concept(id) == nil {
-			continue
-		}
-		seen[id] = true
-		queue = append(queue, id)
 	}
-	e.remedialQueue[studentID] = queue
-}
-
-func (e *Engine) removeRemedialLocked(studentID, conceptID string) {
-	queue := e.remedialQueue[studentID]
-	if len(queue) == 0 {
+	if len(valid) == 0 {
 		return
 	}
-	var next []string
-	for _, id := range queue {
-		if id != conceptID {
-			next = append(next, id)
-		}
-	}
-	if len(next) == 0 {
-		delete(e.remedialQueue, studentID)
-	} else {
-		e.remedialQueue[studentID] = next
-	}
+	_ = e.repo.EnqueueRemedial(studentID, valid...)
 }
 
 // computeXP retains bool-based API for backward compatibility (isReview=true→review 5, false→lesson 10).
