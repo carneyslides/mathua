@@ -146,22 +146,23 @@ type polarGen struct{}
 
 func (g *polarGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	scale := int(1 + ctx.Difficulty*5)
+	type angle struct {
+		deg     int
+		cosReal int
+		sinImag int
+	}
+	angles := []angle{
+		{0, 1, 0},
+		{90, 0, 1},
+		{180, -1, 0},
+		{270, 0, -1},
+	}
+	a := angles[rand.Intn(len(angles))]
+	r := rand.Intn(max(1, scale*4)) + 2
+	realPart := r * a.cosReal
+	imagPart := r * a.sinImag
+
 	if rand.Intn(2) == 0 {
-		type angle struct {
-			deg     int
-			cosReal int
-			sinImag int
-		}
-		angles := []angle{
-			{0, 1, 0},
-			{90, 0, 1},
-			{180, -1, 0},
-			{270, 0, -1},
-		}
-		a := angles[rand.Intn(len(angles))]
-		r := rand.Intn(max(1, scale*4)) + 2
-		realPart := r * a.cosReal
-		imagPart := r * a.sinImag
 		return generator.Problem{
 			Question:    fmt.Sprintf("Convert \\(%d(\\cos %d^{\\circ} + i\\sin %d^{\\circ})\\) to rectangular form.", r, a.deg, a.deg),
 			Answer:      fmtComplex(realPart, imagPart),
@@ -169,22 +170,10 @@ func (g *polarGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 		}
 	}
 
-	type triple struct{ a, b, r int }
-	triples := []triple{
-		{3, 4, 5},
-		{4, 3, 5},
-		{5, 12, 13},
-		{12, 5, 13},
-		{6, 8, 10},
-		{8, 6, 10},
-	}
-	t := triples[rand.Intn(len(triples))]
-	theta := math.Atan2(float64(t.b), float64(t.a)) * 180 / math.Pi
-	thetaStr := strconv.Itoa(int(math.Round(theta)))
 	return generator.Problem{
-		Question:    fmt.Sprintf("Convert \\(%s\\) to polar form.", fmtComplex(t.a, t.b)),
-		Answer:      fmt.Sprintf("%d(cos %s° + i sin %s°)", t.r, thetaStr, thetaStr),
-		Explanation: fmt.Sprintf("r = √(a²+b²) = √(%d²+%d²) = %d. θ = arctan(b/a) = arctan(%d/%d) ≈ %s°", t.a, t.b, t.r, t.b, t.a, thetaStr),
+		Question:    fmt.Sprintf("Convert \\(%s\\) to polar form.", fmtComplex(realPart, imagPart)),
+		Answer:      fmt.Sprintf("%d(cos %d° + i sin %d°)", r, a.deg, a.deg),
+		Explanation: fmt.Sprintf("r = √(a²+b²) = √((%d)²+(%d)²) = %d. θ = %d°", realPart, imagPart, r, a.deg),
 	}
 }
 
