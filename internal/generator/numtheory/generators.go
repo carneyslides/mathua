@@ -3,6 +3,7 @@ package numtheory
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
@@ -444,29 +445,129 @@ func (g *primitiveRootGen) Generate(ctx generator.GeneratorContext) generator.Pr
 	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
+// computeMobius returns the Möbius value mu(n), the prime factor string,
+// whether n is square-free, and the count of distinct prime factors.
+func computeMobius(n int) (mu int, factorStr string, squareFree bool, primeCount int) {
+	if n == 1 {
+		return 1, "1", true, 0
+	}
+	temp := n
+	var parts []string
+	squareFree = true
+	primeCount = 0
+
+	for d := 2; d*d <= temp; d++ {
+		if temp%d == 0 {
+			primeCount++
+			exp := 0
+			for temp%d == 0 {
+				exp++
+				temp /= d
+			}
+			if exp > 1 {
+				squareFree = false
+				parts = append(parts, fmt.Sprintf("%d^{%d}", d, exp))
+			} else {
+				parts = append(parts, strconv.Itoa(d))
+			}
+		}
+	}
+	if temp > 1 {
+		primeCount++
+		parts = append(parts, strconv.Itoa(temp))
+	}
+
+	factorStr = strings.Join(parts, " \\times ")
+	if !squareFree {
+		return 0, factorStr, false, primeCount
+	}
+	if primeCount%2 == 1 {
+		return -1, factorStr, true, primeCount
+	}
+	return 1, factorStr, true, primeCount
+}
+
 type mobiusGen struct{}
 
 func (g *mobiusGen) Generate(ctx generator.GeneratorContext) generator.Problem {
+	mode := rand.Intn(3)
+	var n int
 	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		n  int
-		mu int
+
+	switch mode {
+	case 0:
+		// Square factor present: p^2 * m
+		primes := []int{2, 3, 5, 7}
+		p := primes[rand.Intn(len(primes))]
+		m := 1
+		if scale > 2 {
+			m = rand.Intn(scale*2) + 1
+		}
+		n = p * p * m
+		if n > 150 {
+			n = p * p
+		}
+	case 1:
+		// Odd number of distinct primes: either 1 prime or 3 primes
+		if scale >= 3 && rand.Intn(2) == 0 {
+			triples := [][3]int{
+				{2, 3, 5}, {2, 3, 7}, {2, 3, 11}, {2, 5, 7},
+				{2, 3, 13}, {2, 3, 17}, {3, 5, 7}, {2, 5, 11}, {2, 3, 19},
+			}
+			t := triples[rand.Intn(len(triples))]
+			n = t[0] * t[1] * t[2]
+		} else {
+			primes := []int{2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71}
+			limit := 8
+			if scale > 2 {
+				limit = len(primes)
+			}
+			n = primes[rand.Intn(limit)]
+		}
+	case 2:
+		// Even number of distinct primes: 0 primes (n=1) or 2 distinct primes
+		if rand.Intn(6) == 0 {
+			n = 1
+		} else {
+			pairs := [][2]int{
+				{2, 3}, {2, 5}, {2, 7}, {3, 5}, {2, 11}, {3, 7}, {2, 13},
+				{3, 11}, {5, 7}, {2, 17}, {3, 13}, {2, 19}, {5, 11}, {3, 17},
+				{2, 23}, {3, 19}, {7, 11}, {5, 13}, {2, 29}, {3, 23},
+			}
+			limit := 8
+			if scale > 2 {
+				limit = len(pairs)
+			}
+			p := pairs[rand.Intn(limit)]
+			n = p[0] * p[1]
+		}
 	}
-	easy := []entry{
-		{1, 1}, {2, -1}, {3, -1}, {5, -1}, {6, 1}, {30, -1},
+
+	mu, factorStr, squareFree, k := computeMobius(n)
+	ansStr := strconv.Itoa(mu)
+
+	var exp string
+	if n == 1 {
+		exp = "By definition, 1 is the empty product of 0 distinct prime factors, so \\(\\mu(1) = (-1)^0 = 1\\)."
+	} else if !squareFree {
+		exp = fmt.Sprintf("The prime factorization of %d is \\(%s\\). Because %d has a repeated prime factor (is not square-free), \\(\\mu(%d) = 0\\).", n, factorStr, n, n)
+	} else if k == 1 {
+		exp = fmt.Sprintf("Because %d is prime, it has 1 distinct prime factor. Therefore, \\(\\mu(%d) = (-1)^1 = -1\\).", n, n)
+	} else {
+		exp = fmt.Sprintf("The prime factorization of %d is \\(%s\\), which is the product of %d distinct primes. Therefore, \\(\\mu(%d) = (-1)^{%d} = %d\\).", n, factorStr, k, n, k, mu)
 	}
-	hard := []entry{
-		{4, 0}, {8, 0}, {12, 0}, {18, 0}, {7, -1}, {10, 1},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
+
 	return generator.Problem{
-		Question:    fmt.Sprintf("What is μ(%d) (Möbius function)? (enter -1,0,1)", e.n),
-		Answer:      fmt.Sprintf("%d", e.mu),
-		Explanation: fmt.Sprintf("μ(n)=0 if squared prime divides n, otherwise (-1)^k where k is number of prime factors; μ(%d)=%d.", e.n, e.mu),
+		Question:    fmt.Sprintf("Evaluate the Möbius function \\(\\mu(%d)\\). (enter -1, 0, or 1)", n),
+		Answer:      ansStr,
+		Explanation: exp,
+		Facts: map[string]string{
+			"n":           strconv.Itoa(n),
+			"answer":      ansStr,
+			"square_free": strconv.FormatBool(squareFree),
+			"prime_count": strconv.Itoa(k),
+			"factors":     factorStr,
+		},
 	}
 }
 

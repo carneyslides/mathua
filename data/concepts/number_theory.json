@@ -235,7 +235,7 @@
     "label": "M\u00f6bius function and inversion",
     "domain": "number_theory",
     "subdomain": "number_theory.advanced",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "nt.adv.euler_phi"
     ],

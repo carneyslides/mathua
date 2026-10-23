@@ -11650,7 +11650,7 @@
   },
   {
     "domain": "number_theory",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "id": "nt.adv.mobius",
     "label": "Möbius function and inversion",
     "mastery_threshold": {
