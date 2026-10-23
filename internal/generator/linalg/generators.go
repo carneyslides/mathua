@@ -495,39 +495,55 @@ func (g *spanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type basisGen struct{}
 
 func (g *basisGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
-	qType := rand.Intn(3)
-	switch qType {
+	mode := rand.Intn(5)
+	switch mode {
 	case 0:
+		// Polynomial space P_n
+		n := smallInt(1, 5+int(ctx.Difficulty*3))
+		ans := n + 1
 		return generator.Problem{
-			Question:    "What is the dimension of \\(\\mathbb{R}^{3}\\)?",
-			Answer:      "3",
-			Explanation: "\\(\\mathbb{R}^{3}\\) has dimension 3 because it has a basis of 3 vectors, e.g., \\(\\{(1,0,0), (0,1,0), (0,0,1)\\}\\).",
+			Question:    fmt.Sprintf("What is the dimension of the vector space \\(\\mathcal{P}_{%d}\\) of real polynomials of degree at most %d?", n, n),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("A standard basis for \\(\\mathcal{P}_{%d}\\) is \\(\\{1, x, x^2, \\dots, x^{%d}\\}\\), which has %d elements. Thus \\(\\dim(\\mathcal{P}_{%d}) = %d\\).", n, n, ans, n, ans),
 		}
 	case 1:
+		// Matrix space M_{m x n}
+		m := smallInt(2, 4+int(ctx.Difficulty*2))
+		n := smallInt(2, 4+int(ctx.Difficulty*2))
+		ans := m * n
 		return generator.Problem{
-			Question:    "What is the dimension of \\(\\mathbb{R}^{2}\\)?",
-			Answer:      "2",
-			Explanation: "\\(\\mathbb{R}^{2}\\) has dimension 2 because it has a basis of 2 vectors, e.g., \\(\\{(1,0), (0,1)\\}\\).",
+			Question:    fmt.Sprintf("What is the dimension of the vector space \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\) of all %d-by-%d real matrices?", m, n, m, n),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The standard basis consists of single-entry matrix units \\(E_{ij}\\). With %d rows and %d columns, the dimension is %d.", m, n, ans),
+		}
+	case 2:
+		// Diagonal matrices D_n
+		n := smallInt(2, 6+int(ctx.Difficulty*4))
+		return generator.Problem{
+			Question:    fmt.Sprintf("What is the dimension of the subspace of all %d-by-%d diagonal matrices in \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\)?", n, n, n, n),
+			Answer:      fmt.Sprintf("%d", n),
+			Explanation: fmt.Sprintf("A diagonal matrix is completely determined by its %d diagonal entries, so its basis has %d matrices.", n, n),
+		}
+	case 3:
+		// Coordinates with respect to an upper triangular basis
+		a := smallInt(1, 3)
+		c1 := smallInt(1, 5+int(ctx.Difficulty*3))
+		c2 := smallInt(1, 4+int(ctx.Difficulty*2))
+		w1 := c1 + a*c2
+		w2 := c2
+		return generator.Problem{
+			Question:    fmt.Sprintf("Given the ordered basis \\(\\mathcal{B} = \\{(1,0), (%d,1)\\}\\), find the first coordinate \\(c_1\\) of the vector \\((%d,%d)\\) with respect to \\(\\mathcal{B}\\).", a, w1, w2),
+			Answer:      fmt.Sprintf("%d", c1),
+			Explanation: fmt.Sprintf("We solve \\(c_1(1,0) + c_2(%d,1) = (%d,%d)\\). The second component gives \\(c_2 = %d\\). The first component gives \\(c_1 + %d(%d) = %d\\), so \\(c_1 = %d - %d = %d\\).", a, w1, w2, w2, a, w2, w1, w1, a*w2, c1),
 		}
 	default:
-		v1, v2 := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-		w1, w2 := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-		if v1 == 0 && v2 == 0 {
-			v1, v2 = 1, 0
-		}
-		if w1 == 0 && w2 == 0 {
-			w1, w2 = 0, 1
-		}
-		det := v1*w2 - v2*w1
-		answer := "no"
-		if det != 0 {
-			answer = "yes"
-		}
+		// Symmetric matrices Sym_n
+		n := smallInt(2, 5)
+		ans := n * (n + 1) / 2
 		return generator.Problem{
-			Question:    fmt.Sprintf("Is the set \\(\\{(%d,%d), (%d,%d)\\}\\) a basis for \\(\\mathbb{R}^{2}\\)?", v1, v2, w1, w2),
-			Answer:      answer,
-			Explanation: fmt.Sprintf("det = %d, so the vectors are %s. Since they %s span R² and are %s, they %s a basis.", det, map[bool]string{true: "linearly independent", false: "linearly dependent"}[det != 0], map[bool]string{true: "do", false: "do not"}[det != 0], map[bool]string{true: "independent", false: "dependent"}[det != 0], map[bool]string{true: "form", false: "do not form"}[det != 0]),
+			Question:    fmt.Sprintf("What is the dimension of the subspace of all %d-by-%d real symmetric matrices in \\(\\mathcal{M}_{%d \\times %d}(\\mathbb{R})\\)?", n, n, n, n),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("A symmetric matrix is determined by its diagonal and upper triangular entries. The number of independent entries is \\(\\frac{%d(%d + 1)}{2} = %d\\).", n, n, ans),
 		}
 	}
 }

@@ -237,7 +237,7 @@
     "label": "Basis and dimension",
     "domain": "linear_algebra",
     "subdomain": "linear_algebra.vectors",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "linalg.vec.span"
     ],
