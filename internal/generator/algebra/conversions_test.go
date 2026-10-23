@@ -21,6 +21,7 @@ var convertedIDs = []string{
 	"alg.func.injectivity",
 	"alg.func.irrational",
 	"alg.func.power",
+	"alg.poly.factor_theorem",
 	"alg.systems.concept",
 }
 
@@ -168,6 +169,26 @@ func TestConvertedAnswersRecomputeFromFacts(t *testing.T) {
 		}
 		if p.Answer != strconv.Itoa(count) {
 			t.Fatalf("injectivity: answer=%s want %d from %q", p.Answer, count, p.Facts["functions"])
+		}
+	}
+
+	for i := 0; i < 100; i++ {
+		p := sample(t, reg, "alg.poly.factor_theorem", i)
+		r := convFactInt(t, p.Facts, "root")
+		a := convFactInt(t, p.Facts, "a")
+		c := convFactInt(t, p.Facts, "c")
+		k := convFactInt(t, p.Facts, "answer")
+		rhs := convFactInt(t, p.Facts, "rhs")
+		if p.Answer != strconv.Itoa(k) {
+			t.Fatalf("factor_theorem: answer %s != k %d", p.Answer, k)
+		}
+		// p(r) = r^3 + a*r^2 + k*r + c must be 0
+		val := r*r*r + a*r*r + k*r + c
+		if val != 0 {
+			t.Fatalf("factor_theorem: p(%d) = %d != 0 (a=%d, k=%d, c=%d)", r, val, a, k, c)
+		}
+		if rhs != r*k {
+			t.Fatalf("factor_theorem: rhs %d != r*k %d", rhs, r*k)
 		}
 	}
 }

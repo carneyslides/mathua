@@ -66,7 +66,6 @@ var generatorExplained = map[string]string{
 	"alg.func.sigmoid":              "table-driven: fixed question, fixed answer",
 	"alg.func.transformations":      "table-driven: fixed question, fixed answer",
 	"alg.log.graph":                 "table-driven: fixed question, fixed answer",
-	"alg.poly.factor_theorem":       "table-driven: fixed question, fixed answer",
 	"alg.radical.conjugate":         "table-driven: fixed question, fixed answer",
 	"alg.rational.complex_fraction": "table-driven: fixed question, fixed answer",
 	"alg.seq.induction":             "table-driven: fixed question, fixed answer",

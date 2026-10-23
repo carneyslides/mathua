@@ -218,6 +218,51 @@ func (g *injectivityConvertedGen) Generate(ctx generator.GeneratorContext) gener
 	}
 }
 
+// ---------------------------------------------------------------------------
+// The factor theorem (alg.poly.factor_theorem)
+// ---------------------------------------------------------------------------
+
+type factorTheoremConvertedGen struct{}
+
+func (g *factorTheoremConvertedGen) Generate(ctx generator.GeneratorContext) generator.Problem {
+	roots := []int{-3, -2, -1, 1, 2, 3}
+	r := roots[rand.Intn(len(roots))]
+	a := rand.Intn(9) - 4
+	k := rand.Intn(17) - 8
+	c := -(r*r*r + a*r*r + k*r)
+	if c == 0 {
+		k += 2
+		c = -(r*r*r + a*r*r + k*r)
+	}
+
+	factorStr := fmt.Sprintf("x - %d", r)
+	if r < 0 {
+		factorStr = fmt.Sprintf("x + %d", -r)
+	}
+
+	constTerm := r*r*r + a*r*r + c
+	rhs := -constTerm
+
+	q := fmt.Sprintf("The linear polynomial \\(%s\\) is a factor of \\(p(x) = x^3 + (%d)x^2 + kx + (%d)\\). By the factor theorem, what is the value of \\(k\\)?",
+		factorStr, a, c)
+	exp := fmt.Sprintf("By the factor theorem, \\(%s\\) divides \\(p(x)\\) exactly when \\(p(%d) = 0\\). Evaluating \\(p(%d) = (%d)^3 + (%d)(%d)^2 + k(%d) + (%d) = 0\\) simplifies to \\(%d + (%d)k = 0\\), so \\(%dk = %d\\) and \\(k = %d\\).",
+		factorStr, r, r, r, a, r, r, c, constTerm, r, r, rhs, k)
+
+	return generator.Problem{
+		Question:    q,
+		Answer:      convInt(k),
+		Explanation: exp,
+		Facts: map[string]string{
+			"factor": factorStr,
+			"root":   convInt(r),
+			"a":      convInt(a),
+			"c":      convInt(c),
+			"rhs":    convInt(rhs),
+			"answer": convInt(k),
+		},
+	}
+}
+
 // registerConversions registers the concepts of this batch that used to be
 // table-driven. Their old registrations are removed from Register, because a
 // concept id may be registered only once.
@@ -229,4 +274,5 @@ func registerConversions(reg *generator.Registry) {
 	reg.Register("alg.eq.extraneous_roots", &extraneousRootsConvertedGen{})
 	reg.Register("alg.systems.concept", &systemsConvertedGen{})
 	reg.Register("alg.func.injectivity", &injectivityConvertedGen{})
+	reg.Register("alg.poly.factor_theorem", &factorTheoremConvertedGen{})
 }

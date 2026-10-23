@@ -1,0 +1,23 @@
+{
+  "concept": "alg.poly.factor_theorem",
+  "setup": "The linear binomial \\([[factor]]\\) divides \\(p(x) = x^3 + ([[a]])x^2 + kx + ([[c]])\\).",
+  "steps": [
+    {
+      "fact": "root",
+      "say": "By the factor theorem, \\([[factor]]\\) divides \\(p(x)\\) exactly when \\(p([[root]]) = 0\\)."
+    },
+    {
+      "fact": "c",
+      "say": "Substitute \\(x = [[root]]\\) into the polynomial: \\(([[root]])^3 + ([[a]])([[root]])^2 + k([[root]]) + ([[c]]) = 0\\)."
+    },
+    {
+      "fact": "rhs",
+      "say": "Isolating the linear term in \\(k\\) gives \\([[root]]k = [[rhs]]\\)."
+    },
+    {
+      "fact": "answer",
+      "say": "Dividing by \\([[root]]\\) yields \\(k = [[answer]]\\)."
+    }
+  ],
+  "answer": "So the value of \\(k\\) is \\([[answer]]\\)."
+}
