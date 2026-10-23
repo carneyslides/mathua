@@ -2,6 +2,7 @@ package scoring
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 	"time"
 
@@ -190,5 +191,170 @@ func TestScoresDailyGoalFallback(t *testing.T) {
 	}
 	if scoresExplicit.DailyXPGoal != 50 {
 		t.Errorf("DailyXPGoal = %d, want 50", scoresExplicit.DailyXPGoal)
+	}
+}
+
+func TestWeekStart_Sunday(t *testing.T) {
+	// 2026-05-17 is a Sunday. Monday of that week is May 11.
+	ts := time.Date(2026, 5, 17, 22, 15, 0, 0, time.UTC)
+	m := weekStart(ts)
+	if m.Year() != 2026 || m.Month() != 5 || m.Day() != 11 {
+		t.Errorf("expected 2026-05-11, got %s", m.Format("2006-01-02"))
+	}
+	if m.Hour() != 0 || m.Minute() != 0 {
+		t.Error("expected midnight")
+	}
+}
+
+func TestComputeCurrentStreak_ConsecutiveAndGap(t *testing.T) {
+	now := time.Now().UTC()
+	yesterday := now.AddDate(0, 0, -1)
+	twoDaysAgo := now.AddDate(0, 0, -2)
+	threeDaysAgo := now.AddDate(0, 0, -3)
+
+	// 3 consecutive days: today, yesterday and two days ago -> streak 3
+	progress3 := map[string]*storage.ConceptProgress{
+		"a": {LastAttempted: &now},
+		"b": {LastAttempted: &yesterday},
+		"c": {LastAttempted: &twoDaysAgo},
+	}
+	if s := computeCurrentStreak(progress3); s != 3 {
+		t.Errorf("expected streak 3, got %d", s)
+	}
+
+	// Gap between yesterday and three days ago -> streak 2
+	progressGap := map[string]*storage.ConceptProgress{
+		"a": {LastAttempted: &now},
+		"b": {LastAttempted: &yesterday},
+		"c": {LastAttempted: &threeDaysAgo},
+	}
+	if s := computeCurrentStreak(progressGap); s != 2 {
+		t.Errorf("expected streak 2, got %d", s)
+	}
+}
+
+func TestPausedUntilCases(t *testing.T) {
+	store, _ := storage.NewSQLiteStore(":memory:")
+	defer store.Close()
+	st, _ := store.CreateStudent("paused-tester")
+	u := NewUpdater(nil, store)
+
+	// Case 1: empty settings
+	if got := pausedUntil(u, st.ID); got != "" {
+		t.Errorf("expected empty string for empty settings, got %q", got)
+	}
+
+	// Case 2: literal "{}"
+	_ = store.UpdateSettings(st.ID, "{}")
+	if got := pausedUntil(u, st.ID); got != "" {
+		t.Errorf("expected empty string for {}, got %q", got)
+	}
+
+	// Case 3: invalid json
+	_ = store.UpdateSettings(st.ID, "{bad json")
+	if got := pausedUntil(u, st.ID); got != "" {
+		t.Errorf("expected empty string for malformed json, got %q", got)
+	}
+
+	// Case 4: empty pause_until
+	_ = store.UpdateSettings(st.ID, `{"pause_until":""}`)
+	if got := pausedUntil(u, st.ID); got != "" {
+		t.Errorf("expected empty string for empty pause_until, got %q", got)
+	}
+
+	// Case 5: unparseable date
+	_ = store.UpdateSettings(st.ID, `{"pause_until":"not-a-date"}`)
+	if got := pausedUntil(u, st.ID); got != "" {
+		t.Errorf("expected empty string for unparseable date, got %q", got)
+	}
+
+	// Case 6: past date
+	_ = store.UpdateSettings(st.ID, `{"pause_until":"2020-01-01"}`)
+	if got := pausedUntil(u, st.ID); got != "" {
+		t.Errorf("expected empty string for past date, got %q", got)
+	}
+
+	// Case 7: future date
+	future := time.Now().UTC().AddDate(1, 0, 0).Format("2006-01-02")
+	_ = store.UpdateSettings(st.ID, `{"pause_until":"`+future+`"}`)
+	if got := pausedUntil(u, st.ID); got != future {
+		t.Errorf("expected future date %q, got %q", future, got)
+	}
+}
+
+func TestCompute_TopicSpeedsAndQuizGate(t *testing.T) {
+	store, _ := storage.NewSQLiteStore(":memory:")
+	defer store.Close()
+	st, _ := store.CreateStudent("quiz-tester")
+	_ = store.SetDailyXPGoal(st.ID, 40)
+	_ = store.AwardXP(st.ID, 120, "practice", "seed-xp")
+
+	// Topic speed 1: high repetitions/speed causing darkness clamping to 1.0
+	_ = store.UpsertTopicSpeed(&storage.TopicSpeed{
+		StudentID:     st.ID,
+		ConceptID:     "c1",
+		LearningSpeed: 2.5,
+		Repetitions:   8,
+	})
+	// Topic speed 2: normal repetitions/speed
+	_ = store.UpsertTopicSpeed(&storage.TopicSpeed{
+		StudentID:     st.ID,
+		ConceptID:     "c2",
+		LearningSpeed: 1.2,
+		Repetitions:   2,
+	})
+
+	// Record a previous quiz completion at XP total 50. Current is 120.
+	// XPSinceQuiz = 120 - 50 = 70 >= xp.QuizGateXP (50) -> QuizDue is true.
+	_ = store.RecordQuizCompletion(st.ID, 50)
+
+	u := NewUpdater(nil, store)
+	scores, err := u.Compute(st.ID)
+	if err != nil {
+		t.Fatalf("compute: %v", err)
+	}
+
+	if scores.DailyXPGoal != 40 {
+		t.Errorf("DailyXPGoal = %d, want 40", scores.DailyXPGoal)
+	}
+	if scores.XPTotal != 120 {
+		t.Errorf("XPTotal = %d, want 120", scores.XPTotal)
+	}
+	if scores.XPSinceQuiz != 70 {
+		t.Errorf("XPSinceQuiz = %d, want 70", scores.XPSinceQuiz)
+	}
+	if !scores.QuizDue {
+		t.Errorf("QuizDue expected true (70 >= %d)", xp.QuizGateXP)
+	}
+	if scores.SpacedReps["c1"] != 1.0 {
+		t.Errorf("SpacedReps[c1] = %f, want clamped 1.0", scores.SpacedReps["c1"])
+	}
+	expectedC2 := math.Round(1.2*(0.3+float64(2)*0.15)*100) / 100
+	if scores.SpacedReps["c2"] != expectedC2 {
+		t.Errorf("SpacedReps[c2] = %f, want %f", scores.SpacedReps["c2"], expectedC2)
+	}
+
+	// Test negative xpSinceQuiz clamping (e.g. if last quiz recorded higher xp total than current)
+	_ = store.RecordQuizCompletion(st.ID, 200)
+	scores2, err := u.Compute(st.ID)
+	if err != nil {
+		t.Fatalf("compute: %v", err)
+	}
+	if scores2.XPSinceQuiz != 0 {
+		t.Errorf("XPSinceQuiz = %d, want clamped 0", scores2.XPSinceQuiz)
+	}
+	if scores2.QuizDue {
+		t.Errorf("QuizDue expected false when XPSinceQuiz is 0")
+	}
+}
+
+func TestCompute_StorageError(t *testing.T) {
+	store, _ := storage.NewSQLiteStore(":memory:")
+	st, _ := store.CreateStudent("err-tester")
+	u := NewUpdater(nil, store)
+	_ = store.Close() // close store to induce error
+
+	if _, err := u.Compute(st.ID); err == nil {
+		t.Error("expected error from Compute with closed store")
 	}
 }
