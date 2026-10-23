@@ -351,3 +351,166 @@ func TestStripTitleMarkup(t *testing.T) {
 		}
 	}
 }
+
+func TestLoader_AssetsForAndKPAssets(t *testing.T) {
+	lessonAssets := []Asset{
+		{ID: "fig-1", Caption: "First Figure", Section: "Overview"},
+		{ID: "fig-2", Caption: "Second Figure", Section: "Details"},
+		{ID: "fig-3", Caption: "Third Figure", Section: "Overview"},
+	}
+
+	l := &Loader{
+		concepts: map[string]*Lesson{
+			"calc.derivatives": {
+				Title:  "Derivatives",
+				Assets: lessonAssets,
+			},
+		},
+		kps: map[string][]KP{},
+	}
+
+	// AssetsFor existing and nonexistent
+	if got := l.AssetsFor("calc.derivatives"); len(got) != 3 {
+		t.Fatalf("expected 3 assets for calc.derivatives, got %d", len(got))
+	}
+	if got := l.AssetsFor("nonexistent"); got != nil {
+		t.Fatalf("expected nil assets for nonexistent concept, got %v", got)
+	}
+
+	// KPAssets with nonexistent concept
+	if got := l.KPAssets("nonexistent", KP{}); got != nil {
+		t.Fatalf("expected nil for nonexistent concept in KPAssets, got %v", got)
+	}
+
+	// KPAssets with authored asset_ids
+	kpWithIDs := KP{
+		AssetIDs: []string{"fig-3", "fig-1", "nonexistent-id"},
+	}
+	gotIDs := l.KPAssets("calc.derivatives", kpWithIDs)
+	if len(gotIDs) != 2 || gotIDs[0].ID != "fig-3" || gotIDs[1].ID != "fig-1" {
+		t.Fatalf("expected fig-3 and fig-1 matching in order, got %+v", gotIDs)
+	}
+
+	// KPAssets with empty section
+	kpEmptySec := KP{Section: "   "}
+	if got := l.KPAssets("calc.derivatives", kpEmptySec); got != nil {
+		t.Fatalf("expected nil assets for empty section, got %v", got)
+	}
+
+	// KPAssets with matching section
+	kpSec := KP{Section: "Overview"}
+	gotSec := l.KPAssets("calc.derivatives", kpSec)
+	if len(gotSec) != 2 || gotSec[0].ID != "fig-1" || gotSec[1].ID != "fig-3" {
+		t.Fatalf("expected Overview assets fig-1 and fig-3, got %+v", gotSec)
+	}
+}
+
+func TestLoader_LessonByTitleAndLessonsByDomain(t *testing.T) {
+	lessonA := &Lesson{
+		Title:    "Quadratic Equations",
+		Concepts: []string{"algebra.quadratics.factoring", "algebra.quadratics.formula"},
+	}
+	lessonB := &Lesson{
+		Title:    "Single Part Concept",
+		Concepts: []string{"single"},
+	}
+	lessonC := &Lesson{
+		Title:    "No Concepts Registered",
+		Concepts: nil,
+	}
+
+	l := &Loader{
+		concepts: map[string]*Lesson{
+			"algebra.quadratics.factoring": lessonA,
+			"algebra.quadratics.formula":   lessonA, // duplicate pointer sharing lesson
+			"single":                       lessonB,
+			"empty":                        lessonC,
+		},
+	}
+
+	// LessonByTitle
+	if got := l.LessonByTitle("Quadratic Equations"); got != lessonA {
+		t.Fatalf("expected lessonA for title lookup, got %v", got)
+	}
+	if got := l.LessonByTitle("Nonexistent Title"); got != nil {
+		t.Fatalf("expected nil for nonexistent title lookup, got %v", got)
+	}
+
+	// All()
+	all := l.All()
+	if len(all) != 4 {
+		t.Fatalf("expected 4 entries in All(), got %d", len(all))
+	}
+
+	// LessonsByDomain
+	byDomain := l.LessonsByDomain()
+	if len(byDomain["algebra.quadratics"]) != 1 || byDomain["algebra.quadratics"][0] != lessonA {
+		t.Fatalf("expected deduplicated lessonA under algebra.quadratics, got %+v", byDomain["algebra.quadratics"])
+	}
+	if len(byDomain["general"]) != 2 {
+		t.Fatalf("expected 2 general lessons (single and empty), got %d", len(byDomain["general"]))
+	}
+}
+
+func TestCorpusOf(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"data/lessons/algebrica/functions/log.md", "algebrica"},
+		{"/root/lessons/teaching/trig.md", "teaching"},
+		{"lessons/root-file.md", "authored"},
+		{"standalone/overview.md", "authored"},
+		{"", "authored"},
+	}
+	for _, c := range cases {
+		if got := corpusOf(c.path); got != c.want {
+			t.Errorf("corpusOf(%q) = %q, want %q", c.path, got, c.want)
+		}
+	}
+}
+
+func TestExtractTitle_EdgeCases(t *testing.T) {
+	if got := extractTitle(""); got != "" {
+		t.Errorf("expected empty string for empty markdown, got %q", got)
+	}
+	if got := extractTitle("No headings in this body at all."); got != "" {
+		t.Errorf("expected empty string when no headings exist, got %q", got)
+	}
+	if got := extractTitle("###### Only h6 headings\nParagraph"); got != "" {
+		t.Errorf("expected empty string when only h6 exists, got %q", got)
+	}
+	if got := extractTitle("#NoSpaceHeading\nParagraph"); got != "" {
+		t.Errorf("expected empty string when heading hash lacks space, got %q", got)
+	}
+}
+
+func TestLoadKPs_DirectoriesAndCorruptFiles(t *testing.T) {
+	dir := t.TempDir()
+	kpDir := filepath.Join(dir, "kp")
+	os.MkdirAll(kpDir, 0755)
+
+	// Valid shard
+	writeFile(t, filepath.Join(kpDir, "calc.derivatives.json"), `[{"label": "Derivative Definition"}]`)
+	// Empty shard array
+	writeFile(t, filepath.Join(kpDir, "calc.empty.json"), `[]`)
+	// Corrupt json shard
+	writeFile(t, filepath.Join(kpDir, "calc.corrupt.json"), `not json`)
+	// Non-json file
+	writeFile(t, filepath.Join(kpDir, "readme.txt"), `instructions`)
+	// Subdirectory
+	os.MkdirAll(filepath.Join(kpDir, "subdir"), 0755)
+
+	kps := loadKPs(dir)
+	if len(kps) != 1 {
+		t.Fatalf("expected 1 valid shard loaded, got %d", len(kps))
+	}
+	if len(kps["calc.derivatives"]) != 1 || kps["calc.derivatives"][0].Label != "Derivative Definition" {
+		t.Fatalf("unexpected loaded kp: %+v", kps["calc.derivatives"])
+	}
+
+	// Nonexistent kp directory returns nil
+	if missing := loadKPs(t.TempDir()); missing != nil {
+		t.Fatalf("expected nil for missing kp directory, got %v", missing)
+	}
+}
