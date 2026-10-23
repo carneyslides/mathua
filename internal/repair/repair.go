@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"time"
 
 	"github.com/chuma-beep/mathua/internal/concepts"
 	"github.com/chuma-beep/mathua/internal/engine"
@@ -163,7 +164,7 @@ func replay(dag *concepts.DAG, repo storage.Repository, studentID, conceptID str
 	machine := &mastery.Machine{}
 	p := &storage.ConceptProgress{StudentID: studentID, ConceptID: conceptID, SM2EFactor: 2.5}
 	status := mastery.StatusUnseen
-	advancedEver := false
+	var lastReviewAt *time.Time
 	sm2 := scheduler.SM2{Repetitions: 0, EFactor: 2.5, Interval: 0}
 
 	for i, a := range atts {
@@ -220,32 +221,40 @@ func replay(dag *concepts.DAG, repo storage.Repository, studentID, conceptID str
 			ResponseThreshold: thresh,
 		})
 		advanced := next != status
-		streakMet := p.Streak >= reqStreak
 		if next == mastery.StatusMastered && status != mastery.StatusMastered {
 			mt := a.Timestamp
 			p.MasteredAt = &mt
 			p.WeaknessScore = 0.0
 		}
+		// The live engine resets the streak on a tier advance before it computes
+		// SM-2 quality, so an advancing attempt is graded at quality 0 and the
+		// repaired interval matches what a real run would have stored.
 		if advanced && correct[i] {
 			p.Streak = 1
-			advancedEver = true
 		}
 		status = next
 
-		q := mastery.SM2Quality(correct[i] && (streakMet || advanced), p.AvgResponseTime/thresh)
+		q := mastery.SM2Quality(correct[i] && p.Streak >= reqStreak, p.AvgResponseTime/thresh)
 		sm2 = scheduler.ComputeSM2WithSpeed(sm2, q, speed)
+
+		// The decay clock starts at the last attempt that advanced a tier, or
+		// that met the streak and time threshold. Tracking the timestamp here is
+		// what keeps LastReviewed honest: the final attempt may have advanced
+		// nothing, and then it is not the review date.
+		if advanced || (p.Streak >= reqStreak && p.AvgResponseTime <= thresh) {
+			ts := a.Timestamp
+			lastReviewAt = &ts
+		}
 	}
 
 	p.Status = string(status)
 	p.SM2Repetitions = sm2.Repetitions
 	p.SM2EFactor = sm2.EFactor
 	p.SM2Interval = sm2.Interval
-	if advancedEver || (p.Streak >= reqStreak && p.AvgResponseTime <= thresh) {
-		p.LastReviewed = p.LastAttempted
-		if p.LastAttempted != nil && sm2.Interval > 0 {
-			due := p.LastAttempted.AddDate(0, 0, sm2.Interval)
-			p.NextReviewDue = &due
-		}
+	if lastReviewAt != nil {
+		p.LastReviewed = lastReviewAt
+		due := lastReviewAt.AddDate(0, 0, sm2.Interval)
+		p.NextReviewDue = &due
 	}
 	return p
 }
