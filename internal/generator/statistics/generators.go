@@ -685,24 +685,91 @@ func (g *chiSquareGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type exponentialDistGen struct{}
 
 func (g *exponentialDistGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"Events occur at rate 4 per hour. What is the mean waiting time in hours as a decimal?", "0.25", "The mean of Exp(rate) is 1/rate = 1/4."},
-		{"For an Exponential(rate=5) variable, what is the variance of the waiting time as a decimal?", "0.04", "The variance of Exp(rate) is 1/rate^2 = 1/25."},
-		{"Does the Exponential distribution have the memoryless property? (yes/no)", "yes", "The exponential is the only continuous distribution with the memoryless property: past waiting tells nothing about the future."},
-		{"What type of process is the Exponential distribution used to model?", "waiting times", "Exponential models waiting times between Poisson events."},
-		{"The mean waiting time is 0.5 hours. What is the rate parameter per hour?", "2", "The rate is the average number of events per unit time; rate = 1/mean = 2."},
-		{"The Exponential distribution is a special case of which distribution?", "Gamma", "Exponential(rate) = Gamma(shape=1, rate)."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type rateItem struct {
+			m      int
+			lambda int
+		}
+		items := []rateItem{
+			{5, 12},
+			{6, 10},
+			{10, 6},
+			{12, 5},
+			{15, 4},
+			{20, 3},
+			{30, 2},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Customer arrivals follow an exponential distribution with a mean waiting time of %d minutes. What is the arrival rate \\(\\lambda\\) in events per hour?", it.m),
+			Answer:   fmt.Sprintf("%d", it.lambda),
+			Explanation: fmt.Sprintf("With 60 minutes per hour and mean \\(E[X] = %d\\) minutes, the hourly rate parameter is \\(\\lambda = \\frac{60}{%d} = %d\\).",
+				it.m, it.m, it.lambda),
+		}
+	case 1:
+		type memItem struct {
+			mu int
+			s  int
+		}
+		items := []memItem{
+			{4, 10},
+			{5, 8},
+			{6, 12},
+			{8, 20},
+			{10, 15},
+			{12, 24},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A component lifetime follows an exponential distribution with mean \\(E[X] = %d\\) hours. Given that the component has operated without failure for %d hours, what is the expected remaining lifetime until failure?", it.mu, it.s),
+			Answer:   fmt.Sprintf("%d", it.mu),
+			Explanation: fmt.Sprintf("By the memoryless property of the exponential distribution, prior operating time does not affect remaining lifetime: \\(E[X - %d \\mid X > %d] = E[X] = %d\\).",
+				it.s, it.s, it.mu),
+		}
+	case 2:
+		l1List := []int{2, 3, 4, 5, 6}
+		l2List := []int{3, 4, 5, 7, 8}
+		l1 := l1List[rand.Intn(len(l1List))]
+		l2 := l2List[rand.Intn(len(l2List))]
+		sumL := l1 + l2
+		return generator.Problem{
+			Question: fmt.Sprintf("Two independent sensors monitor a machine. The time until sensor 1 triggers follows \\(\\operatorname{Exp}(\\lambda_1)\\) with rate \\(\\lambda_1 = %d\\) per day, and sensor 2 follows \\(\\operatorname{Exp}(\\lambda_2)\\) with rate \\(\\lambda_2 = %d\\) per day. What is the rate parameter \\(\\lambda_{\\min}\\) of the first sensor trigger time \\(T = \\min(X_1, X_2)\\)?", l1, l2),
+			Answer:   fmt.Sprintf("%d", sumL),
+			Explanation: fmt.Sprintf("The minimum of independent exponential variables is exponentially distributed with rate equal to the sum of the rates: \\(\\lambda_{\\min} = \\lambda_1 + \\lambda_2 = %d + %d = %d\\).",
+				l1, l2, sumL),
+		}
+	case 3:
+		muList := []int{3, 4, 5, 6, 7, 8, 10}
+		mu := muList[rand.Intn(len(muList))]
+		m2 := 2 * mu * mu
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X \\sim \\operatorname{Exp}(\\lambda)\\) have mean \\(E[X] = %d\\). Calculate the second moment \\(E[X^2]\\).", mu),
+			Answer:   fmt.Sprintf("%d", m2),
+			Explanation: fmt.Sprintf("For an exponential random variable, \\(\\operatorname{Var}(X) = \\mu^2 = %d^2 = %d\\). Therefore, \\(E[X^2] = \\operatorname{Var}(X) + (E[X])^2 = %d + %d = %d\\).",
+				mu, mu*mu, mu*mu, mu*mu, m2),
+		}
+	default:
+		type sumItem struct {
+			n  int
+			mu int
+		}
+		items := []sumItem{
+			{4, 5},
+			{5, 6},
+			{6, 7},
+			{8, 5},
+			{10, 4},
+			{12, 3},
+		}
+		it := items[rand.Intn(len(items))]
+		total := it.n * it.mu
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X_1, X_2, \\dots, X_{%d}\\) be independent exponential random variables each having mean \\(E[X_i] = %d\\). Find the expected value of their sum \\(E[\\sum_{i=1}^{%d} X_i]\\).", it.n, it.mu, it.n),
+			Answer:   fmt.Sprintf("%d", total),
+			Explanation: fmt.Sprintf("By linearity of expectation, the expected value of the sum is \\(E[\\sum_{i=1}^{%d} X_i] = %d \\times E[X_1] = %d \\times %d = %d\\).",
+				it.n, it.n, it.n, it.mu, total),
+		}
 	}
 }
 
