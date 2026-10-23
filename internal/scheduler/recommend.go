@@ -325,7 +325,13 @@ func classify(c Candidate, in RecommendInput) (bucket, Kind, Reason) {
 		return bucketReview, KindReview, ReasonReviewDue
 	}
 	w := in.Weakness[c.Concept.ID]
+	if snap != nil && snap.WeaknessScore > w {
+		w = snap.WeaknessScore
+	}
 	if w >= weaknessPracticeFloor {
+		if snap != nil && snap.Status == mastery.StatusMastered {
+			return bucketPractice, KindPractice, ReasonPrerequisite
+		}
 		return bucketPractice, KindPractice, ReasonNeedsPractice
 	}
 	if started {
@@ -362,9 +368,15 @@ func (s *Scheduler) render(c *concepts.Concept, kind Kind, reason Reason, priori
 		r.Detail = "Something you have learned is due a check"
 		r.CTA = "Review →"
 	case KindPractice:
-		r.Badge = "Practice"
-		r.Detail = "Worth another go — this one has not stuck yet"
-		r.CTA = "Keep practicing →"
+		if reason == ReasonPrerequisite {
+			r.Badge = "Remediation"
+			r.Detail = "Strengthen this prerequisite to break through a downstream block"
+			r.CTA = "Review prerequisite →"
+		} else {
+			r.Badge = "Practice"
+			r.Detail = "Worth another go — this one has not stuck yet"
+			r.CTA = "Keep practicing →"
+		}
 	default:
 		r.Badge = "New"
 		r.Detail = "Ready to learn — everything it needs, you have done"

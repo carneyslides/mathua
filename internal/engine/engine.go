@@ -2056,39 +2056,45 @@ func (e *Engine) PropagateWeakness(studentID string) {
 		return
 	}
 	weakness := e.weaknessMapFromProgress(progress)
-	type update struct {
-		cid string
-		w   float64
-	}
-	var updates []update
+	// Propagate forward to dependents (upstream struggles carry risk downstream)
+	// and backward to immediate prerequisites (downstream failure suggests shaky foundations).
+	targetWeakness := make(map[string]float64)
 	for cid, w := range weakness {
 		if w > 0.3 {
 			for _, dep := range e.dag.DependentsOf(cid) {
-				if weakness[dep.ID] < w*0.3 {
-					updates = append(updates, update{dep.ID, w * 0.3})
+				newW := w * 0.3
+				if current := weakness[dep.ID]; current < newW && targetWeakness[dep.ID] < newW {
+					targetWeakness[dep.ID] = newW
+				}
+			}
+		}
+		if w > 0.4 {
+			for _, prereq := range e.dag.PrereqsOf(cid) {
+				newW := w * 0.5
+				if current := weakness[prereq.ID]; current < newW && targetWeakness[prereq.ID] < newW {
+					targetWeakness[prereq.ID] = newW
 				}
 			}
 		}
 	}
-	if len(updates) == 0 {
+	if len(targetWeakness) == 0 {
 		return
 	}
-	// One batched write from the single fetched snapshot — no per-dependent
-	// Get/Upsert round trips.
-	batch := make([]*storage.ConceptProgress, 0, len(updates))
-	for _, u := range updates {
-		prog := progress[u.cid]
+	// One batched write from the single fetched snapshot — no per-node round trips.
+	batch := make([]*storage.ConceptProgress, 0, len(targetWeakness))
+	for cid, w := range targetWeakness {
+		prog := progress[cid]
 		if prog == nil {
 			prog = &storage.ConceptProgress{
 				StudentID: studentID,
-				ConceptID: u.cid,
+				ConceptID: cid,
 				Status:    string(mastery.StatusUnseen),
 			}
 		} else {
 			cp := *prog
 			prog = &cp
 		}
-		prog.WeaknessScore = u.w
+		prog.WeaknessScore = w
 		batch = append(batch, prog)
 	}
 	if err := e.repo.UpsertProgressBatch(batch); err != nil {

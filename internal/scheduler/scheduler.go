@@ -182,7 +182,9 @@ func buildCandidates(dag *concepts.DAG, snapshots map[string]*ConceptSnapshot, n
 		snap := snapshots[c.ID]
 		effStatus, isReview := effectiveState(snap, now)
 		if effStatus == mastery.StatusMastered {
-			continue
+			if snap == nil || snap.WeaknessScore < weaknessPracticeFloor {
+				continue
+			}
 		}
 		if !prereqsMet(dag, c, snapshots, now) {
 			continue
@@ -243,6 +245,9 @@ func computePriority(snap *ConceptSnapshot, now time.Time, isDecaying bool) floa
 	priority := 0.5*daysSinceLastSeen + 0.2*(1.0-masteryScore) + 0.3*weakness
 	if isDecaying {
 		priority += 5.0
+	}
+	if snap != nil && snap.Status == mastery.StatusMastered && weakness >= weaknessPracticeFloor {
+		priority += 4.0
 	}
 	return priority
 }

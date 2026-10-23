@@ -117,6 +117,91 @@ func TestRecommend_WeakConceptIsOfferedAsPracticeNotNew(t *testing.T) {
 	}
 }
 
+func TestRecommend_MasteredPrerequisiteWithWeaknessOfferedForRemediation(t *testing.T) {
+	s := New(miniDAG(t))
+	now := time.Now()
+	// Concept "a" is mastered but elevated weakness was propagated backward from downstream struggle.
+	got := s.Recommend(RecommendInput{
+		Now:              now,
+		AttemptedDays:    15,
+		ConceptsMastered: 1,
+		Weakness:         map[string]float64{"a": 0.45},
+		Snapshots: map[string]*ConceptSnapshot{
+			"a": {
+				Status:        mastery.StatusMastered,
+				Streak:        3,
+				WeaknessScore: 0.45,
+				LastAttempted: now,
+				LastReviewed:  now,
+			},
+		},
+	})
+	var remediation *Recommendation
+	for i, r := range all(got) {
+		if r.ConceptID == "a" {
+			remediation = &all(got)[i]
+		}
+	}
+	if remediation == nil {
+		t.Fatalf("mastered prerequisite with weakness 0.45 was not offered for remediation: %+v", got)
+	}
+	if remediation.Kind != KindPractice {
+		t.Errorf("remediation kind = %q, want %q", remediation.Kind, KindPractice)
+	}
+	if remediation.Reason != ReasonPrerequisite {
+		t.Errorf("remediation reason = %q, want %q", remediation.Reason, ReasonPrerequisite)
+	}
+	if remediation.Badge != "Remediation" {
+		t.Errorf("remediation badge = %q, want Remediation", remediation.Badge)
+	}
+	if remediation.CTA != "Review prerequisite →" {
+		t.Errorf("remediation cta = %q, want Review prerequisite →", remediation.CTA)
+	}
+}
+
+func TestScheduler_BackwardRemediationOutranksDownstreamStruggle(t *testing.T) {
+	s := New(miniDAG(t))
+	now := time.Now()
+	// In miniDAG: a -> b.
+	// Learner has mastered "a" with streak 3, but downstream struggle on "b" elevated "a"'s weakness to 0.45.
+	// Meanwhile "b" has weakness 0.7.
+	// Prerequisite remediation for "a" must receive higher priority than repeating "b".
+	candidates := buildCandidates(s.dag, map[string]*ConceptSnapshot{
+		"a": {
+			Status:        mastery.StatusMastered,
+			Streak:        3,
+			WeaknessScore: 0.45,
+			LastAttempted: now,
+			LastReviewed:  now,
+		},
+		"b": {
+			Status:        mastery.StatusPracticing,
+			Streak:        0,
+			WeaknessScore: 0.7,
+			LastAttempted: now,
+		},
+	}, now, "")
+
+	var prioA, prioB float64
+	foundA, foundB := false, false
+	for _, c := range candidates {
+		if c.Concept.ID == "a" {
+			prioA = c.Priority
+			foundA = true
+		}
+		if c.Concept.ID == "b" {
+			prioB = c.Priority
+			foundB = true
+		}
+	}
+	if !foundA || !foundB {
+		t.Fatalf("expected both a and b in candidates: foundA=%v foundB=%v candidates=%+v", foundA, foundB, candidates)
+	}
+	if prioA <= prioB {
+		t.Errorf("prerequisite remediation priority %v should exceed downstream struggle priority %v", prioA, prioB)
+	}
+}
+
 func TestRecommend_ExcludedConceptIsNotOfferedBack(t *testing.T) {
 	s := New(miniDAG(t))
 	now := time.Now()

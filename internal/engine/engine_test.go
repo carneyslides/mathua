@@ -1740,3 +1740,43 @@ func TestDontKnowIsNeverRushed(t *testing.T) {
 		}
 	}
 }
+
+// Weakness on a downstream concept propagates backward to immediate prerequisites
+// so learners who struggle downstream have foundation gaps surfaced for remediation.
+func TestEngine_PropagateWeaknessBackwardToPrerequisites(t *testing.T) {
+	e := testEngine(t)
+	st, _ := e.CreateStudent("weakness_propagation")
+	now := time.Now().UTC()
+	// Prerequisite "a" was mastered previously.
+	if err := e.repo.UpsertProgress(&storage.ConceptProgress{
+		StudentID:     st.ID,
+		ConceptID:     "a",
+		Status:        string(mastery.StatusMastered),
+		Streak:        3,
+		WeaknessScore: 0.0,
+		LastReviewed:  &now,
+	}); err != nil {
+		t.Fatalf("upsert prereq: %v", err)
+	}
+	// Downstream concept "b" (which depends on "a") has high weakness due to struggles.
+	if err := e.repo.UpsertProgress(&storage.ConceptProgress{
+		StudentID:     st.ID,
+		ConceptID:     "b",
+		Status:        string(mastery.StatusPracticing),
+		Streak:        0,
+		WeaknessScore: 0.8,
+		LastAttempted: &now,
+	}); err != nil {
+		t.Fatalf("upsert dependent: %v", err)
+	}
+
+	e.PropagateWeakness(st.ID)
+
+	pA, err := e.repo.GetProgress(st.ID, "a")
+	if err != nil {
+		t.Fatalf("get prereq progress: %v", err)
+	}
+	if pA.WeaknessScore < 0.35 {
+		t.Errorf("prerequisite weakness = %v, want >= 0.35 after backward propagation from struggling dependent", pA.WeaknessScore)
+	}
+}
