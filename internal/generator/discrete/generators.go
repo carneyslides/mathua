@@ -38,6 +38,7 @@ func Register(reg *generator.Registry) {
 	reg.Register("discrete.sequences.generating_functions", &generatingFunctionsGen{})
 
 	registerBatch(reg)
+	registerCombinatoricsBatch(reg)
 }
 
 // ----- 1. propositions -----
