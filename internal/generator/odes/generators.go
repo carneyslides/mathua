@@ -935,30 +935,82 @@ func (g *boundaryValueGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type lyapunovGen struct{}
 
 func (g *lyapunovGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct{ q, a, e string }
-	easy := []entry{
-		{"Does Lyapunov prove stability without solving ODE? (yes/no)", "yes", "Energy-like function."},
-		{"Is V strict Lyapunov if dV/dt<0? (yes/no)", "yes", "Strict."},
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// 1D orbital derivative dot(V) = -2 k x^2
+		k := smallInt(1, 5)
+		x0 := smallInt(1, 4)
+		ans := -2 * k * x0 * x0
+		return generator.Problem{
+			Question: fmt.Sprintf("For the dynamical system \\(x' = -%dx\\) with candidate Lyapunov function \\(V(x) = x^2\\), evaluate the orbital time derivative \\(\\dot{V}(%d)\\).", k, x0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"The orbital derivative is \\(\\dot{V}(x) = \\frac{dV}{dx}x' = 2x(-%dx) = -%dx^2\\). Evaluating at \\(x = %d\\) yields \\(\\dot{V}(%d) = -%d(%d^2) = -%d(%d) = %d\\).",
+				k, 2*k, x0, x0, 2*k, x0, 2*k, x0*x0, ans,
+			),
+		}
+
+	case 1:
+		// 2D linear system orbital derivative dot(V)
+		a := smallInt(1, 4)
+		b := smallInt(1, 4)
+		x0 := smallInt(1, 3)
+		y0 := smallInt(1, 3)
+		ans := -2*a*x0*x0 - 2*b*y0*y0
+		return generator.Problem{
+			Question: fmt.Sprintf("For the 2D linear system \\(x' = -%dx\\) and \\(y' = -%dy\\) with Lyapunov function \\(V(x, y) = x^2 + y^2\\), evaluate the orbital time derivative \\(\\dot{V}(%d, %d)\\).", a, b, x0, y0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"The orbital time derivative is \\(\\dot{V} = \\nabla V \\cdot (x', y') = 2x(-%dx) + 2y(-%dy) = -%dx^2 - %dy^2\\). Substituting \\((x, y) = (%d, %d)\\) gives \\(\\dot{V}(%d, %d) = -%d(%d^2) - %d(%d^2) = -%d(%d) - %d(%d) = %d\\).",
+				a, b, 2*a, 2*b, x0, y0, x0, y0, 2*a, x0, 2*b, y0, 2*a, x0*x0, 2*b, y0*y0, ans,
+			),
+		}
+
+	case 2:
+		// Basin radius r where dot(V) < 0 for x' = -a*x + b*x^3
+		b := smallInt(1, 3)
+		r := smallInt(2, 5)
+		a := b * r * r
+		return generator.Problem{
+			Question: fmt.Sprintf("For the nonlinear system \\(x' = -%dx + %dx^3\\) with Lyapunov function \\(V(x) = x^2\\), the origin is strictly asymptotically stable on the symmetric open interval \\((-r, r)\\) where \\(\\dot{V}(x) < 0\\) for \\(x \\ne 0\\). What is the positive radius \\(r > 0\\)?", a, b),
+			Answer:   fmt.Sprintf("%d", r),
+			Explanation: fmt.Sprintf(
+				"The orbital derivative is \\(\\dot{V}(x) = 2x(-%dx + %dx^3) = 2x^2(%dx^2 - %d)\\). For \\(x \\ne 0\\), strict negativity \\(\\dot{V}(x) < 0\\) requires \\(%dx^2 - %d < 0\\), which simplifies to \\(x^2 < %d\\), or \\(|x| < %d\\). Thus the basin radius is \\(r = %d\\).",
+				a, b, b, a, b, a, r*r, r, r,
+			),
+		}
+
+	case 3:
+		// Quadratic Lyapunov energy evaluation V(x0, y0) = a*x0^2 + b*y0^2
+		a := smallInt(1, 5)
+		b := smallInt(1, 5)
+		x0 := smallInt(1, 4)
+		y0 := smallInt(1, 4)
+		ans := a*x0*x0 + b*y0*y0
+		return generator.Problem{
+			Question: fmt.Sprintf("Given the positive definite Lyapunov energy function \\(V(x, y) = %dx^2 + %dy^2\\), evaluate the energy level \\(V(%d, %d)\\).", a, b, x0, y0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Substituting the coordinates \\((x, y) = (%d, %d)\\) into the quadratic form gives \\(V(%d, %d) = %d(%d^2) + %d(%d^2) = %d(%d) + %d(%d) = %d + %d = %d\\).",
+				x0, y0, x0, y0, a, x0, b, y0, a, x0*x0, b, y0*y0, a*x0*x0, b*y0*y0, ans,
+			),
+		}
+
+	default:
+		// Conservative Hamiltonian oscillator dot(E) = 0
+		k := smallInt(2, 9)
+		x0 := smallInt(1, 5)
+		y0 := smallInt(1, 5)
+		return generator.Problem{
+			Question: fmt.Sprintf("For the undamped harmonic oscillator \\(x' = y\\) and \\(y' = -%dx\\) with total mechanical energy \\(E(x, y) = \\frac{%d}{2}x^2 + \\frac{1}{2}y^2\\), evaluate the orbital time derivative \\(\\dot{E}(%d, %d)\\).", k, k, x0, y0),
+			Answer:   "0",
+			Explanation: fmt.Sprintf(
+				"Calculating the orbital derivative along trajectories: \\(\\dot{E} = \\frac{\\partial E}{\\partial x}x' + \\frac{\\partial E}{\\partial y}y' = (%dx)(y) + (y)(-%dx) = %dxy - %dxy = 0\\). Total energy is conserved along orbits, so \\(\\dot{E} = 0\\).",
+				k, k, k, k,
+			),
+		}
 	}
-	// Parameterized production: dV/dt at a point for V = x^2, x' = -k*x.
-	ks := []int{1, 2, 3}
-	xs := []int{1, 2}
-	k := ks[rand.Intn(len(ks))]
-	x := xs[rand.Intn(len(xs))]
-	v := -2 * k * x * x
-	easy = append(easy, entry{
-		q: fmt.Sprintf("For x' = -%dx with V = x^2, what is dV/dt at x = %d? (enter a number)", k, x),
-		a: fmt.Sprintf("%d", v),
-		e: fmt.Sprintf("dV/dt = 2x·(-%dx) = -%dx^2, so at x = %d the value is %d.", k, 2*k, x, v),
-	})
-	hard := []entry{{"Does LaSalle's invariance principle extend Lyapunov? (yes/no)", "yes", "Invariant set."}, {"Is V(x)=x^2 Lyapunov for x'=-x? (yes/no)", "yes", "V>0, dV/dt<0."}, {"Does converse Lyapunov hold for asymptotically stable? (yes/no)", "yes", "Existence of V."}}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type laplaceEqGen struct{}
