@@ -787,45 +787,80 @@ func (g *waveGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type heatGen struct{}
 
 func (g *heatGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Spatial Dirichlet eigenvalue lambda_n on [0, pi]
+		n := smallInt(1, 5+int(ctx.Difficulty*4))
+		ans := n * n
+		return generator.Problem{
+			Question: fmt.Sprintf("For the heat equation on the spatial domain \\([0, \\pi]\\) with Dirichlet boundary conditions \\(u(0, t) = u(\\pi, t) = 0\\), what is the spatial eigenvalue \\(\\lambda_%d\\) corresponding to eigenfunction \\(\\sin(%dx)\\)?", n, n),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"The spatial eigenvalue problem is \\(X'' + \\lambda X = 0\\) with \\(X(0) = X(\\pi) = 0\\). The eigenfunctions are \\(X_n(x) = \\sin(nx)\\) with eigenvalues \\(\\lambda_n = n^2\\). For \\(n = %d\\), \\(\\lambda_%d = %d^2 = %d\\).",
+				n, n, n, ans,
+			),
+		}
+
+	case 1:
+		// Temporal decay rate beta = alpha * lambda_n
+		alpha := smallInt(1, 5)
+		n := smallInt(1, 4)
+		lambda := n * n
+		beta := alpha * lambda
+		return generator.Problem{
+			Question: fmt.Sprintf("For the diffusion equation \\(u_t = %du_{xx}\\) on \\([0, \\pi]\\) with Dirichlet ends, what is the exponential decay rate \\(\\beta\\) in the temporal factor \\(e^{-\\beta t}\\) for harmonic mode \\(n = %d\\)?", alpha, n),
+			Answer:   fmt.Sprintf("%d", beta),
+			Explanation: fmt.Sprintf(
+				"Separation of variables gives \\(T'(t) = -\\alpha \\lambda_n T(t)\\). On \\([0, \\pi]\\), the \\(n = %d\\) spatial eigenvalue is \\(\\lambda_%d = %d^2 = %d\\). The decay rate is \\(\\beta = %d \\cdot %d = %d\\).",
+				n, n, n, lambda, alpha, lambda, beta,
+			),
+		}
+
+	case 2:
+		// Steady-state linear temperature profile
+		L := smallInt(2, 8)
+		T0 := smallInt(0, 30)
+		s := smallInt(2, 6)
+		TL := T0 + s*L
+		x0 := smallInt(1, L-1)
+		ans := T0 + s*x0
+		return generator.Problem{
+			Question: fmt.Sprintf("A conductive rod of length \\(L = %d\\) satisfies the steady-state equation \\(u_{xx} = 0\\) with boundary temperatures \\(u(0) = %d\\) and \\(u(%d) = %d\\). Evaluate the temperature \\(u(%d)\\).", L, T0, L, TL, x0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Steady-state heat distribution satisfies \\(u_{xx} = 0\\), producing the linear profile \\(u(x) = T_0 + \\frac{T_L - T_0}{L}x = %d + \\frac{%d - %d}{%d}x = %d + %dx\\). At \\(x = %d\\), \\(u(%d) = %d + %d(%d) = %d\\).",
+				T0, TL, T0, L, T0, s, x0, x0, T0, s, x0, ans,
+			),
+		}
+
+	case 3:
+		// Count of interior nodal points
+		n := smallInt(2, 8)
+		nodalCount := n - 1
+		return generator.Problem{
+			Question: fmt.Sprintf("How many interior nodal points (coordinates where \\(u(x, t) = 0\\) strictly inside the open interval \\(0 < x < \\pi\\)) does the spatial harmonic \\(\\sin(%dx)\\) possess?", n),
+			Answer:   fmt.Sprintf("%d", nodalCount),
+			Explanation: fmt.Sprintf(
+				"The eigenfunction \\(\\sin(%dx) = 0\\) occurs when \\(%dx = k\\pi\\) for integer \\(k\\). Inside the open domain \\(0 < x < \\pi\\), valid indices are \\(k = 1, 2, \\dots, %d\\). There are %d interior nodal points.",
+				n, n, nodalCount, nodalCount,
+			),
+		}
+
+	default:
+		// Maximum principle bound
+		L := smallInt(2, 8)
+		tMax := smallInt(5, 15)
+		M := smallInt(40, 95)
+		return generator.Problem{
+			Question: fmt.Sprintf("A heat diffusion process on the region \\([0, %d] \\times [0, %d]\\) has temperatures bounded by \\(M = %d\\) along the initial and spatial boundaries. By the maximum principle, what is the maximum possible temperature in the interior?", L, tMax, M),
+			Answer:   fmt.Sprintf("%d", M),
+			Explanation: fmt.Sprintf(
+				"By the weak maximum principle for parabolic equations, the maximum of \\(u(x, t)\\) across a space-time domain is achieved on the parabolic boundary. Therefore the maximum interior temperature cannot exceed the boundary upper bound of %d.",
+				M,
+			),
+		}
 	}
-	easy := []entry{
-		{"Is heat equation parabolic? (yes/no)", "yes", "Classification."},
-		{"Does separation give T(t)=C e^{-kλt}? (yes/no)", "yes", "ODE T'=-kλT."},
-	}
-	// Parameterized production: Dirichlet eigenvalue λ_n = n^2 on [0,π].
-	ns := []int{1, 2, 3}
-	n := ns[rand.Intn(len(ns))]
-	easy = append(easy, entry{
-		q: fmt.Sprintf("For heat on [0,π] with Dirichlet ends, λ_n = n^2. What is λ_%d? (enter a number)", n),
-		a: fmt.Sprintf("%d", n*n),
-		e: fmt.Sprintf("Eigenfunctions sin(nx) give λ_%d = %d^2 = %d.", n, n, n*n),
-	})
-	// Parameterized production: decay factor T(1)/T(0) = e^{-kλ}.
-	ks := []int{1, 2}
-	ls := []int{2, 3}
-	k := ks[rand.Intn(len(ks))]
-	l := ls[rand.Intn(len(ls))]
-	easy = append(easy, entry{
-		q: fmt.Sprintf("A heat mode has T(t) = Ce^{-%dt}. What is T(1)/T(0)? (type like e^(-6))", k*l),
-		a: fmt.Sprintf("e^(-%d)", k*l),
-		e: fmt.Sprintf("T(1)/T(0) = e^{-%d·1} = e^{-%d}.", k*l, k*l),
-	})
-	hard := []entry{
-		{"Does Fourier series solve heat equation on [0,L] with Dirichlet? (yes/no)", "yes", "Eigenfunctions sin(nπx/L)."},
-		{"Is maximum principle: max of u on space-time boundary? (yes/no)", "yes", "Heat cannot have interior max exceeding boundary."},
-		{"Does heat smoothing make incompatible initial data become smooth for t>0? (yes/no)", "yes", "Instant smoothing."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type greenFunctionGen struct{}
