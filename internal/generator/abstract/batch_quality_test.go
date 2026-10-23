@@ -114,14 +114,11 @@ func answerAppearsAsNumber(question, answer string) bool {
 	if answer == "" {
 		return false
 	}
-	for i := 0; i+len(answer) <= len(question); i++ {
-		if question[i:i+len(answer)] != answer {
-			continue
-		}
-		beforeOK := i == 0 || question[i-1] < '0' || question[i-1] > '9'
-		after := i + len(answer)
-		afterOK := after == len(question) || question[after] < '0' || question[after] > '9'
-		if beforeOK && afterOK {
+	tokens := strings.FieldsFunc(question, func(r rune) bool {
+		return r < '0' || r > '9'
+	})
+	for _, tok := range tokens {
+		if tok == answer {
 			return true
 		}
 	}
