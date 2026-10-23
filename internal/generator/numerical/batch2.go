@@ -18,12 +18,14 @@ package numerical
 // recompute the answer rather than trusting the author's arithmetic.
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"strconv"
 	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -33,46 +35,97 @@ import (
 type leastSquaresGen struct{}
 
 func (g *leastSquaresGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		xs, ys []int
-		reason string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var xs, ys []int
+	var bVal float64
+	var answer string
+	var xbar, ybar, sxx, sxy float64
+
+	for iter := 0; iter < 10; iter++ {
+		numPoints := 3
+		if tier == 2 {
+			numPoints = 4
+		}
+		xStart := rand.Intn(3)
+		step := 1
+		if tier > 0 && rand.Float64() < 0.4 {
+			step = 2
+		}
+		xs = make([]int, numPoints)
+		for i := 0; i < numPoints; i++ {
+			xs[i] = xStart + i*step
+		}
+
+		slopeBase := 1 + rand.Intn(2+tier*2)
+		intercept := rand.Intn(4 + tier*3)
+		ys = make([]int, numPoints)
+		for i := 0; i < numPoints; i++ {
+			noise := rand.Intn(3) - 1 // -1, 0 or 1
+			ys[i] = intercept + slopeBase*xs[i] + noise
+			if ys[i] < 0 {
+				ys[i] = 0
+			}
+		}
+
+		n := float64(len(xs))
+		var sx, sy float64
+		for i := range xs {
+			sx += float64(xs[i])
+			sy += float64(ys[i])
+		}
+		xbar = sx / n
+		ybar = sy / n
+		sxx, sxy = 0, 0
+		for i := range xs {
+			dx := float64(xs[i]) - xbar
+			sxx += dx * dx
+			sxy += dx * (float64(ys[i]) - ybar)
+		}
+		if sxx == 0 {
+			continue
+		}
+		bVal = sxy / sxx
+		answer = decimal6(bVal)
+
+		// Avoid read-off: answer should not match any x or y
+		collision := false
+		for _, x := range xs {
+			if strconv.Itoa(x) == answer {
+				collision = true
+				break
+			}
+		}
+		for _, y := range ys {
+			if strconv.Itoa(y) == answer {
+				collision = true
+				break
+			}
+		}
+		if !collision {
+			break
+		}
 	}
-	claims := []claim{
-		{xs: []int{0, 1, 2}, ys: []int{1, 3, 4}, reason: "The centred sums give sxy = 3 and sxx = 2, so the slope is 1.5."},
-		{xs: []int{0, 1, 2}, ys: []int{1, 2, 6}, reason: "sxy = 5 and sxx = 2, so the slope is 2.5."},
-		{xs: []int{0, 1, 2}, ys: []int{2, 3, 3}, reason: "sxy = 1 and sxx = 2, so the slope is 0.5."},
-		{xs: []int{1, 2, 3}, ys: []int{1, 2, 4}, reason: "sxy = 3 and sxx = 2, so the slope is 1.5."},
-		{xs: []int{0, 1, 2}, ys: []int{3, 4, 7}, reason: "sxy = 4 and sxx = 2, so the slope is 2."},
-		{xs: []int{0, 1, 2, 3}, ys: []int{0, 1, 3, 4}, reason: "sxy = 7 and sxx = 5, so the slope is 1.4."},
+
+	xsStrs := make([]string, len(xs))
+	ysStrs := make([]string, len(ys))
+	for i := range xs {
+		xsStrs[i] = strconv.Itoa(xs[i])
+		ysStrs[i] = strconv.Itoa(ys[i])
 	}
-	c := claims[rand.Intn(len(claims))]
-	n := float64(len(c.xs))
-	var sx, sy float64
-	for i := range c.xs {
-		sx += float64(c.xs[i])
-		sy += float64(c.ys[i])
-	}
-	xbar, ybar := sx/n, sy/n
-	var sxx, sxy float64
-	for i := range c.xs {
-		dx := float64(c.xs[i]) - xbar
-		sxx += dx * dx
-		sxy += dx * (float64(c.ys[i]) - ybar)
-	}
-	answer := decimal6(sxy / sxx)
-	xs := make([]string, len(c.xs))
-	ys := make([]string, len(c.ys))
-	for i := range c.xs {
-		xs[i] = strconv.Itoa(c.xs[i])
-		ys[i] = strconv.Itoa(c.ys[i])
-	}
+
+	subgoal1 := "Subgoal 1: State governing formula. The slope b of the least-squares regression line y = a + b x is given by b = s_xy / s_xx, where s_xy = \\sum (x_i - \\bar{x})(y_i - \\bar{y}) and s_xx = \\sum (x_i - \\bar{x})^2."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For the given points, the sample means are \\bar{x} = %s and \\bar{y} = %s. The centred cross-sum is s_xy = %s and the centred sum of squares is s_xx = %s.",
+		decimal6(xbar), decimal6(ybar), decimal6(sxy), decimal6(sxx))
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Dividing yields slope b = %s / %s = %s.",
+		decimal6(sxy), decimal6(sxx), answer)
+
 	return generator.Problem{
-		Question: "The least-squares line y = a + b x through the points with x values " + strings.Join(xs, ", ") +
-			" and y values " + strings.Join(ys, ", ") + " has slope b equal to the centred sum of x times y divided by the centred sum of x squared. What is b? (enter a decimal)",
+		Question: "The least-squares line y = a + b x through the points with x values " + strings.Join(xsStrs, ", ") +
+			" and y values " + strings.Join(ysStrs, ", ") + " has slope b equal to the centred sum of x times y divided by the centred sum of x squared. What is b? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "Subtracting the means removes the intercept from the slope, so the numerator and denominator are the centred cross-sum and the centred sum of squares; " + c.reason,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"xs": strings.Join(xs, ","), "ys": strings.Join(ys, ","), "answer": answer,
+			"xs": strings.Join(xsStrs, ","), "ys": strings.Join(ysStrs, ","), "answer": answer,
 		},
 	}
 }
@@ -84,47 +137,98 @@ func (g *leastSquaresGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type normalEquationsGen struct{}
 
 func (g *normalEquationsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		xs, ys []int
-		reason string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var xs, ys []int
+	var aVal, bVal float64
+	var answer string
+	var xbar, ybar, sxx, sxy float64
+
+	for iter := 0; iter < 10; iter++ {
+		numPoints := 3
+		if tier == 2 {
+			numPoints = 4
+		}
+		xStart := rand.Intn(3)
+		step := 1
+		if tier > 0 && rand.Float64() < 0.4 {
+			step = 2
+		}
+		xs = make([]int, numPoints)
+		for i := 0; i < numPoints; i++ {
+			xs[i] = xStart + i*step
+		}
+
+		slopeBase := 1 + rand.Intn(2+tier*2)
+		intercept := 1 + rand.Intn(3+tier*3)
+		ys = make([]int, numPoints)
+		for i := 0; i < numPoints; i++ {
+			noise := rand.Intn(3) - 1
+			ys[i] = intercept + slopeBase*xs[i] + noise
+			if ys[i] < 0 {
+				ys[i] = 0
+			}
+		}
+
+		n := float64(len(xs))
+		var sx, sy float64
+		for i := range xs {
+			sx += float64(xs[i])
+			sy += float64(ys[i])
+		}
+		xbar = sx / n
+		ybar = sy / n
+		sxx, sxy = 0, 0
+		for i := range xs {
+			dx := float64(xs[i]) - xbar
+			sxx += dx * dx
+			sxy += dx * (float64(ys[i]) - ybar)
+		}
+		if sxx == 0 {
+			continue
+		}
+		bVal = sxy / sxx
+		aVal = ybar - bVal*xbar
+		answer = decimal6(aVal)
+
+		// Avoid read-off: answer should not match any x or y
+		collision := false
+		for _, x := range xs {
+			if strconv.Itoa(x) == answer {
+				collision = true
+				break
+			}
+		}
+		for _, y := range ys {
+			if strconv.Itoa(y) == answer {
+				collision = true
+				break
+			}
+		}
+		if !collision {
+			break
+		}
 	}
-	claims := []claim{
-		{xs: []int{0, 1, 2}, ys: []int{1, 4, 4}, reason: "b = 1.5, so a = 3 − 1.5·1 = 1.5."},
-		{xs: []int{0, 1, 2}, ys: []int{0, 3, 3}, reason: "b = 1.5, so a = 2 − 1.5·1 = 0.5."},
-		{xs: []int{0, 1, 2}, ys: []int{2, 5, 5}, reason: "b = 1.5, so a = 4 − 1.5·1 = 2.5."},
-		{xs: []int{0, 1, 2}, ys: []int{4, 4, 7}, reason: "b = 1.5, so a = 5 − 1.5·1 = 3.5."},
-		{xs: []int{1, 2, 3}, ys: []int{2, 3, 4}, reason: "b = 1, so a = 3 − 1·2 = 1."},
-		{xs: []int{0, 1, 2}, ys: []int{3, 4, 5}, reason: "b = 1, so a = 4 − 1·1 = 3."},
+
+	xsStrs := make([]string, len(xs))
+	ysStrs := make([]string, len(ys))
+	for i := range xs {
+		xsStrs[i] = strconv.Itoa(xs[i])
+		ysStrs[i] = strconv.Itoa(ys[i])
 	}
-	c := claims[rand.Intn(len(claims))]
-	n := float64(len(c.xs))
-	var sx, sy float64
-	for i := range c.xs {
-		sx += float64(c.xs[i])
-		sy += float64(c.ys[i])
-	}
-	xbar, ybar := sx/n, sy/n
-	var sxx, sxy float64
-	for i := range c.xs {
-		dx := float64(c.xs[i]) - xbar
-		sxx += dx * dx
-		sxy += dx * (float64(c.ys[i]) - ybar)
-	}
-	b := sxy / sxx
-	answer := decimal6(ybar - b*xbar)
-	xs := make([]string, len(c.xs))
-	ys := make([]string, len(c.ys))
-	for i := range c.xs {
-		xs[i] = strconv.Itoa(c.xs[i])
-		ys[i] = strconv.Itoa(c.ys[i])
-	}
+
+	subgoal1 := "Subgoal 1: State governing formula. The normal equations for least squares determine that the regression line passes through the data centroid, giving intercept a = \\bar{y} - b \\bar{x}, where b = s_xy / s_xx."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For the sample data, sample means are \\bar{x} = %s and \\bar{y} = %s with slope b = %s.",
+		decimal6(xbar), decimal6(ybar), decimal6(bVal))
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Evaluating the intercept gives a = %s - (%s * %s) = %s.",
+		decimal6(ybar), decimal6(bVal), decimal6(xbar), answer)
+
 	return generator.Problem{
-		Question: "The normal equations for the least-squares line y = a + b x through the points with x values " + strings.Join(xs, ", ") +
-			" and y values " + strings.Join(ys, ", ") + " give the intercept a = mean(y) − b·mean(x). What is a? (enter a decimal)",
+		Question: "The normal equations for the least-squares line y = a + b x through the points with x values " + strings.Join(xsStrs, ", ") +
+			" and y values " + strings.Join(ysStrs, ", ") + " give the intercept a = mean(y) − b·mean(x). What is a? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "The intercept is the one that makes the line pass through the centre of mass of the data once the slope is known; " + c.reason,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"xs": strings.Join(xs, ","), "ys": strings.Join(ys, ","), "answer": answer,
+			"xs": strings.Join(xsStrs, ","), "ys": strings.Join(ysStrs, ","), "answer": answer,
 		},
 	}
 }
@@ -238,28 +342,39 @@ func (g *extrapolationGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type trapezoidGen struct{}
 
 func (g *trapezoidGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, b   int
-		reason string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b int
+	var answer string
+	var est float64
+
+	for iter := 0; iter < 10; iter++ {
+		a = rand.Intn(3 + tier*2)
+		width := 1 + rand.Intn(3+tier*2)
+		b = a + width
+
+		fA := a * a
+		fB := b * b
+		est = float64(b-a) * float64(fA+fB) / 2.0
+		answer = decimal6(est)
+
+		if answer != strconv.Itoa(a) && answer != strconv.Itoa(b) {
+			break
+		}
 	}
-	claims := []claim{
-		{a: 0, b: 1, reason: "(1 − 0)(0 + 1)/2 = 0.5."},
-		{a: 1, b: 2, reason: "(2 − 1)(1 + 4)/2 = 2.5."},
-		{a: 0, b: 2, reason: "(2 − 0)(0 + 4)/2 = 4."},
-		{a: 1, b: 3, reason: "(3 − 1)(1 + 9)/2 = 10."},
-		{a: 2, b: 3, reason: "(3 − 2)(4 + 9)/2 = 6.5."},
-		{a: 0, b: 3, reason: "(3 − 0)(0 + 9)/2 = 13.5."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	f := func(x int) int { return x * x }
-	answer := decimal6(float64(c.b-c.a) * float64(f(c.a)+f(c.b)) / 2)
+
+	subgoal1 := "Subgoal 1: State governing formula. The single-interval trapezoid rule approximates the definite integral by T = (b - a)(f(a) + f(b)) / 2."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For f(x) = x² on interval [%d, %d], the width is b - a = %d, with f(%d) = %d and f(%d) = %d.",
+		a, b, b-a, a, a*a, b, b*b)
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Evaluating the trapezoid sum gives (%d)(%d + %d) / 2 = %s.",
+		b-a, a*a, b*b, answer)
+
 	return generator.Problem{
 		Question: "The trapezoid rule estimates the integral of f over the interval from a to b by (b − a)(f(a) + f(b))/2. For f(x) = x², a = " +
-			strconv.Itoa(c.a) + " and b = " + strconv.Itoa(c.b) + ", what is the estimate? (enter a decimal)",
+			strconv.Itoa(a) + " and b = " + strconv.Itoa(b) + ", what is the estimate? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "The rule replaces the curve by the straight line joining the endpoints and takes the area of the resulting trapezoid; " + c.reason,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b), "answer": answer,
+			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "answer": answer,
 		},
 	}
 }
@@ -271,28 +386,42 @@ func (g *trapezoidGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type midpointGen struct{}
 
 func (g *midpointGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, b   int
-		reason string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b int
+	var m float64
+	var answer string
+	var est float64
+
+	for iter := 0; iter < 10; iter++ {
+		a = rand.Intn(3 + tier*2)
+		width := 1 + rand.Intn(3+tier*2)
+		b = a + width
+		if a == 0 && b == 2 {
+			b = 3
+		}
+
+		m = float64(a+b) / 2.0
+		est = float64(b-a) * m * m
+		answer = decimal6(est)
+
+		if answer != strconv.Itoa(a) && answer != strconv.Itoa(b) {
+			break
+		}
 	}
-	claims := []claim{
-		{a: 0, b: 1, reason: "(1 − 0)·(0.5)² = 0.25."},
-		{a: 0, b: 2, reason: "(2 − 0)·1² = 2."},
-		{a: 1, b: 3, reason: "(3 − 1)·2² = 8."},
-		{a: 2, b: 4, reason: "(4 − 2)·3² = 18."},
-		{a: 0, b: 4, reason: "(4 − 0)·2² = 16."},
-		{a: 1, b: 2, reason: "(2 − 1)·1.5² = 2.25."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	m := float64(c.a+c.b) / 2
-	answer := decimal6(float64(c.b-c.a) * m * m)
+
+	subgoal1 := "Subgoal 1: State governing formula. The midpoint rule approximates the integral of f over [a, b] by M = (b - a) * f((a + b)/2)."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For f(x) = x² on [%d, %d], the width is b - a = %d and the midpoint is m = %s with f(m) = %s.",
+		a, b, b-a, decimal6(m), decimal6(m*m))
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Evaluating the midpoint product gives (%d) * %s = %s.",
+		b-a, decimal6(m*m), answer)
+
 	return generator.Problem{
 		Question: "The midpoint rule estimates the integral of f over the interval from a to b by (b − a)·f((a + b)/2). For f(x) = x², a = " +
-			strconv.Itoa(c.a) + " and b = " + strconv.Itoa(c.b) + ", what is the estimate? (enter a decimal)",
+			strconv.Itoa(a) + " and b = " + strconv.Itoa(b) + ", what is the estimate? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "The rule replaces the curve by the horizontal line at the midpoint value and takes the area of the rectangle; " + c.reason,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b), "answer": answer,
+			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "answer": answer,
 		},
 	}
 }
@@ -304,29 +433,42 @@ func (g *midpointGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type simpsonGen struct{}
 
 func (g *simpsonGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, b   int
-		reason string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b int
+	var m float64
+	var answer string
+	var est float64
+
+	for iter := 0; iter < 10; iter++ {
+		a = rand.Intn(3 + tier*2)
+		width := 1 + rand.Intn(3+tier*2)
+		b = a + width
+
+		m = float64(a+b) / 2.0
+		fA := float64(a * a)
+		fB := float64(b * b)
+		fM := m * m
+		est = (float64(b-a) / 6.0) * (fA + 4.0*fM + fB)
+		answer = decimal6(est)
+
+		if answer != strconv.Itoa(a) && answer != strconv.Itoa(b) {
+			break
+		}
 	}
-	claims := []claim{
-		{a: 0, b: 1, reason: "(1/6)(0 + 4·0.25 + 1) = 0.333333."},
-		{a: 0, b: 2, reason: "(2/6)(0 + 4·1 + 4) = 2.666667."},
-		{a: 1, b: 2, reason: "(1/6)(1 + 9 + 4) = 2.333333."},
-		{a: 0, b: 3, reason: "(3/6)(0 + 9 + 9) = 9."},
-		{a: 2, b: 3, reason: "(1/6)(4 + 25 + 9) = 6.333333."},
-		{a: 1, b: 3, reason: "(2/6)(1 + 16 + 9) = 8.666667."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	f := func(x float64) float64 { return x * x }
-	m := float64(c.a+c.b) / 2
-	answer := decimal6((float64(c.b-c.a) / 6) * (f(float64(c.a)) + 4*f(m) + f(float64(c.b))))
+
+	subgoal1 := "Subgoal 1: State governing formula. Simpson's rule approximates the integral of f over [a, b] by S = ((b - a)/6) * (f(a) + 4 f(mid) + f(b))."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For f(x) = x² on [%d, %d], the width is %d, midpoint is %s, f(%d) = %d, f(%d) = %d and f(mid) = %s.",
+		a, b, b-a, decimal6(m), a, a*a, b, b*b, decimal6(m*m))
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Evaluating gives (%d/6) * (%d + 4 * %s + %d) = %s.",
+		b-a, a*a, decimal6(m*m), b*b, answer)
+
 	return generator.Problem{
 		Question: "Simpson's rule estimates the integral of f over the interval from a to b by (b − a)(f(a) + 4 f(mid) + f(b))/6. For f(x) = x², a = " +
-			strconv.Itoa(c.a) + " and b = " + strconv.Itoa(c.b) + ", what is the estimate? (enter a decimal)",
+			strconv.Itoa(a) + " and b = " + strconv.Itoa(b) + ", what is the estimate? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "The rule fits a parabola through the two endpoints and the midpoint and integrates it exactly; " + c.reason,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b), "answer": answer,
+			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "answer": answer,
 		},
 	}
 }
@@ -338,37 +480,46 @@ func (g *simpsonGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 type compositeGen struct{}
 
 func (g *compositeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		b, n   int
-		reason string
-	}
-	claims := []claim{
-		{b: 1, n: 2, reason: "h = 0.5, giving 0.5(0 + 0.25 + 0.5) = 0.375."},
-		{b: 2, n: 4, reason: "h = 0.5, giving 0.5(0 + 0.25 + 1 + 2.25 + 2) = 2.75."},
-		{b: 1, n: 4, reason: "h = 0.25, giving 0.25(0 + 0.0625 + 0.25 + 0.5625 + 0.5) = 0.34375."},
-		{b: 3, n: 3, reason: "h = 1, giving 1(0 + 1 + 4 + 4.5) = 9.5."},
-		{b: 2, n: 2, reason: "h = 1, giving 1(0 + 1 + 2) = 3."},
-		{b: 4, n: 4, reason: "h = 1, giving 1(0 + 1 + 4 + 9 + 8) = 22."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	h := float64(c.b) / float64(c.n)
-	sum := 0.0
-	for i := 0; i <= c.n; i++ {
-		x := float64(i) * h
-		w := 1.0
-		if i == 0 || i == c.n {
-			w = 0.5
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var b, n int
+	var answer string
+	var h float64
+
+	for iter := 0; iter < 10; iter++ {
+		n = 2 + rand.Intn(2+tier*2) // 2 to 6
+		b = 1 + rand.Intn(2+tier*3) // 1 to 8
+
+		h = float64(b) / float64(n)
+		sum := 0.0
+		for i := 0; i <= n; i++ {
+			x := float64(i) * h
+			w := 1.0
+			if i == 0 || i == n {
+				w = 0.5
+			}
+			sum += w * x * x
 		}
-		sum += w * x * x
+		est := h * sum
+		answer = decimal6(est)
+
+		if answer != strconv.Itoa(b) && answer != strconv.Itoa(n) {
+			break
+		}
 	}
-	answer := decimal6(h * sum)
+
+	subgoal1 := "Subgoal 1: State governing formula. The composite trapezoid rule on [0, b] with n equal subintervals is T_n = h (f_0/2 + f_1 + ... + f_{n-1} + f_n/2), where h = b/n."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For f(x) = x² on [0, %d] with n = %d subintervals, the width is h = %s and endpoints carry half-weight.",
+		b, n, decimal6(h))
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Summing the weighted function values and multiplying by h yields T_n = %s.",
+		answer)
+
 	return generator.Problem{
 		Question: "The composite trapezoid rule with n equal subintervals of width h on the interval from 0 to b is h(f_0/2 + f_1 + ... + f_{n−1} + f_n/2). For f(x) = x², b = " +
-			strconv.Itoa(c.b) + " and n = " + strconv.Itoa(c.n) + ", what is the estimate? (enter a decimal)",
+			strconv.Itoa(b) + " and n = " + strconv.Itoa(n) + ", what is the estimate? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "The single-interval rule is applied to each subinterval and the interior values are shared by two neighbours, which is why the end values carry weight one half; " + c.reason,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"b": strconv.Itoa(c.b), "n": strconv.Itoa(c.n), "answer": answer,
+			"b": strconv.Itoa(b), "n": strconv.Itoa(n), "answer": answer,
 		},
 	}
 }
@@ -482,27 +633,25 @@ func (g *rombergGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 type gaussGen struct{}
 
 func (g *gaussGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		k      int
-		reason string
-	}
-	claims := []claim{
-		{k: 1, reason: "Each node contributes (1/3)^1 = 1/3, so the sum is 2/3 = 0.666667."},
-		{k: 2, reason: "Each node contributes (1/3)^2 = 1/9, so the sum is 2/9 = 0.222222."},
-		{k: 3, reason: "Each node contributes 1/27, so the sum is 2/27 = 0.074074."},
-		{k: 4, reason: "Each node contributes 1/81, so the sum is 2/81 = 0.024691."},
-		{k: 5, reason: "Each node contributes 1/243, so the sum is 2/243 = 0.008230."},
-		{k: 6, reason: "Each node contributes 1/729, so the sum is 2/729 = 0.002743."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(2 * math.Pow(1.0/3.0, float64(c.k)))
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	k := 1 + rand.Intn(4+tier*2) // 1 to 8
+
+	est := 2.0 * math.Pow(1.0/3.0, float64(k))
+	answer := decimal6(est)
+
+	subgoal1 := "Subgoal 1: State governing formula. Two-point Gauss quadrature on [-1, 1] uses symmetric nodes at \\pm 1/\\sqrt{3} with unit weights, estimating the integral of f by f(-1/\\sqrt{3}) + f(1/\\sqrt{3})."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For f(x) = x^{2k} with k = %d (degree 2k = %d), each node contributes (\\pm 1/\\sqrt{3})^{%d} = (1/3)^%d = %s.",
+		k, 2*k, 2*k, k, decimal6(math.Pow(1.0/3.0, float64(k))))
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Adding both node contributions gives 2 * (1/3)^%d = %s.",
+		k, answer)
+
 	return generator.Problem{
-		Question: "Two-point Gauss quadrature on the interval from minus one to one uses the nodes at plus and minus one over the square root of three, with equal weights, so it estimates the integral of f by f(node) + f(−node). For f(x) = x raised to the power " +
-			strconv.Itoa(2*c.k) + ", what is the estimate? (enter a decimal)",
+		Question: "Two-point Gauss quadrature on the interval from minus one to one uses the nodes at plus and minus one over the square root of three, with equal weights, so it estimates the integral of f by f(node) + f(−node). For f(x) = x raised to the power 2k with k = " +
+			strconv.Itoa(k) + " (power " + strconv.Itoa(2*k) + "), what is the estimate? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "The two nodes are symmetric, so each contributes the same power of one over the square root of three; " + c.reason,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"k": strconv.Itoa(c.k), "answer": answer,
+			"k": strconv.Itoa(k), "answer": answer,
 		},
 	}
 }
@@ -616,30 +765,71 @@ func (g *improperGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type eliminationGen struct{}
 
 func (g *eliminationGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, b, c, d, x, y int
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b, c, d, e, f int
+	var answer string
+
+	for iter := 0; iter < 25; iter++ {
+		a = 1 + rand.Intn(3+tier*2)
+		b = 1 + rand.Intn(3+tier*2)
+		c = 1 + rand.Intn(3+tier*2)
+		d = 1 + rand.Intn(3+tier*2)
+		det := a*d - b*c
+		if det == 0 {
+			continue
+		}
+
+		x := 2 + rand.Intn(4+tier*3)
+		y := 5 + rand.Intn(4+tier*3)
+		if rand.Float64() < 0.3 && tier > 0 {
+			x = -x
+		}
+		if rand.Float64() < 0.3 && tier > 0 {
+			y = -y
+		}
+		for y == a || y == b || y == c || y == d {
+			y += 2
+		}
+
+		e = a*x + b*y
+		f = c*x + d*y
+		if y == e || y == f {
+			continue
+		}
+
+		yVal := float64(a*f-c*e) / float64(det)
+		answer = decimal6(yVal)
+
+		// Read-off avoidance: answer must not equal a, b, c, d, e or f
+		collision := false
+		for _, v := range []int{a, b, c, d, e, f} {
+			if answer == strconv.Itoa(v) {
+				collision = true
+				break
+			}
+		}
+		if !collision {
+			break
+		}
 	}
-	claims := []claim{
-		{a: 2, b: 1, c: 1, d: 3, x: 1, y: 3},
-		{a: 1, b: 1, c: 1, d: -1, x: 3, y: 1},
-		{a: 3, b: 2, c: 1, d: 2, x: 2, y: 1},
-		{a: 1, b: 2, c: 3, d: 1, x: 1, y: 2},
-		{a: 2, b: 3, c: 1, d: 1, x: 4, y: 1},
-		{a: 1, b: 1, c: 2, d: 3, x: 5, y: 2},
-	}
-	c := claims[rand.Intn(len(claims))]
-	e := c.a*c.x + c.b*c.y
-	f := c.c*c.x + c.d*c.y
-	det := c.a*c.d - c.b*c.c
-	answer := decimal6(float64(c.a*f-c.c*e) / float64(det))
+
+	det := a*d - b*c
+	num := a*f - c*e
+
+	subgoal1 := "Subgoal 1: State governing formula. Gaussian elimination eliminates x by subtracting (c/a) times the first row from the second, giving y = (a f - c e) / (a d - b c)."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For a = %d, b = %d, c = %d, d = %d, e = %d and f = %d, the numerator is a f - c e = (%d)(%d) - (%d)(%d) = %d and the pivot determinant is a d - b c = (%d)(%d) - (%d)(%d) = %d.",
+		a, b, c, d, e, f, a, f, c, e, num, a, d, b, c, det)
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Dividing gives y = %d / %d = %s.",
+		num, det, answer)
+
 	return generator.Problem{
 		Question: "Solve the linear system a x + b y = e and c x + d y = f by Gaussian elimination. For a = " +
-			strconv.Itoa(c.a) + ", b = " + strconv.Itoa(c.b) + ", c = " + strconv.Itoa(c.c) + ", d = " + strconv.Itoa(c.d) +
+			strconv.Itoa(a) + ", b = " + strconv.Itoa(b) + ", c = " + strconv.Itoa(c) + ", d = " + strconv.Itoa(d) +
 			", e = " + strconv.Itoa(e) + " and f = " + strconv.Itoa(f) + ", what is y? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "Elimination forms a single equation for y by subtracting a multiple of the first row from the second; the determinant below is the pivot product; " + "y = (a f − c e)/(a d − b c).",
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b), "c": strconv.Itoa(c.c), "d": strconv.Itoa(c.d),
+			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "c": strconv.Itoa(c), "d": strconv.Itoa(d),
 			"e": strconv.Itoa(e), "f": strconv.Itoa(f), "answer": answer,
 		},
 	}
@@ -703,28 +893,53 @@ func (g *pivotingGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type luGen struct{}
 
 func (g *luGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, b, c, d int
-		reason     string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b, c, d int
+	var answer string
+	var m float64
+
+	for iter := 0; iter < 15; iter++ {
+		a = 2 + rand.Intn(3+tier*2) // 2 to 6
+		b = 1 + rand.Intn(3)        // 1 to 3
+		d = 1 + rand.Intn(3)        // 1 to 3
+
+		mult := 7 + rand.Intn(6+tier*5) // 7 to 17
+		rem := 0
+		if tier > 0 && rand.Float64() < 0.5 {
+			rem = 1 + rand.Intn(a-1)
+		}
+		c = a*mult + rem
+
+		m = float64(c) / float64(a)
+		answer = decimal6(m)
+
+		// Read-off avoidance: answer must not match a, b, c or d
+		collision := false
+		for _, v := range []int{a, b, c, d} {
+			if answer == strconv.Itoa(v) {
+				collision = true
+				break
+			}
+		}
+		if !collision {
+			break
+		}
 	}
-	claims := []claim{
-		{a: 2, b: 1, c: 4, d: 3, reason: "4/2 = 2."},
-		{a: 3, b: 1, c: 6, d: 2, reason: "6/3 = 2."},
-		{a: 1, b: 2, c: 3, d: 4, reason: "3/1 = 3."},
-		{a: 4, b: 1, c: 6, d: 5, reason: "6/4 = 1.5."},
-		{a: 2, b: 3, c: 5, d: 7, reason: "5/2 = 2.5."},
-		{a: 5, b: 2, c: 10, d: 3, reason: "10/5 = 2."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(c.c) / float64(c.a))
+
+	subgoal1 := "Subgoal 1: State governing formula. In the LU factorization A = L U of a 2x2 matrix without pivoting, the elimination multiplier in L is l_21 = a_21 / a_11 = c / a."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. From the given matrix, the pivot entry is a_11 = a = %d and the entry below the pivot is a_21 = c = %d.",
+		a, c)
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Dividing gives multiplier l_21 = %d / %d = %s.",
+		c, a, answer)
+
 	return generator.Problem{
 		Question: "For the matrix whose first row is a and b and second row is c and d, the elimination multiplier in the LU factorization is c divided by a. For a = " +
-			strconv.Itoa(c.a) + ", b = " + strconv.Itoa(c.b) + ", c = " + strconv.Itoa(c.c) + " and d = " + strconv.Itoa(c.d) +
+			strconv.Itoa(a) + ", b = " + strconv.Itoa(b) + ", c = " + strconv.Itoa(c) + " and d = " + strconv.Itoa(d) +
 			", what is the multiplier? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "The multiplier is the factor by which the first row is subtracted from the second to clear the entry below the pivot; " + c.reason,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b), "c": strconv.Itoa(c.c), "d": strconv.Itoa(c.d), "answer": answer,
+			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "c": strconv.Itoa(c), "d": strconv.Itoa(d), "answer": answer,
 		},
 	}
 }
@@ -736,29 +951,54 @@ func (g *luGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type jacobiGen struct{}
 
 func (g *jacobiGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, b, e, y0 int
-		reason      string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b, e, y0 int
+	var answer string
+	var nextX float64
+
+	for iter := 0; iter < 15; iter++ {
+		a = 2 + rand.Intn(3)  // 2 to 4
+		b = 1 + rand.Intn(3)  // 1 to 3
+		y0 = 1 + rand.Intn(3) // 1 to 3
+
+		targetX := 7 + rand.Intn(6+tier*5) // 7 to 17
+		rem := 0
+		if tier > 0 && rand.Float64() < 0.5 {
+			rem = 1 + rand.Intn(a-1)
+		}
+		e = a*targetX + b*y0 + rem
+
+		nextX = float64(e-b*y0) / float64(a)
+		answer = decimal6(nextX)
+
+		// Read-off avoidance: answer must not match a, b, e or y0
+		collision := false
+		for _, v := range []int{a, b, e, y0} {
+			if answer == strconv.Itoa(v) {
+				collision = true
+				break
+			}
+		}
+		if !collision {
+			break
+		}
 	}
-	claims := []claim{
-		{a: 4, b: 1, e: 9, y0: 1, reason: "(9 − 1·1)/4 = 2."},
-		{a: 3, b: 2, e: 8, y0: 1, reason: "(8 − 2·1)/3 = 2."},
-		{a: 5, b: 1, e: 12, y0: 2, reason: "(12 − 1·2)/5 = 2."},
-		{a: 4, b: 3, e: 10, y0: 2, reason: "(10 − 3·2)/4 = 1."},
-		{a: 2, b: 1, e: 7, y0: 3, reason: "(7 − 1·3)/2 = 2."},
-		{a: 5, b: 2, e: 13, y0: 4, reason: "(13 − 2·4)/5 = 1."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(c.e-c.b*c.y0) / float64(c.a))
+
+	subgoal1 := "Subgoal 1: State governing formula. One step of the Jacobi method solves row 1 for x using the iterate value from the previous step: x^{(k+1)} = (e - b y^{(k)}) / a."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For equation %d x + %d y = %d with previous iterate y = %d, the remaining term is b y = (%d)(%d) = %d.",
+		a, b, e, y0, b, y0, b*y0)
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Evaluating gives x = (%d - %d) / %d = %s.",
+		e, b*y0, a, answer)
+
 	return generator.Problem{
 		Question: "One step of the Jacobi iteration solves each equation for its own unknown using the previous values. For the equation " +
-			strconv.Itoa(c.a) + " x + " + strconv.Itoa(c.b) + " y = " + strconv.Itoa(c.e) + " with the previous value y = " +
-			strconv.Itoa(c.y0) + ", what is the new x? (enter a decimal)",
+			strconv.Itoa(a) + " x + " + strconv.Itoa(b) + " y = " + strconv.Itoa(e) + " with the previous value y = " +
+			strconv.Itoa(y0) + ", what is the new x? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "Jacobi uses only values from the previous sweep, so the other unknowns in the equation keep their old values; " + c.reason,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b), "e": strconv.Itoa(c.e),
-			"y0": strconv.Itoa(c.y0), "answer": answer,
+			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "e": strconv.Itoa(e),
+			"y0": strconv.Itoa(y0), "answer": answer,
 		},
 	}
 }
@@ -821,30 +1061,69 @@ func (g *gaussSeidelGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type powerMethodGen struct{}
 
 func (g *powerMethodGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, b, d int
-		reason  string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	var a, b, d int
+	var answer string
+	var mid, rad, lambda1 float64
+
+	for iter := 0; iter < 10; iter++ {
+		if tier == 0 {
+			a = 2 + rand.Intn(4)
+			d = a
+			b = 1 + rand.Intn(3)
+		} else if tier == 1 {
+			type pyth struct {
+				delta, b int
+			}
+			triples := []pyth{{3, 4}, {4, 3}, {6, 8}, {8, 6}}
+			tr := triples[rand.Intn(len(triples))]
+			m := 1 + rand.Intn(5)
+			a = m + tr.delta
+			d = m - tr.delta
+			if d <= 0 {
+				d = 1
+				a = d + 2*tr.delta
+			}
+			b = tr.b
+		} else {
+			a = 1 + rand.Intn(6+tier*2)
+			d = 1 + rand.Intn(6+tier*2)
+			b = 1 + rand.Intn(4+tier*2)
+		}
+
+		mid = float64(a+d) / 2.0
+		diff := float64(a-d) / 2.0
+		rad = math.Sqrt(diff*diff + float64(b*b))
+		lambda1 = mid + rad
+		answer = decimal6(lambda1)
+
+		// Read-off avoidance: answer must not match a, b or d
+		collision := false
+		for _, v := range []int{a, b, d} {
+			if answer == strconv.Itoa(v) {
+				collision = true
+				break
+			}
+		}
+		if !collision {
+			break
+		}
 	}
-	claims := []claim{
-		{a: 2, b: 1, d: 2, reason: "The midpoint is 2 and the square root of b² is 1, giving 2 + 1 = 3."},
-		{a: 3, b: 1, d: 3, reason: "3 + 1 = 4."},
-		{a: 2, b: 2, d: 2, reason: "2 + 2 = 4."},
-		{a: 1, b: 2, d: 1, reason: "1 + 2 = 3."},
-		{a: 4, b: 1, d: 4, reason: "4 + 1 = 5."},
-		{a: 3, b: 2, d: 3, reason: "3 + 2 = 5."},
-	}
-	c := claims[rand.Intn(len(claims))]
-	mid := float64(c.a+c.d) / 2
-	rad := math.Sqrt(math.Pow(float64(c.a-c.d)/2, 2) + float64(c.b*c.b))
-	answer := decimal6(mid + rad)
+
+	subgoal1 := "Subgoal 1: State governing formula. The power method converges to the dominant eigenvalue of a matrix; for a 2x2 symmetric matrix, the larger eigenvalue is \\lambda_1 = (a + d)/2 + \\sqrt{((a - d)/2)^2 + b^2}."
+	subgoal2 := fmt.Sprintf("Subgoal 2: Substitute parameters. For a = %d, d = %d and b = %d, the diagonal midpoint is (a + d)/2 = %s and the radius term is \\sqrt{((%d - %d)/2)^2 + %d^2} = \\sqrt{%s + %d} = %s.",
+		a, d, b, decimal6(mid), a, d, b, decimal6(math.Pow(float64(a-d)/2.0, 2)), b*b, decimal6(rad))
+	subgoal3 := fmt.Sprintf("Subgoal 3: Evaluate and simplify. Summing the center and radius yields dominant eigenvalue \\lambda_1 = %s + %s = %s.",
+		decimal6(mid), decimal6(rad), answer)
+
 	return generator.Problem{
 		Question: "The power method converges to the dominant eigenvalue of a matrix. For the symmetric matrix with diagonal entries a = " +
-			strconv.Itoa(c.a) + " and d = " + strconv.Itoa(c.d) + " and off-diagonal entry b = " + strconv.Itoa(c.b) +
+			strconv.Itoa(a) + " and d = " + strconv.Itoa(d) + " and off-diagonal entry b = " + strconv.Itoa(b) +
 			", the dominant eigenvalue is (a + d)/2 + sqrt(((a − d)/2)² + b²). What is it? (enter a decimal)",
 		Answer:      answer,
-		Explanation: "The eigenvalues of a two-by-two symmetric matrix are the midpoint of the diagonal plus or minus a square-root term, and the power method returns the larger; " + c.reason,
+		Explanation: strings.Join([]string{subgoal1, subgoal2, subgoal3}, " "),
 		Facts: map[string]string{
-			"a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b), "d": strconv.Itoa(c.d), "answer": answer,
+			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "d": strconv.Itoa(d), "answer": answer,
 		},
 	}
 }
