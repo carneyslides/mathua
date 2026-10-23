@@ -352,3 +352,135 @@ func TestRepair_RepoError(t *testing.T) {
 		t.Error("expected error from Run with closed repository")
 	}
 }
+func TestRepair_ReplayFallbackWhenConceptAbsentOrZeroThreshold(t *testing.T) {
+	repo, dag, sid, sess := testRepo(t)
+	base := time.Now().UTC().Add(-time.Hour)
+
+	// Case 1: Concept absent from DAG entirely.
+	// 6 consistent attempts in window with distinct instances to achieve mastery.
+	attsAbsent := make([]storage.AttemptEntry, 6)
+	correctAbsent := make([]bool, 6)
+	diff := 0.8
+	for i := 0; i < 6; i++ {
+		attsAbsent[i] = storage.AttemptEntry{
+			SessionID:      sess,
+			StudentID:      sid,
+			ConceptID:      "missing_concept",
+			Question:       time.Duration(i).String(),
+			Answer:         "ans",
+			Correct:        true,
+			ElapsedSeconds: 3.0,
+			Difficulty:     &diff,
+			Timestamp:      base.Add(time.Duration(i) * time.Minute),
+		}
+		correctAbsent[i] = true
+	}
+	pAbsent := replay(dag, repo, sid, "missing_concept", attsAbsent, correctAbsent)
+	if pAbsent == nil {
+		t.Fatal("expected non-nil progress for absent concept")
+	}
+	if pAbsent.Attempts != 6 || pAbsent.BestStreak != 5 || pAbsent.Streak != 1 {
+		t.Errorf("absent concept: attempts=%d bestStreak=%d streak=%d, want 6/5/1", pAbsent.Attempts, pAbsent.BestStreak, pAbsent.Streak)
+	}
+	// Fallback required streak of 3 and threshold of 10s should transition to mastered after full evidence window
+	if pAbsent.Status != "MASTERED" {
+		t.Errorf("absent concept status=%s, want MASTERED", pAbsent.Status)
+	}
+	if pAbsent.MasteredAt == nil {
+		t.Errorf("absent concept expected MasteredAt to be set")
+	}
+
+	// Case 2: Concept with zero streak and zero time threshold in raw DAG struct.
+	// Since concepts.Build rejects non-positive streak, construct a Concept directly in DAG.
+	cZero := &concepts.Concept{
+		ID:          "zero_thresh",
+		Label:       "Zero Thresh",
+		Domain:      "d",
+		GradingType: "numeric",
+		MasteryThreshold: concepts.MasteryThreshold{
+			Streak:         0,
+			AvgTimeSeconds: 0,
+		},
+	}
+	dagZero, err := concepts.Build([]concepts.Concept{{
+		ID: "dummy", Label: "Dummy", Domain: "d", GradingType: "numeric",
+		MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
+	}})
+	if err != nil {
+		t.Fatalf("build dagZero base: %v", err)
+	}
+	// Inject the zero threshold concept directly into DAG to test replay fallback guard
+	dagZero.Concepts()["zero_thresh"] = cZero
+
+	attsZero := make([]storage.AttemptEntry, 6)
+	correctZero := make([]bool, 6)
+	for i := 0; i < 6; i++ {
+		attsZero[i] = storage.AttemptEntry{
+			SessionID:      sess,
+			StudentID:      sid,
+			ConceptID:      "zero_thresh",
+			Question:       time.Duration(i).String(),
+			Answer:         "ans",
+			Correct:        true,
+			ElapsedSeconds: 2.5,
+			Difficulty:     &diff,
+			Timestamp:      base.Add(time.Duration(i) * time.Minute),
+		}
+		correctZero[i] = true
+	}
+	pZero := replay(dagZero, repo, sid, "zero_thresh", attsZero, correctZero)
+	if pZero == nil {
+		t.Fatal("expected non-nil progress for zero threshold concept")
+	}
+	if pZero.Status != "MASTERED" {
+		t.Errorf("zero threshold concept status=%s, want MASTERED", pZero.Status)
+	}
+	if pZero.WeaknessScore != 0.0 {
+		t.Errorf("weakness score=%f, want 0.0 after mastery", pZero.WeaknessScore)
+	}
+	if pZero.NextReviewDue == nil {
+		t.Errorf("expected NextReviewDue to be scheduled for mastered concept")
+	}
+}
+
+func TestRepair_ReplayWithTopicSpeed(t *testing.T) {
+	repo, dag, sid, sess := testRepo(t)
+	base := time.Now().UTC().Add(-time.Hour)
+
+	must(t, repo.UpsertTopicSpeed(&storage.TopicSpeed{
+		StudentID:     sid,
+		ConceptID:     "t",
+		LearningSpeed: 1.5,
+	}))
+
+	atts := make([]storage.AttemptEntry, 6)
+	correct := make([]bool, 6)
+	diff := 0.7
+	for i := 0; i < 6; i++ {
+		atts[i] = storage.AttemptEntry{
+			SessionID:      sess,
+			StudentID:      sid,
+			ConceptID:      "t",
+			Question:       time.Duration(i).String(),
+			Answer:         "1",
+			Correct:        true,
+			ElapsedSeconds: 2.0,
+			Difficulty:     &diff,
+			Timestamp:      base.Add(time.Duration(i) * time.Minute),
+		}
+		correct[i] = true
+	}
+	p := replay(dag, repo, sid, "t", atts, correct)
+	if p == nil {
+		t.Fatal("expected non-nil progress")
+	}
+	if p.Status != "MASTERED" {
+		t.Errorf("status=%s, want MASTERED", p.Status)
+	}
+	if p.SM2Repetitions < 3 {
+		t.Errorf("SM2Repetitions=%d, want >= 3", p.SM2Repetitions)
+	}
+	if p.SM2Interval <= 0 {
+		t.Errorf("SM2Interval=%d, want > 0", p.SM2Interval)
+	}
+}
