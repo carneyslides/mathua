@@ -932,24 +932,123 @@ func (g *zTableGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type confidenceGen struct{}
 
 func (g *confidenceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"Does a 95% confidence interval mean that 95% of such intervals contain the true parameter? (yes/no)", "yes", "In repeated sampling, 95% of CIs contain the population parameter."},
-		{"A sample of n=100 has SD 20. With z=2, what is the margin of error?", "4", "CI = sample mean plus/minus margin; margin = z times SD/sqrt(n) = 2 times 2."},
-		{"Does a larger sample give a narrower confidence interval? (yes/no)", "yes", "CI width goes like 1/sqrt(n), so larger samples give more precise estimates."},
-		{"What happens to CI width when confidence level increases from 95% to 99%?", "it gets wider", "Higher confidence requires a wider interval."},
-		{"A 95% CI is 10 plus/minus 2. What is the margin of error?", "2", "Margin of error = critical value times standard error."},
-		{"For 50 of 100 voters with z=2, what is the margin of error as a decimal?", "0.1", "Margin = z times sqrt(phat(1-phat)/n) = 2 times 0.05."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type marginItem struct {
+			n     int
+			sigma int
+			z     int
+			e     int
+		}
+		items := []marginItem{
+			{25, 15, 2, 6},
+			{36, 24, 2, 8},
+			{64, 40, 2, 10},
+			{100, 30, 3, 9},
+			{100, 50, 2, 10},
+			{144, 36, 2, 6},
+			{144, 48, 3, 12},
+			{225, 45, 2, 6},
+		}
+		it := items[rand.Intn(len(items))]
+		se := it.e / it.z
+		return generator.Problem{
+			Question: fmt.Sprintf("A random sample of size \\(n = %d\\) is drawn from a population with standard deviation \\(\\sigma = %d\\). Using critical value \\(z = %d\\), calculate the margin of error \\(E\\).", it.n, it.sigma, it.z),
+			Answer:   fmt.Sprintf("%d", it.e),
+			Explanation: fmt.Sprintf("The margin of error for a confidence interval is \\(E = z \\cdot \\frac{\\sigma}{\\sqrt{n}} = %d \\cdot \\frac{%d}{\\sqrt{%d}} = %d \\cdot %d = %d\\).",
+				it.z, it.sigma, it.n, it.z, se, it.e),
+		}
+	case 1:
+		type sampleSizeItem struct {
+			sigma int
+			z     int
+			e     int
+			ratio int
+			n     int
+		}
+		items := []sampleSizeItem{
+			{10, 2, 4, 5, 25},
+			{15, 2, 5, 6, 36},
+			{20, 2, 5, 8, 64},
+			{12, 2, 3, 8, 64},
+			{30, 2, 6, 10, 100},
+			{16, 2, 4, 8, 64},
+			{24, 3, 6, 12, 144},
+			{25, 2, 5, 10, 100},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A researcher requires a margin of error of \\(E = %d\\) with critical value \\(z = %d\\) from a population with standard deviation \\(\\sigma = %d\\). Determine the required sample size \\(n\\).", it.e, it.z, it.sigma),
+			Answer:   fmt.Sprintf("%d", it.n),
+			Explanation: fmt.Sprintf("The required sample size formula is \\(n = \\left(\\frac{z\\sigma}{E}\\right)^2 = \\left(\\frac{%d \\cdot %d}{%d}\\right)^2 = %d^2 = %d\\).",
+				it.z, it.sigma, it.e, it.ratio, it.n),
+		}
+	case 2:
+		type midpointItem struct {
+			lower int
+			upper int
+			mean  int
+		}
+		items := []midpointItem{
+			{64, 76, 70},
+			{42, 58, 50},
+			{115, 145, 130},
+			{82, 98, 90},
+			{23, 37, 30},
+			{180, 220, 200},
+			{75, 105, 90},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A confidence interval for the population mean is computed as \\([%d, %d]\\). Find the sample mean point estimate \\(\\bar{x}\\).", it.lower, it.upper),
+			Answer:   fmt.Sprintf("%d", it.mean),
+			Explanation: fmt.Sprintf("The sample mean is the midpoint of the confidence interval: \\(\\bar{x} = \\frac{L + U}{2} = \\frac{%d + %d}{2} = \\frac{%d}{2} = %d\\).",
+				it.lower, it.upper, it.lower+it.upper, it.mean),
+		}
+	case 3:
+		type widthItem struct {
+			lower  int
+			upper  int
+			margin int
+		}
+		items := []widthItem{
+			{38, 62, 12},
+			{85, 105, 10},
+			{14, 26, 6},
+			{55, 75, 10},
+			{120, 150, 15},
+			{63, 81, 9},
+			{210, 250, 20},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A symmetric confidence interval for a population parameter is given by \\([%d, %d]\\). What is the margin of error \\(E\\)?", it.lower, it.upper),
+			Answer:   fmt.Sprintf("%d", it.margin),
+			Explanation: fmt.Sprintf("The margin of error is half the interval width: \\(E = \\frac{U - L}{2} = \\frac{%d - %d}{2} = \\frac{%d}{2} = %d\\).",
+				it.upper, it.lower, it.upper-it.lower, it.margin),
+		}
+	default:
+		type totalWidthItem struct {
+			e int
+			w int
+		}
+		items := []totalWidthItem{
+			{7, 14},
+			{12, 24},
+			{9, 18},
+			{15, 30},
+			{8, 16},
+			{22, 44},
+			{16, 32},
+			{25, 50},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A survey report establishes a confidence interval with a margin of error \\(E = %d\\). What is the total width \\(W\\) of this confidence interval?", it.e),
+			Answer:   fmt.Sprintf("%d", it.w),
+			Explanation: fmt.Sprintf("The total width of a confidence interval spanning \\([\\bar{x} - E, \\bar{x} + E]\\) is \\(W = 2E = 2 \\cdot %d = %d\\).",
+				it.e, it.w),
+		}
 	}
 }
 

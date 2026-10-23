@@ -496,7 +496,7 @@
   "label": "Confidence intervals",
   "domain": "statistics",
   "subdomain": "statistics.inference",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "stat.infer.sampling"
   ],
