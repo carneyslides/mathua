@@ -391,31 +391,73 @@ func (g *cramerGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type eigenConceptGen struct{}
 
 func (g *eigenConceptGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	if rand.Intn(2) == 0 {
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Av = lambda v
+		lambda := smallInt(1, 5+int(ctx.Difficulty*3))
+		k := smallInt(1, 3)
+		b := smallInt(-2, 3)
+		a := lambda - b*k
+		d := smallInt(-2, 3)
+		c := k * (lambda - d)
 		return generator.Problem{
-			Question:    "What is an eigenvalue \\(\\lambda\\) of a square matrix \\(A\\)?",
-			Answer:      "A scalar \\(\\lambda\\) such that \\(\\det(A-\\lambda I)=0\\), equivalently \\(Av=\\lambda v\\) for some nonzero \\(v\\)",
-			Explanation: "An eigenvalue \\(\\lambda\\) satisfies \\(\\det(A-\\lambda I)=0\\), meaning there exists a nonzero vector \\(v\\) with \\(Av=\\lambda v\\).",
+			Question:    fmt.Sprintf("The vector \\(v = \\begin{pmatrix} 1 \\\\ %d \\end{pmatrix}\\) is an eigenvector of matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\). Find the corresponding eigenvalue \\(\\lambda\\).", k, a, b, c, d),
+			Answer:      fmt.Sprintf("%d", lambda),
+			Explanation: fmt.Sprintf("An eigenvector satisfies \\(Av = \\lambda v\\). Computing the first component of \\(Av\\) gives \\(%d(1) + (%d)(%d) = %d\\). Therefore \\(\\lambda = %d\\).", a, b, k, lambda, lambda),
 		}
-	}
-	scale := int(1 + ctx.Difficulty*5)
-	a, d := rand.Intn(max(1, scale*2))-scale, rand.Intn(max(1, scale*2))-scale
-	if a == 0 {
-		a = 1
-	}
-	if d == 0 {
-		d = 2
-	}
-	lambda := rand.Intn(max(1, scale*2)) - scale
-	det := (a - lambda) * (d - lambda)
-	answer := "no"
-	if det == 0 {
-		answer = "yes"
-	}
-	return generator.Problem{
-		Question:    fmt.Sprintf("Is \\(\\lambda=%d\\) an eigenvalue of matrix \\(%s\\)?", lambda, formatMatrix2([][]int{{a, 0}, {0, d}})),
-		Answer:      answer,
-		Explanation: fmt.Sprintf("det(A-λI) = det([[%d,%d],[%d,%d]]) = (%d)*(%d) = %d. Since det %s 0, λ=%d %s an eigenvalue.", a-lambda, 0, 0, d-lambda, a-lambda, d-lambda, det, map[bool]string{true: "=", false: "≠"}[det == 0], lambda, map[bool]string{true: "is", false: "is not"}[det == 0]),
+	case 1:
+		// tr(A) = lambda1 + lambda2
+		a := smallInt(-5, 5)
+		d := smallInt(-5, 5)
+		b := smallInt(-4, 4)
+		c := smallInt(-4, 4)
+		tr := a + d
+		l1 := smallInt(-4, 4)
+		l2 := tr - l1
+		return generator.Problem{
+			Question:    fmt.Sprintf("The matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) has one eigenvalue \\(\\lambda_1 = %d\\). Using the trace formula \\(\\operatorname{tr}(A) = \\lambda_1 + \\lambda_2\\), compute the second eigenvalue \\(\\lambda_2\\).", a, b, c, d, l1),
+			Answer:      fmt.Sprintf("%d", l2),
+			Explanation: fmt.Sprintf("The trace of a square matrix is the sum of its eigenvalues: \\(\\operatorname{tr}(A) = %d + (%d) = %d\\). Thus \\(\\lambda_2 = \\operatorname{tr}(A) - \\lambda_1 = %d - (%d) = %d\\).", a, d, tr, tr, l1, l2),
+		}
+	case 2:
+		// det(A) = lambda1 * lambda2
+		a := smallInt(-4, 4)
+		d := smallInt(-4, 4)
+		b := smallInt(-3, 3)
+		c := smallInt(-3, 3)
+		det := a*d - b*c
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\), what is the product of its eigenvalues \\(\\lambda_1 \\lambda_2\\)?", a, b, c, d),
+			Answer:      fmt.Sprintf("%d", det),
+			Explanation: fmt.Sprintf("The product of all eigenvalues of a matrix equals its determinant: \\(\\lambda_1 \\lambda_2 = \\det(A) = (%d)(%d) - (%d)(%d) = %d\\).", a, d, b, c, det),
+		}
+	case 3:
+		// c * lambda
+		lambda := smallInt(-5, 5)
+		for lambda == 0 {
+			lambda = smallInt(-5, 5)
+		}
+		c := smallInt(2, 5)
+		ans := c * lambda
+		return generator.Problem{
+			Question:    fmt.Sprintf("If matrix \\(A\\) has an eigenvalue \\(\\lambda = %d\\), what is the corresponding eigenvalue of the scaled matrix \\(%d A\\)?", lambda, c),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("For any scalar \\(c\\), the eigenvalues of \\(cA\\) are \\(c\\lambda\\). Here \\(%d \\cdot (%d) = %d\\).", c, lambda, ans),
+		}
+	default:
+		// lambda + c
+		lambda := smallInt(-5, 5)
+		c := smallInt(-5, 5)
+		for c == 0 {
+			c = smallInt(-5, 5)
+		}
+		ans := lambda + c
+		return generator.Problem{
+			Question:    fmt.Sprintf("If matrix \\(A\\) has an eigenvalue \\(\\lambda = %d\\), what is the corresponding eigenvalue of the shifted matrix \\(A + %d I\\)?", lambda, c),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("If \\(Av = \\lambda v\\), then \\((A + %d I)v = Av + %d v = (%d + %d)v = %d v\\). The eigenvalue is %d.", c, c, lambda, c, ans, ans),
+		}
 	}
 }
 

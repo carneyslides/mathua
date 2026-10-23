@@ -163,7 +163,7 @@
     "label": "Eigenvalues and eigenvectors concept",
     "domain": "linear_algebra",
     "subdomain": "linear_algebra.eigenvalues",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "linalg.det.2x2",
       "alg.quad.formula"
