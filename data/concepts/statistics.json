@@ -272,7 +272,7 @@
   "label": "Expected value of a random variable",
   "domain": "statistics",
   "subdomain": "statistics.probability",
-  "grading_type": "symbolic",
+  "grading_type": "numeric",
   "prerequisites": [
    "stat.prob.discrete_rv"
   ],

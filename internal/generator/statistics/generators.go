@@ -1054,24 +1054,129 @@ func (g *discreteRVGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type expectedValueGen struct{}
 
 func (g *expectedValueGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"What is the expected value of a constant c?", "c", "E[c] = c for any constant c."},
-		{"If E[X] = 5, what is E[2X + 1]?", "11", "Linearity of expectation: E[aX+b] = aE[X] + b = 2 times 5 plus 1."},
-		{"If E[X] = 3 and E[Y] = 4, what is E[X + Y]?", "7", "Linearity: expectation of sum = sum of expectations."},
-		{"Is E[XY] always equal to E[X]E[Y]?", "no", "E[XY] = E[X]E[Y] only when X and Y are independent."},
-		{"If E[X] = 2 and E[X^2] = 8, what is Var[X]?", "4", "Variance = second moment minus squared mean = 8 - 4."},
-		{"What is E[X²] called?", "second moment", "E[X²] is the second moment about the origin."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question:    e.question,
-		Answer:      e.answer,
-		Explanation: e.exp,
+	switch rand.Intn(5) {
+	case 0:
+		type linItem struct {
+			ex  int
+			a   int
+			b   int
+			ans int
+		}
+		items := []linItem{
+			{4, 3, 5, 17},
+			{6, 2, 7, 19},
+			{5, 4, 3, 23},
+			{8, 3, 6, 30},
+			{7, 5, 4, 39},
+			{9, 2, 8, 26},
+			{10, 3, 12, 42},
+			{12, 4, 5, 53},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X\\) be a random variable with expected value \\(E[X] = %d\\). Calculate \\(E[%dX + %d]\\).", it.ex, it.a, it.b),
+			Answer:   fmt.Sprintf("%d", it.ans),
+			Explanation: fmt.Sprintf("By linearity of expectation, \\(E[%dX + %d] = %dE[X] + %d = (%d \\cdot %d) + %d = %d\\).",
+				it.a, it.b, it.a, it.b, it.a, it.ex, it.b, it.ans),
+		}
+	case 1:
+		type combItem struct {
+			ex  int
+			ey  int
+			a   int
+			b   int
+			ans int
+		}
+		items := []combItem{
+			{5, 8, 2, 3, 34},
+			{4, 7, 3, 2, 26},
+			{6, 9, 4, 3, 51},
+			{10, 4, 2, 5, 40},
+			{8, 6, 3, 4, 48},
+			{7, 12, 5, 2, 59},
+			{9, 5, 2, 6, 48},
+			{3, 11, 4, 3, 45},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Random variables \\(X\\) and \\(Y\\) have expected values \\(E[X] = %d\\) and \\(E[Y] = %d\\). Compute \\(E[%dX + %dY]\\).", it.ex, it.ey, it.a, it.b),
+			Answer:   fmt.Sprintf("%d", it.ans),
+			Explanation: fmt.Sprintf("By linearity of expectation, \\(E[%dX + %dY] = %dE[X] + %dE[Y] = (%d \\cdot %d) + (%d \\cdot %d) = %d + %d = %d\\).",
+				it.a, it.b, it.a, it.b, it.a, it.ex, it.b, it.ey, it.a*it.ex, it.b*it.ey, it.ans),
+		}
+	case 2:
+		type momentItem struct {
+			ex  int
+			vx  int
+			ex2 int
+		}
+		items := []momentItem{
+			{3, 7, 16},
+			{4, 9, 25},
+			{5, 11, 36},
+			{6, 13, 49},
+			{7, 15, 64},
+			{8, 17, 81},
+			{10, 25, 125},
+			{12, 20, 164},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A random variable \\(X\\) has expected value \\(E[X] = %d\\) and variance \\(\\operatorname{Var}(X) = %d\\). Calculate the second moment \\(E[X^2]\\).", it.ex, it.vx),
+			Answer:   fmt.Sprintf("%d", it.ex2),
+			Explanation: fmt.Sprintf("Using the variance formula \\(\\operatorname{Var}(X) = E[X^2] - (E[X])^2\\), we find \\(E[X^2] = \\operatorname{Var}(X) + (E[X])^2 = %d + %d^2 = %d + %d = %d\\).",
+				it.vx, it.ex, it.vx, it.ex*it.ex, it.ex2),
+		}
+	case 3:
+		type discreteItem struct {
+			x1   int
+			x2   int
+			x3   int
+			p1   float64
+			p2   float64
+			p3   float64
+			mean int
+		}
+		items := []discreteItem{
+			{2, 6, 10, 0.25, 0.50, 0.25, 6},
+			{1, 5, 9, 0.20, 0.60, 0.20, 5},
+			{3, 7, 11, 0.30, 0.40, 0.30, 7},
+			{4, 8, 16, 0.25, 0.50, 0.25, 9},
+			{0, 5, 10, 0.30, 0.40, 0.30, 5},
+			{1, 6, 11, 0.40, 0.20, 0.40, 6},
+			{2, 7, 12, 0.10, 0.80, 0.10, 7},
+			{4, 10, 16, 0.30, 0.40, 0.30, 10},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("A discrete random variable \\(X\\) takes values %d, %d and %d with probabilities %.2f, %.2f and %.2f respectively. Calculate the expected value \\(E[X]\\).", it.x1, it.x2, it.x3, it.p1, it.p2, it.p3),
+			Answer:   fmt.Sprintf("%d", it.mean),
+			Explanation: fmt.Sprintf("The expected value is the probability-weighted sum \\(E[X] = \\sum x_i P(X = x_i) = (%d \\cdot %.2f) + (%d \\cdot %.2f) + (%d \\cdot %.2f) = %d\\).",
+				it.x1, it.p1, it.x2, it.p2, it.x3, it.p3, it.mean),
+		}
+	default:
+		type prodItem struct {
+			ex   int
+			ey   int
+			prod int
+		}
+		items := []prodItem{
+			{4, 7, 28},
+			{5, 9, 45},
+			{6, 8, 48},
+			{3, 12, 36},
+			{7, 8, 56},
+			{9, 6, 54},
+			{11, 5, 55},
+			{12, 7, 84},
+		}
+		it := items[rand.Intn(len(items))]
+		return generator.Problem{
+			Question: fmt.Sprintf("Let \\(X\\) and \\(Y\\) be independent random variables with \\(E[X] = %d\\) and \\(E[Y] = %d\\). Find the expected value of their product \\(E[XY]\\).", it.ex, it.ey),
+			Answer:   fmt.Sprintf("%d", it.prod),
+			Explanation: fmt.Sprintf("For independent random variables, the expected value of the product is the product of their expectations: \\(E[XY] = E[X]E[Y] = %d \\cdot %d = %d\\).",
+				it.ex, it.ey, it.prod),
+		}
 	}
 }
 
