@@ -3,6 +3,7 @@ package numtheory
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
@@ -307,32 +308,94 @@ func joinProd(primes []int) string {
 	return s.String()
 }
 
+func computeLegendreSymbol(a, p int) (symbol int, root int) {
+	if p <= 2 {
+		return 0, 0
+	}
+	r := ((a % p) + p) % p
+	if r == 0 {
+		return 0, 0
+	}
+	for x := 1; x <= (p-1)/2; x++ {
+		if (x*x)%p == r {
+			return 1, x
+		}
+	}
+	return -1, 0
+}
+
 type legendreGen struct{}
 
 func (g *legendreGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
+	var primes []int
+	switch {
+	case ctx.Difficulty < 0.35:
+		primes = []int{3, 5, 7}
+	case ctx.Difficulty < 0.70:
+		primes = []int{5, 7, 11, 13, 17}
+	default:
+		primes = []int{11, 13, 17, 19, 23, 29, 31}
 	}
-	easy := []entry{
-		{"What is the Legendre symbol (1/5)? (enter -1,0,1)", "1", "1 is a quadratic residue mod 5 (1^2=1)."},
-		{"What is the Legendre symbol (4/5)? (enter -1,0,1)", "1", "4=2^2 mod5, so residue."},
-		{"What is the Legendre symbol (2/5)? (enter -1,0,1)", "-1", "2 is non-residue mod5 (no x with x^2=2)."},
-		{"Is (a/p)=0 iff p divides a? (yes/no)", "yes", "Legendre 0 exactly when p|a."},
+	p := primes[rand.Intn(len(primes))]
+
+	var a int
+	outcome := rand.Intn(4)
+	switch outcome {
+	case 0:
+		k := rand.Intn(4) + 1
+		a = k * p
+	case 1:
+		x := rand.Intn((p-1)/2) + 1
+		mult := 0
+		if rand.Intn(2) == 1 {
+			mult = rand.Intn(3) + 1
+		}
+		a = mult*p + (x*x)%p
+	default:
+		for attempt := 0; attempt < 50; attempt++ {
+			cand := rand.Intn(2*p-1) + 1
+			sym, _ := computeLegendreSymbol(cand, p)
+			if sym == -1 {
+				a = cand
+				break
+			}
+			a = cand
+		}
 	}
-	hard := []entry{
-		{"What is the Legendre symbol (3/7)? (enter -1,0,1)", "-1", "Quadratic residues mod7 are 1,2,4; 3 not in set."},
-		{"Does Euler's criterion give (a/p)≡a^{(p-1)/2} mod p? (yes/no)", "yes", "Euler's criterion for odd prime p."},
-		{"Is (2/p)=1 iff p≡±1 mod8? (yes/no)", "yes", "Supplement to quadratic reciprocity."},
+
+	sym, root := computeLegendreSymbol(a, p)
+	r := ((a % p) + p) % p
+
+	var exp string
+	switch sym {
+	case 0:
+		exp = fmt.Sprintf("%d is divisible by %d. Thus the Legendre symbol (%d/%d) is 0.", a, p, a, p)
+	case 1:
+		if a == r {
+			exp = fmt.Sprintf("%d is a quadratic residue modulo %d because %d^2 ≡ %d (mod %d). Thus the Legendre symbol (%d/%d) is 1.", a, p, root, a, p, a, p)
+		} else {
+			exp = fmt.Sprintf("%d ≡ %d (mod %d) is a quadratic residue modulo %d because %d^2 ≡ %d (mod %d). Thus the Legendre symbol (%d/%d) is 1.", a, r, p, p, root, r, p, a, p)
+		}
+	case -1:
+		if a == r {
+			exp = fmt.Sprintf("%d is a quadratic non-residue modulo %d because no integer x satisfies x^2 ≡ %d (mod %d). Thus the Legendre symbol (%d/%d) is -1.", a, p, a, p, a, p)
+		} else {
+			exp = fmt.Sprintf("%d ≡ %d (mod %d) is a quadratic non-residue modulo %d because no integer x satisfies x^2 ≡ %d (mod %d). Thus the Legendre symbol (%d/%d) is -1.", a, r, p, p, r, p, a, p)
+		}
 	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
+
+	return generator.Problem{
+		Question:    fmt.Sprintf("Compute the value of the Legendre symbol (%d/%d).", a, p),
+		Answer:      strconv.Itoa(sym),
+		Explanation: exp,
+		Facts: map[string]string{
+			"a":       strconv.Itoa(a),
+			"p":       strconv.Itoa(p),
+			"residue": strconv.Itoa(r),
+			"symbol":  strconv.Itoa(sym),
+			"answer":  strconv.Itoa(sym),
+		},
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type quadraticReciprocityGen struct{}

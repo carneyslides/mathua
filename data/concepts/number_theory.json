@@ -178,7 +178,7 @@
     "label": "Legendre symbol",
     "domain": "number_theory",
     "subdomain": "number_theory.advanced",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "nt.adv.wilson"
     ],

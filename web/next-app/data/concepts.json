@@ -11593,7 +11593,7 @@
   },
   {
     "domain": "number_theory",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "id": "nt.adv.legendre",
     "label": "Legendre symbol",
     "mastery_threshold": {
