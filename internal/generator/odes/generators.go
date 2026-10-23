@@ -905,31 +905,81 @@ func (g *sturmLiouvilleGen) Generate(ctx generator.GeneratorContext) generator.P
 type boundaryValueGen struct{}
 
 func (g *boundaryValueGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct{ q, a, e string }
-	easy := []entry{
-		{"Is BVP different from IVP (conditions at two points)? (yes/no)", "yes", "BVP at boundaries."},
-		{"Does BVP may have 0,1,∞ solutions? (yes/no)", "yes", "Unlike IVP."},
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Linear BVP y'' = 0 on [0, L] with y(0) = y0, y(L) = yL
+		L := smallInt(2, 6)
+		y0 := smallInt(1, 10)
+		m := smallInt(1, 5)
+		yL := y0 + m*L
+		x0 := smallInt(1, L-1)
+		ans := y0 + m*x0
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider the two-point boundary value problem \\(y'' = 0\\) on \\([0, %d]\\) with boundary values \\(y(0) = %d\\) and \\(y(%d) = %d\\). Evaluate \\(y(%d)\\).", L, y0, L, yL, x0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Integrating \\(y'' = 0\\) twice yields the linear solution \\(y(x) = C_1 x + C_2\\). From \\(y(0) = %d\\), \\(C_2 = %d\\). From \\(y(%d) = %d\\), \\(C_1(%d) + %d = %d\\), giving \\(C_1 = %d\\). Thus \\(y(x) = %dx + %d\\). At \\(x = %d\\), \\(y(%d) = %d(%d) + %d = %d\\).",
+				y0, y0, L, yL, L, y0, yL, m, m, y0, x0, x0, m, x0, y0, ans,
+			),
+		}
+
+	case 1:
+		// Nonhomogeneous BVP y'' = 2c on [0, 2m] with y(0) = y(2m) = 0
+		m := smallInt(1, 4)
+		L := 2 * m
+		c := smallInt(1, 5)
+		k := 2 * c
+		ans := -c * m * m
+		return generator.Problem{
+			Question: fmt.Sprintf("For the two-point boundary value problem \\(y'' = %d\\) on \\([0, %d]\\) with Dirichlet conditions \\(y(0) = y(%d) = 0\\), evaluate the midpoint value \\(y(%d)\\).", k, L, L, m),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Integrating \\(y'' = %d\\) gives \\(y(x) = %d x^2 + C_1 x + C_2\\). From \\(y(0) = 0\\), \\(C_2 = 0\\). From \\(y(%d) = 0\\), \\(%d(%d^2) + C_1(%d) = 0\\), yielding \\(C_1 = -%d(%d) = -%d\\). Thus \\(y(x) = %d x(x - %d)\\). At \\(x = %d\\), \\(y(%d) = %d(%d)(%d - %d) = %d\\).",
+				k, c, L, c, L, L, c, L, c*L, c, L, m, m, c, m, m, L, ans,
+			),
+		}
+
+	case 2:
+		// Resonant frequency non-uniqueness mode omega = n
+		n := smallInt(1, 8)
+		return generator.Problem{
+			Question: fmt.Sprintf("For what positive integer \\(\\omega > 0\\) does the boundary value problem \\(y'' + \\omega^2 y = 0\\) on \\([0, \\pi]\\) with \\(y(0) = y(\\pi) = 0\\) possess non-trivial solutions for harmonic mode \\(n = %d\\)?", n),
+			Answer:   fmt.Sprintf("%d", n),
+			Explanation: fmt.Sprintf(
+				"The general solution is \\(y(x) = A\\cos(\\omega x) + B\\sin(\\omega x)\\). The boundary condition \\(y(0) = 0\\) sets \\(A = 0\\). Then \\(y(\\pi) = B\\sin(\\omega\\pi) = 0\\) requires \\(\\omega\\pi = n\\pi\\) for non-zero solutions. Thus \\(\\omega = n = %d\\).",
+				n,
+			),
+		}
+
+	case 3:
+		// Mixed Dirichlet/Neumann BVP y(0) = y0 and y'(L) = s
+		s := smallInt(2, 6)
+		y0 := smallInt(1, 9)
+		L := smallInt(3, 8)
+		x0 := smallInt(1, L-1)
+		ans := s*x0 + y0
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider the mixed boundary value problem \\(y'' = 0\\) on \\([0, %d]\\) with Dirichlet condition \\(y(0) = %d\\) and Neumann condition \\(y'(%d) = %d\\). Evaluate \\(y(%d)\\).", L, y0, L, s, x0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Integrating \\(y'' = 0\\) gives \\(y'(x) = C_1\\). From \\(y'(%d) = %d\\), \\(C_1 = %d\\). Integrating again gives \\(y(x) = %dx + C_2\\). With \\(y(0) = %d\\), \\(C_2 = %d\\). Thus \\(y(x) = %dx + %d\\). At \\(x = %d\\), \\(y(%d) = %d(%d) + %d = %d\\).",
+				L, s, s, s, y0, y0, s, y0, x0, x0, s, x0, y0, ans,
+			),
+		}
+
+	default:
+		// Positive definite BVP solution count = 1
+		k2 := smallInt(1, 9)
+		return generator.Problem{
+			Question: fmt.Sprintf("For the homogeneous boundary value problem \\(y'' - %dy = 0\\) on \\([0, 1]\\) with boundary conditions \\(y(0) = 0\\) and \\(y(1) = 0\\), how many solutions exist?", k2),
+			Answer:   "1",
+			Explanation: fmt.Sprintf(
+				"Because the operator \\(-y'' + %dy\\) is strictly positive definite, the boundary value problem has trivial kernel. The only solution is the zero solution \\(y(x) = 0\\), meaning exactly 1 solution exists.",
+				k2,
+			),
+		}
 	}
-	// Parameterized production: solve y'' = 0 with y(0) = 0, y(1) = b.
-	bs := []int{1, 2, 3}
-	b := bs[rand.Intn(len(bs))]
-	sol := "y=x"
-	if b != 1 {
-		sol = fmt.Sprintf("y=%dx", b)
-	}
-	easy = append(easy, entry{
-		q: fmt.Sprintf("Solve y'' = 0 with y(0) = 0 and y(1) = %d. (type like y=3x)", b),
-		a: sol,
-		e: fmt.Sprintf("y'' = 0 gives y = Cx+D; y(0) = 0 gives D = 0, y(1) = %d gives C = %d.", b, b),
-	})
-	hard := []entry{{"Does Green's function solve BVP? (yes/no)", "yes", "Via integral."}, {"Is shooting method for BVP? (yes/no)", "yes", "Convert BVP to IVP iteration."}, {"Does Fredholm alternative apply? (yes/no)", "yes", "Solvability condition."}}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type lyapunovGen struct{}
