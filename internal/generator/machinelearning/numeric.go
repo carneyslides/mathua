@@ -1,22 +1,19 @@
 package machinelearning
 
-// The numeric machine-learning concepts: the metrics and quantities a first course computes rather
-// than recognises.
+// The numeric machine-learning concepts: least-squares slope and prediction,
+// accuracy, precision and recall from classification counts, the ridge penalty,
+// explained variance percentage in principal component analysis and nearest-neighbour distance.
 //
-// The domain had twenty-five concepts and twenty-four of them `multiple_choice`, which is the
-// recognition-shaped surface section 4.2 of docs/content-expansion.md measures. These eight are
-// computed: a least-squares slope and the prediction it makes, accuracy, precision and recall from a
-// confusion matrix, the ridge penalty, the fraction of variance a principal component explains, and
-// the distance a nearest-neighbour classifier measures.
-//
-// Every answer is an integer by construction: the data points are collinear so the slope is exact,
-// the confusion-matrix counts divide, the penalty is a whole multiple of the squared weights, and
-// the variance pair is chosen so its share is a whole percentage.
+// Converted to parametric generators scaling with ctx.Difficulty using mathutil primitives
+// and structured three-subgoal cognitive derivations in explanations.
+
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func registerNumeric(reg *generator.Registry) {
@@ -37,157 +34,258 @@ func smallInt(lo, hi int) int {
 	return lo + rand.Intn(hi-lo+1)
 }
 
-// leastSquaresGen fits a line to three collinear points, so the least-squares slope is exact.
+// leastSquaresGen fits a line to three collinear points with unit steps.
 type leastSquaresGen struct{}
 
 func (g *leastSquaresGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	m := smallInt(1, 3+int(ctx.Difficulty*6))
-	b := smallInt(-5, 5+int(ctx.Difficulty*6))
+	maxM := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	m := 1 + rand.Intn(maxM)
+	maxB := mathutil.ScaleInt(ctx.Difficulty, 5, 20)
+	b := rand.Intn(2*maxB+1) - maxB
+	ans := strconv.Itoa(m)
+
+	y0 := b
+	y1 := m + b
+	y2 := 2*m + b
+
+	q := fmt.Sprintf("Fit a line to the points \\((0,%d)\\), \\((1,%d)\\) and \\((2,%d)\\). What is the least-squares slope?", y0, y1, y2)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The ordinary least squares slope for points (x_i, y_i) is m = Cov(x, y) / Var(x) = [Σ(x_i - x̄)(y_i - ȳ)] / [Σ(x_i - x̄)^2]. For collinear points with uniform step size Δx = 1, the slope equals the constant difference m = Δy = y_{i+1} - y_i.\n\nSubgoal 2: Substitute parameters. For coordinates (0, %d), (1, %d) and (2, %d), compute the first-step difference y_1 - y_0 = %d - (%d) and second-step difference y_2 - y_1 = %d - (%d).\n\nSubgoal 3: Evaluate and simplify. Both differences yield m = %d, confirming the exact least-squares slope is %d.",
+		y0, y1, y2, y1, y0, y2, y1, m, m)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Fit a line to the points \\((0,%d)\\), \\((1,%d)\\) and \\((2,%d)\\). What is the least-squares slope?", b, m+b, 2*m+b),
-		Answer:   fmt.Sprintf("%d", m),
-		Explanation: fmt.Sprintf("The least-squares slope is the covariance of x and y over the variance of x, and for x = 0, 1, 2 with y rising by %d each time it is %d. The points are collinear, so the fit is exact and the residuals are zero.",
-			m, m),
-		Facts: map[string]string{"slope": fmt.Sprintf("%d", m), "intercept": fmt.Sprintf("%d", b)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"b":      strconv.Itoa(y0),
+			"y1":     strconv.Itoa(y1),
+			"y2":     strconv.Itoa(y2),
+			"answer": ans,
+		},
 	}
 }
 
-// predictGen evaluates the fitted line at a new input, with the intercept given so the answer does
-// not depend on recovering it.
+// predictGen evaluates the fitted regression line at a given query point.
 type predictGen struct{}
 
 func (g *predictGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	m := smallInt(1, 3+int(ctx.Difficulty*5))
-	b := smallInt(-5, 5+int(ctx.Difficulty*6))
-	x := smallInt(2, 5+int(ctx.Difficulty*6))
+	maxM := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	m := 1 + rand.Intn(maxM)
+	maxB := mathutil.ScaleInt(ctx.Difficulty, 5, 20)
+	b := rand.Intn(2*maxB+1) - maxB
+	maxX := mathutil.ScaleInt(ctx.Difficulty, 4, 15)
+	x := 2 + rand.Intn(maxX)
+	pred := m*x + b
+	ans := strconv.Itoa(pred)
+
+	q := fmt.Sprintf("A model has been fitted as \\(\\hat{y} = %dx %+d\\). Find the predicted value of \\(\\hat{y}\\) when \\(x = %d\\).", m, b, x)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. Prediction in a fitted univariate linear model ŷ = mx + b is evaluated by directly substituting query point x into the equation.\n\nSubgoal 2: Substitute parameters. Insert slope m = %d, intercept b = %d and query value x = %d: ŷ = %d(%d) %+d.\n\nSubgoal 3: Evaluate and simplify. Multiply and add: ŷ = %d %+d = %d.",
+		m, b, x, m, x, b, m*x, b, pred)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A model has been fitted as \\(\\hat{y} = %dx + %d\\). Find the predicted value of \\(\\hat{y}\\) when \\(x = %d\\).", m, b, x),
-		Answer:   fmt.Sprintf("%d", m*x+b),
-		Explanation: fmt.Sprintf("Substituting gives %d * %d + %d = %d. Prediction is the only part of fitting that is arithmetic rather than optimisation, which is why it is the step to check first when a model looks wrong.",
-			m, x, b, m*x+b),
-		Facts: map[string]string{"prediction": fmt.Sprintf("%d", m*x+b)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"m":      strconv.Itoa(m),
+			"b":      strconv.Itoa(b),
+			"x":      strconv.Itoa(x),
+			"answer": ans,
+		},
 	}
 }
 
-// accuracyGen uses counts whose total divides evenly.
+// accuracyGen evaluates classification accuracy as an exact integer percentage.
 type accuracyGen struct{}
 
 func (g *accuracyGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	per := 2 + rand.Intn(5+int(ctx.Difficulty*5))
-	tp, tn := per, per+rand.Intn(4)
-	fp, fn := rand.Intn(per), rand.Intn(per)
-	total := tp + tn + fp + fn
-	// ask for the percentage, which is whole for these counts
-	pct := 100 * (tp + tn) / total
+	denoms := []int{10, 20, 25, 50}
+	total := denoms[rand.Intn(len(denoms))]
+	correct := 2 + rand.Intn(total-3)
+	pct := 100 * correct / total
+
+	tp := 1 + rand.Intn(correct-1)
+	tn := correct - tp
+	incorrect := total - correct
+	fp := 1
+	if incorrect > 1 {
+		fp = 1 + rand.Intn(incorrect-1)
+	}
+	fn := incorrect - fp
+	ans := strconv.Itoa(pct)
+
+	q := fmt.Sprintf("A binary classifier has %d true positives, %d true negatives, %d false positives and %d false negatives. What is its accuracy, as a whole percentage?", tp, tn, fp, fn)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. Classification accuracy equals the proportion of correct predictions over total instances: Accuracy = [(TP + TN) / (TP + TN + FP + FN)] · 100%%.\n\nSubgoal 2: Substitute parameters. Substitute TP = %d, TN = %d, FP = %d and FN = %d: Accuracy = [(%d + %d) / (%d + %d + %d + %d)] · 100%%.\n\nSubgoal 3: Evaluate and simplify. Total correct predictions equal %d + %d = %d across %d total samples. Divide to find accuracy: (%d / %d) · 100%% = %d%%.",
+		tp, tn, fp, fn, tp, tn, tp, tn, fp, fn, tp, tn, correct, total, correct, total, pct)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A binary classifier has %d true positives, %d true negatives, %d false positives and %d false negatives. What is its accuracy, as a whole percentage?", tp, tn, fp, fn),
-		Answer:   fmt.Sprintf("%d", pct),
-		Explanation: fmt.Sprintf("Accuracy is the fraction of predictions that were right: (%d + %d) over %d = %d%%. It hides the cost of the two error types, which is why precision and recall are reported beside it.",
-			tp, tn, total, pct),
-		Facts: map[string]string{"accuracy_percent": fmt.Sprintf("%d", pct), "total": fmt.Sprintf("%d", total)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"tp":     strconv.Itoa(tp),
+			"tn":     strconv.Itoa(tn),
+			"fp":     strconv.Itoa(fp),
+			"fn":     strconv.Itoa(fn),
+			"answer": ans,
+		},
 	}
 }
 
-// precisionGen uses counts whose shared denominator divides.
+// precisionGen evaluates precision as an exact whole percentage.
 type precisionGen struct{}
 
 func (g *precisionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	d := 2 + rand.Intn(4+int(ctx.Difficulty*4))
-	tp := d * (2 + rand.Intn(3+int(ctx.Difficulty*4)))
-	fp := d * rand.Intn(3+int(ctx.Difficulty*3))
+	denoms := []int{10, 20, 25, 50}
+	total := denoms[rand.Intn(len(denoms))]
+	tp := 1 + rand.Intn(total-1)
+	fp := total - tp
+	pct := 100 * tp / total
+	ans := strconv.Itoa(pct)
+
+	q := fmt.Sprintf("A classifier produces %d true positives and %d false positives. What is its precision, as a whole percentage?", tp, fp)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. Precision measures the proportion of positive predictions that are truly positive: Precision = [TP / (TP + FP)] · 100%%.\n\nSubgoal 2: Substitute parameters. Substitute true positives TP = %d and false positives FP = %d: Precision = [%d / (%d + %d)] · 100%%.\n\nSubgoal 3: Evaluate and simplify. Total predicted positives equal %d + %d = %d. Compute precision: (%d / %d) · 100%% = %d%%.",
+		tp, fp, tp, tp, fp, tp, fp, total, tp, total, pct)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A classifier produces %d true positives and %d false positives. What is its precision, as a whole percentage?", tp, fp),
-		Answer:   fmt.Sprintf("%d", 100*tp/(tp+fp)),
-		Explanation: fmt.Sprintf("Precision is the fraction of the positive predictions that were correct: %d over %d + %d = %d%%. It answers how much to trust a positive answer, not how many positives were found.",
-			tp, tp, fp, 100*tp/(tp+fp)),
-		Facts: map[string]string{"precision_percent": fmt.Sprintf("%d", 100*tp/(tp+fp))},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"tp":     strconv.Itoa(tp),
+			"fp":     strconv.Itoa(fp),
+			"answer": ans,
+		},
 	}
 }
 
-// recallGen is precision's counterpart, with the denominator over the actual positives.
+// recallGen evaluates recall as an exact whole percentage.
 type recallGen struct{}
 
 func (g *recallGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	d := 2 + rand.Intn(4+int(ctx.Difficulty*4))
-	tp := d * (2 + rand.Intn(3+int(ctx.Difficulty*4)))
-	fn := d * rand.Intn(3+int(ctx.Difficulty*3))
+	denoms := []int{10, 20, 25, 50}
+	total := denoms[rand.Intn(len(denoms))]
+	tp := 1 + rand.Intn(total-1)
+	fn := total - tp
+	pct := 100 * tp / total
+	ans := strconv.Itoa(pct)
+
+	q := fmt.Sprintf("Of the positive cases in a test set, %d were found and %d were missed. What is the recall, as a whole percentage?", tp, fn)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. Recall measures the proportion of actual positive cases successfully detected: Recall = [TP / (TP + FN)] · 100%%.\n\nSubgoal 2: Substitute parameters. Substitute detected positives TP = %d and missed positives FN = %d: Recall = [%d / (%d + %d)] · 100%%.\n\nSubgoal 3: Evaluate and simplify. Total actual positive cases equal %d + %d = %d. Compute recall: (%d / %d) · 100%% = %d%%.",
+		tp, fn, tp, tp, fn, tp, fn, total, tp, total, pct)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("Of the positive cases in a test set, %d were found and %d were missed. What is the recall, as a whole percentage?", tp, fn),
-		Answer:   fmt.Sprintf("%d", 100*tp/(tp+fn)),
-		Explanation: fmt.Sprintf("Recall is the fraction of the actual positives that were found: %d over %d + %d = %d%%. Raising recall usually lowers precision, and the trade-off is chosen by which error costs more.",
-			tp, tp, fn, 100*tp/(tp+fn)),
-		Facts: map[string]string{"recall_percent": fmt.Sprintf("%d", 100*tp/(tp+fn))},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"tp":     strconv.Itoa(tp),
+			"fn":     strconv.Itoa(fn),
+			"answer": ans,
+		},
 	}
 }
 
-// ridgePenaltyGen is the L2 penalty, which is a whole multiple of the squared weights.
+// ridgePenaltyGen computes the L2 penalty term lambda * (w1^2 + w2^2).
 type ridgePenaltyGen struct{}
 
 func (g *ridgePenaltyGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	lambda := 1 + rand.Intn(3+int(ctx.Difficulty*4))
-	w1 := smallInt(-4, 4)
-	w2 := smallInt(-4, 4)
-	if w1 == 0 && w2 == 0 {
-		w1 = 1
-	}
+	maxLambda := mathutil.ScaleInt(ctx.Difficulty, 3, 10)
+	lambda := 1 + rand.Intn(maxLambda)
+	maxW := mathutil.ScaleInt(ctx.Difficulty, 3, 8)
+	w1 := 1 + rand.Intn(maxW)
+	w2 := 1 + rand.Intn(maxW)
+	penalty := lambda * (w1*w1 + w2*w2)
+	ans := strconv.Itoa(penalty)
+
+	q := fmt.Sprintf("A ridge regression has weights %d and %d and penalty strength %d. What is the value of the L2 penalty term \\(\\lambda(w_1^2 + w_2^2)\\)?", w1, w2, lambda)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The L2 ridge regularization penalty term is defined as R(w) = λ · (w_1^2 + w_2^2).\n\nSubgoal 2: Substitute parameters. Substitute penalty strength λ = %d and weights w_1 = %d and w_2 = %d: R(w) = %d · ((%d)^2 + (%d)^2).\n\nSubgoal 3: Evaluate and simplify. Compute squared weights (%d)^2 + (%d)^2 = %d + %d = %d. Multiply by penalty strength: R(w) = %d · %d = %d.",
+		lambda, w1, w2, lambda, w1, w2, w1, w2, w1*w1, w2*w2, w1*w1+w2*w2, lambda, w1*w1+w2*w2, penalty)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A ridge regression has weights %d and %d and penalty strength %d. What is the value of the L2 penalty term \\(\\lambda(w_1^2 + w_2^2)\\)?", w1, w2, lambda),
-		Answer:   fmt.Sprintf("%d", lambda*(w1*w1+w2*w2)),
-		Explanation: fmt.Sprintf("The penalty is the squared weights added and scaled by lambda: %d * (%d + %d) = %d. Adding it to the loss pushes the weights toward zero, which is why ridge shrinks a model rather than selecting features.",
-			lambda, w1*w1, w2*w2, lambda*(w1*w1+w2*w2)),
-		Facts: map[string]string{"penalty": fmt.Sprintf("%d", lambda*(w1*w1+w2*w2))},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"w1":     strconv.Itoa(w1),
+			"w2":     strconv.Itoa(w2),
+			"lambda": strconv.Itoa(lambda),
+			"answer": ans,
+		},
 	}
 }
 
-// variancePercentGen uses an eigenvalue pair whose share is a whole percentage.
+// variancePercentGen computes PCA explained variance percentage.
 type variancePercentGen struct{}
 
 func (g *variancePercentGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	base := 1 + rand.Intn(4+int(ctx.Difficulty*5))
-	other := 1 + rand.Intn(3+int(ctx.Difficulty*3))
-	if other == base {
-		other = base + 1
+	pairs := [][2]int{
+		{3, 1},  // 75%
+		{4, 1},  // 80%
+		{7, 3},  // 70%
+		{9, 1},  // 90%
+		{17, 3}, // 85%
+		{19, 1}, // 95%
+		{13, 7}, // 65%
 	}
-	// the pairs are chosen so the share of the first is a whole percentage
-	lam1, lam2 := 3*base, base*other
-	if lam1 <= lam2 {
-		lam1, lam2 = lam2, lam1
-	}
-	pct := 100 * lam1 / (lam1 + lam2)
+	pair := pairs[rand.Intn(len(pairs))]
+	maxMult := mathutil.ScaleInt(ctx.Difficulty, 2, 8)
+	mult := 1 + rand.Intn(maxMult)
+	lam1 := pair[0] * mult
+	lam2 := pair[1] * mult
+	pct := 100 * pair[0] / (pair[0] + pair[1])
+	ans := strconv.Itoa(pct)
+
+	q := fmt.Sprintf("A principal component analysis finds two eigenvalues, %d and %d. What percentage of the total variance is accounted for by the first component?", lam1, lam2)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. In principal component analysis, the percentage of total variance explained by the first component equals Explained Variance = [λ_1 / (λ_1 + λ_2)] · 100%%.\n\nSubgoal 2: Substitute parameters. Insert eigenvalues λ_1 = %d and λ_2 = %d: Explained Variance = [%d / (%d + %d)] · 100%%.\n\nSubgoal 3: Evaluate and simplify. Total variance is %d + %d = %d. Compute percentage: (%d / %d) · 100%% = %d%%.",
+		lam1, lam2, lam1, lam1, lam2, lam1, lam2, lam1+lam2, lam1, lam1+lam2, pct)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A principal-component analysis finds two eigenvalues, %d and %d. What percentage of the total variance is accounted for by the first component?", lam1, lam2),
-		Answer:   fmt.Sprintf("%d", pct),
-		Explanation: fmt.Sprintf("The share of the first component is its eigenvalue over the sum: %d over %d = %d%%. The eigenvalues are the variances along the components, so their total is the total variance and the ratio is a fraction of it.",
-			lam1, lam1+lam2, pct),
-		Facts: map[string]string{"percent": fmt.Sprintf("%d", pct), "total": fmt.Sprintf("%d", lam1+lam2)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"lam1":   strconv.Itoa(lam1),
+			"lam2":   strconv.Itoa(lam2),
+			"answer": ans,
+		},
 	}
 }
 
-// nearestDistanceGen asks for the squared distance to the nearest training point, which avoids a
-// square root and stays exact.
+// nearestDistanceGen evaluates squared Euclidean distance to the nearest training point.
 type nearestDistanceGen struct{}
 
 func (g *nearestDistanceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	best := 1 << 30
 	var bx, by int
 	pts := [][2]int{}
+	dists := []int{}
 	for i := 0; i < 3; i++ {
-		// no training point is the query point, so every distance is positive
 		x := smallInt(-6, 6)
 		y := smallInt(-6, 6)
 		if x == 0 && y == 0 {
 			x = 1
 		}
 		pts = append(pts, [2]int{x, y})
-		if d := x*x + y*y; d < best {
+		d := x*x + y*y
+		dists = append(dists, d)
+		if d < best {
 			best, bx, by = d, x, y
 		}
 	}
+	ans := strconv.Itoa(best)
+
+	q := fmt.Sprintf("A nearest-neighbour classifier holds the training points \\((%d,%d)\\), \\((%d,%d)\\) and \\((%d,%d)\\). What is the squared distance from the origin to the nearest of them?",
+		pts[0][0], pts[0][1], pts[1][0], pts[1][1], pts[2][0], pts[2][1])
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The squared Euclidean distance from the origin (0, 0) to point (x, y) is d^2 = x^2 + y^2. A nearest-neighbour classifier selects the point minimizing this squared distance.\n\nSubgoal 2: Substitute parameters. Compute squared distance to each candidate point: d_1^2 = (%d)^2 + (%d)^2 = %d, d_2^2 = (%d)^2 + (%d)^2 = %d and d_3^2 = (%d)^2 + (%d)^2 = %d.\n\nSubgoal 3: Evaluate and simplify. Comparing squared distances min(%d, %d, %d) yields the minimum value %d at nearest point (%d, %d).",
+		pts[0][0], pts[0][1], dists[0], pts[1][0], pts[1][1], dists[1], pts[2][0], pts[2][1], dists[2], dists[0], dists[1], dists[2], best, bx, by)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A nearest-neighbour classifier holds the training points \\((%d,%d)\\), \\((%d,%d)\\) and \\((%d,%d)\\). What is the squared distance from the origin to the nearest of them?", pts[0][0], pts[0][1], pts[1][0], pts[1][1], pts[2][0], pts[2][1]),
-		Answer:   fmt.Sprintf("%d", best),
-		Explanation: fmt.Sprintf("Nearest-neighbour measures the distance from the query point to each training point and keeps the smallest, and comparing squared distances avoids square roots: the nearest is \\((%d,%d)\\) at a squared distance of %d.",
-			bx, by, best),
-		Facts: map[string]string{"squared_distance": fmt.Sprintf("%d", best)},
+		Question:    q,
+		Answer:      ans,
+		Explanation: exp,
+		Facts: map[string]string{
+			"answer": ans,
+		},
 	}
 }
