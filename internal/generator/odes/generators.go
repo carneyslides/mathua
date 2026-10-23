@@ -124,48 +124,90 @@ func (g *separableGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type linearFirstGen struct{}
 
 func (g *linearFirstGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type qa struct {
-		q string
-		a string
-		e string
-	}
-	templates := []qa{
-		{
-			q: "Solve: \\(y' + 2y = 0\\)",
-			a: "Ce^(-2x)",
-			e: "This is a homogeneous first-order linear ODE. The integrating factor is \\(e^{2x}\\). \\(\\frac{d}{dx}(ye^{2x}) = 0\\), so \\(ye^{2x} = C\\), giving \\(y = Ce^{-2x}\\).",
-		},
-		{
-			q: "Solve: \\(y' + y = 0\\)",
-			a: "Ce^(-x)",
-			e: "This is a homogeneous first-order linear ODE. The integrating factor is \\(e^{x}\\). \\(\\frac{d}{dx}(ye^{x}) = 0\\), so \\(ye^{x} = C\\), giving \\(y = Ce^{-x}\\).",
-		},
-		{
-			q: "Solve: \\(y' + 3y = 0\\)",
-			a: "Ce^(-3x)",
-			e: "This is a homogeneous first-order linear ODE. The integrating factor is \\(e^{3x}\\). \\(\\frac{d}{dx}(ye^{3x}) = 0\\), so \\(ye^{3x} = C\\), giving \\(y = Ce^{-3x}\\).",
-		},
-		{
-			q: "Solve: \\(y' + y = 1\\)",
-			a: "1+Ce^(-x)",
-			e: "The integrating factor is \\(e^{x}\\). \\(\\frac{d}{dx}(ye^{x}) = e^{x}\\). Integrate: \\(ye^{x} = e^{x} + C\\), so \\(y = 1 + Ce^{-x}\\).",
-		},
-		{
-			q: "Solve: \\(y' + 2y = 4\\)",
-			a: "2+Ce^(-2x)",
-			e: "The integrating factor is \\(e^{2x}\\). \\(\\frac{d}{dx}(ye^{2x}) = 4e^{2x}\\). Integrate: \\(ye^{2x} = 2e^{2x} + C\\), so \\(y = 2 + Ce^{-2x}\\).",
-		},
-		{
-			q: "Solve: \\(y' + y = e^{x}\\)",
-			a: "0.5e^x+Ce^(-x)",
-			e: "The integrating factor is \\(e^{x}\\). \\(\\frac{d}{dx}(ye^{x}) = e^{2x}\\). Integrate: \\(ye^{x} = \\frac{1}{2}e^{2x} + C\\), so \\(y = \\frac{1}{2}e^{x} + Ce^{-x}\\).",
-		},
-	}
-	t := templates[rand.Intn(len(templates))]
-	return generator.Problem{
-		Question:    t.q,
-		Answer:      t.a,
-		Explanation: t.e,
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Integrating factor evaluation at x0: y' + (a/x) y = Q(x)
+		a := smallInt(2, 4)
+		x0 := smallInt(2, 4)
+		// I(x) = exp(int a/x dx) = x^a
+		val := 1
+		for i := 0; i < a; i++ {
+			val *= x0
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("For the first-order linear differential equation \\(y' + \\frac{%d}{x}y = x^2\\) (with \\(x > 0\\)), what is the value of the integrating factor \\(I(x) = \\exp\\left(\\int P(x)dx\\right)\\) evaluated at \\(x = %d\\)?", a, x0),
+			Answer:   fmt.Sprintf("%d", val),
+			Explanation: fmt.Sprintf(
+				"The coefficient is \\(P(x) = \\frac{%d}{x}\\). The integrating factor is \\(I(x) = \\exp\\left(\\int \\frac{%d}{x} dx\\right) = \\exp(%d \\ln x) = x^{%d}\\). Evaluating at \\(x = %d\\) gives %d.",
+				a, a, a, a, x0, val,
+			),
+		}
+
+	case 1:
+		// IVP integration constant C in y' + a y = b with y(0) = y0
+		a := smallInt(2, 5)
+		k := smallInt(1, 4)
+		b := a * k
+		y0 := smallInt(1, 8)
+		constC := y0 - k
+		return generator.Problem{
+			Question: fmt.Sprintf("For the first-order linear initial value problem \\(y' + %d y = %d\\) with \\(y(0) = %d\\), what is the value of the integration constant \\(C\\) in the general solution \\(y(x) = %d + C e^{-%d x}\\)?", a, b, y0, k, a),
+			Answer:   fmt.Sprintf("%d", constC),
+			Explanation: fmt.Sprintf(
+				"The differential equation has particular solution \\(y_p = \\frac{%d}{%d} = %d\\) and homogeneous solution \\(y_h = C e^{-%d x}\\). Setting \\(x = 0\\) gives \\(y(0) = %d + C = %d\\), so \\(C = %d - %d = %d\\).",
+				b, a, k, a, k, y0, y0, k, constC,
+			),
+		}
+
+	case 2:
+		// Long-term equilibrium limit lim_{x -> inf} y(x) for y' + a y = b (a > 0)
+		a := smallInt(2, 6)
+		k := smallInt(1, 8+int(ctx.Difficulty*3))
+		b := a * k
+		return generator.Problem{
+			Question: fmt.Sprintf("For the stable first-order linear differential equation \\(y' + %d y = %d\\), what is the long-term equilibrium limit \\(\\lim_{x \\to \\infty} y(x)\\)?", a, b),
+			Answer:   fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf(
+				"The general solution is \\(y(x) = %d + C e^{-%d x}\\). Because the damping coefficient %d is positive, the transient exponential term \\(C e^{-%d x} \\to 0\\) as \\(x \\to \\infty\\). Thus the steady-state equilibrium limit is %d.",
+				k, a, a, a, k,
+			),
+		}
+
+	case 3:
+		// Homogeneous solution evaluation: x y' - k y = 0 with y(1) = y0, evaluate at x1
+		k := smallInt(1, 3)
+		y0 := smallInt(1, 4)
+		x1 := smallInt(2, 3)
+		xPow := 1
+		for i := 0; i < k; i++ {
+			xPow *= x1
+		}
+		val := y0 * xPow
+		return generator.Problem{
+			Question: fmt.Sprintf("Solve the initial value problem \\(x y' - %d y = 0\\) with \\(y(1) = %d\\) for \\(x > 0\\). What is the value of \\(y(%d)\\)?", k, y0, x1),
+			Answer:   fmt.Sprintf("%d", val),
+			Explanation: fmt.Sprintf(
+				"Separating variables yields \\(\\frac{dy}{y} = \\frac{%d}{x} dx\\), giving \\(\\ln|y| = %d \\ln x + C\\) and general solution \\(y(x) = C x^{%d}\\). Applying initial condition \\(y(1) = %d\\) yields \\(C(1)^{%d} = %d\\), so \\(y(x) = %d x^{%d}\\). Evaluating at \\(x = %d\\) gives %d.",
+				k, k, k, y0, k, y0, y0, k, x1, val,
+			),
+		}
+
+	default:
+		// Particular solution polynomial constant coefficient B in y' + a y = b x + c
+		a := smallInt(2, 4)
+		k := smallInt(1, 4)
+		b := a * k
+		m := smallInt(1, 5)
+		c := k + a*m
+		return generator.Problem{
+			Question: fmt.Sprintf("The differential equation \\(y' + %d y = %d x + %d\\) possesses a linear particular solution of the form \\(y_p(x) = A x + B\\). What is the value of the constant coefficient \\(B\\)?", a, b, c),
+			Answer:   fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf(
+				"Substituting \\(y_p = A x + B\\) into the differential equation gives \\(A + %d(A x + B) = %d A x + (A + %d B) = %d x + %d\\). Equating coefficients of \\(x\\) yields \\(%d A = %d\\), so \\(A = %d\\). Equating constant terms gives \\(%d + %d B = %d\\), so \\(%d B = %d\\), which yields \\(B = %d\\).",
+				a, a, a, b, c, a, b, k, k, a, c, a, c-k, m,
+			),
+		}
 	}
 }
 
