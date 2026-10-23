@@ -217,3 +217,16 @@ func TestNilRegistryIsSafe(t *testing.T) {
 		t.Error("nil registry IDs must be nil")
 	}
 }
+
+func TestRegistry_IDs_WithProviders(t *testing.T) {
+	s1 := &Stub{IDValue: "p1", Pol: Policy{ProductionPermitted: true}}
+	s2 := &Stub{IDValue: "p2", Pol: Policy{ProductionPermitted: true}}
+	r, err := NewRegistry([]Provider{s1, s2}, Options{})
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	ids := r.IDs()
+	if len(ids) != 2 || ids[0] != "p1" || ids[1] != "p2" {
+		t.Errorf("IDs = %v, want [p1 p2]", ids)
+	}
+}
