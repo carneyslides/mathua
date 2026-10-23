@@ -16,10 +16,12 @@ package graphtheory
 // tests recompute the answer from those facts.
 
 import (
+	"fmt"
 	"math/rand"
 	"strconv"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -80,26 +82,23 @@ func (g *isomorphismGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type complementGen struct{}
 
 func (g *complementGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		n, m   int
-		answer string
-		reason string
-	}
-	claims := []claim{
-		{n: 5, m: 4, answer: "6", reason: "A graph on 5 vertices has 10 possible edges, so the complement has 10 - 4 = 6."},
-		{n: 6, m: 7, answer: "8", reason: "A graph on 6 vertices has 15 possible edges, so the complement has 15 - 7 = 8."},
-		{n: 4, m: 3, answer: "3", reason: "A graph on 4 vertices has 6 possible edges, so the complement has 6 - 3 = 3."},
-		{n: 5, m: 8, answer: "2", reason: "A graph on 5 vertices has 10 possible edges, so the complement has 10 - 8 = 2."},
-		{n: 6, m: 10, answer: "5", reason: "A graph on 6 vertices has 15 possible edges, so the complement has 15 - 10 = 5."},
-		{n: 7, m: 12, answer: "9", reason: "A graph on 7 vertices has 21 possible edges, so the complement has 21 - 12 = 9."},
-	}
-	c := claims[rand.Intn(len(claims))]
+	n := 4 + rand.Intn(3) + mathutil.ScaleInt(ctx.Difficulty, 0, 6) // 4..12
+	totalEdges := n * (n - 1) / 2
+	m := 1 + rand.Intn(totalEdges-1)
+	ans := totalEdges - m
+
+	prompt := fmt.Sprintf("A simple graph has %d vertices and %d edges. How many edges does its complement have?", n, m)
+	expl := fmt.Sprintf("Subgoal 1: State governing formula. The complement of a simple graph \\(G = (V, E)\\) on \\(n\\) vertices contains all edges not present in \\(G\\). A complete graph \\(K_n\\) has \\(\\binom{n}{2} = \\frac{n(n - 1)}{2}\\) edges, so the complement has \\(|E(\\overline{G})| = \\frac{n(n - 1)}{2} - |E(G)|\\) edges.\nSubgoal 2: Substitute parameters. For \\(n = %d\\) and \\(|E(G)| = %d\\), calculate the total possible edges: \\(\\frac{%d \\times %d}{2} = %d\\).\nSubgoal 3: Evaluate and simplify. Subtract the existing edges: %d - %d = %d.", n, m, n, n-1, totalEdges, totalEdges, m, ans)
+
 	return generator.Problem{
-		Question: "A simple graph has " + strconv.Itoa(c.n) + " vertices and " + strconv.Itoa(c.m) +
-			" edges. How many edges does its complement have? (enter a number)",
-		Answer:      c.answer,
-		Explanation: c.reason,
-		Facts:       map[string]string{"n": strconv.Itoa(c.n), "m": strconv.Itoa(c.m), "answer": c.answer},
+		Question:    prompt,
+		Answer:      strconv.Itoa(ans),
+		Explanation: expl,
+		Facts: map[string]string{
+			"n":      strconv.Itoa(n),
+			"m":      strconv.Itoa(m),
+			"answer": strconv.Itoa(ans),
+		},
 	}
 }
 
@@ -212,30 +211,29 @@ func (g *homomorphismGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type productGen struct{}
 
 func (g *productGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		n1, m1 int
-		n2, m2 int
-		answer string
-		reason string
-	}
-	claims := []claim{
-		{n1: 3, m1: 2, n2: 3, m2: 2, answer: "12", reason: "The Cartesian product has m1 n2 + n1 m2 = 2*3 + 3*2 = 12 edges."},
-		{n1: 4, m1: 4, n2: 2, m2: 1, answer: "12", reason: "m1 n2 + n1 m2 = 4*2 + 4*1 = 12."},
-		{n1: 3, m1: 3, n2: 2, m2: 1, answer: "9", reason: "m1 n2 + n1 m2 = 3*2 + 3*1 = 9."},
-		{n1: 4, m1: 3, n2: 2, m2: 1, answer: "10", reason: "m1 n2 + n1 m2 = 3*2 + 4*1 = 10."},
-		{n1: 3, m1: 3, n2: 3, m2: 3, answer: "18", reason: "m1 n2 + n1 m2 = 3*3 + 3*3 = 18."},
-		{n1: 4, m1: 6, n2: 2, m2: 1, answer: "16", reason: "m1 n2 + n1 m2 = 6*2 + 4*1 = 16."},
-	}
-	c := claims[rand.Intn(len(claims))]
+	n1 := 3 + rand.Intn(2) + mathutil.ScaleInt(ctx.Difficulty, 0, 3)
+	maxM1 := n1 * (n1 - 1) / 2
+	m1 := n1 - 1 + rand.Intn(maxM1-n1+2)
+
+	n2 := 2 + rand.Intn(2) + mathutil.ScaleInt(ctx.Difficulty, 0, 3)
+	maxM2 := n2 * (n2 - 1) / 2
+	m2 := n2 - 1 + rand.Intn(maxM2-n2+2)
+
+	ans := m1*n2 + n1*m2
+
+	prompt := fmt.Sprintf("Graphs G and H have (%d vertices, %d edges) and (%d vertices, %d edges). How many edges does their Cartesian product have?", n1, m1, n2, m2)
+	expl := fmt.Sprintf("Subgoal 1: State governing formula. The number of edges in the Cartesian product \\(G \\square H\\) of two graphs is given by \\(|E(G \\square H)| = |E(G)| \\cdot |V(H)| + |V(G)| \\cdot |E(H)| = m_1 n_2 + n_1 m_2\\).\nSubgoal 2: Substitute parameters. For \\(n_1 = %d\\), \\(m_1 = %d\\), \\(n_2 = %d\\) and \\(m_2 = %d\\), form the expression: (%d \\times %d) + (%d \\times %d).\nSubgoal 3: Evaluate and simplify. Multiply and sum the terms: %d + %d = %d.", n1, m1, n2, m2, m1, n2, n1, m2, m1*n2, n1*m2, ans)
+
 	return generator.Problem{
-		Question: "Graphs G and H have (" + strconv.Itoa(c.n1) + " vertices, " + strconv.Itoa(c.m1) +
-			" edges) and (" + strconv.Itoa(c.n2) + " vertices, " + strconv.Itoa(c.m2) +
-			" edges). How many edges does their Cartesian product have? (enter a number)",
-		Answer:      c.answer,
-		Explanation: c.reason,
+		Question:    prompt,
+		Answer:      strconv.Itoa(ans),
+		Explanation: expl,
 		Facts: map[string]string{
-			"n1": strconv.Itoa(c.n1), "m1": strconv.Itoa(c.m1),
-			"n2": strconv.Itoa(c.n2), "m2": strconv.Itoa(c.m2), "answer": c.answer,
+			"n1":     strconv.Itoa(n1),
+			"m1":     strconv.Itoa(m1),
+			"n2":     strconv.Itoa(n2),
+			"m2":     strconv.Itoa(m2),
+			"answer": strconv.Itoa(ans),
 		},
 	}
 }
@@ -247,32 +245,56 @@ func (g *productGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 type distanceGen struct{}
 
 func (g *distanceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		kind     string
-		n        int
-		rows     int
-		cols     int
-		reason   string
+	mode := rand.Intn(4)
+	var prompt, expl, kind string
+	var ans int
+	facts := map[string]string{}
+
+	switch mode {
+	case 0:
+		kind = "path"
+		n := 4 + rand.Intn(3) + mathutil.ScaleInt(ctx.Difficulty, 0, 5) // 4..11
+		ans = n - 1
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("What is the diameter of the path graph P_%d?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. The diameter of a connected graph is the maximum shortest-path distance between any pair of vertices. For a path graph \\(P_n\\), the maximum distance occurs between the two leaf endpoints and equals \\(n - 1\\).\nSubgoal 2: Substitute parameters. With \\(n = %d\\), the path has %d edges between endpoints.\nSubgoal 3: Evaluate and simplify. The diameter is %d - 1 = %d.", n, n-1, n, ans)
+
+	case 1:
+		kind = "cycle"
+		n := 4 + rand.Intn(4) + mathutil.ScaleInt(ctx.Difficulty, 0, 6) // 4..13
+		ans = n / 2
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("What is the diameter of the cycle graph C_%d?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. For a cycle graph \\(C_n\\), the shortest path between any two vertices cannot exceed half the circumference of the cycle: \\(\\text{diam}(C_n) = \\lfloor n / 2 \\rfloor\\).\nSubgoal 2: Substitute parameters. For \\(n = %d\\), compute \\(\\lfloor %d / 2 \\rfloor\\).\nSubgoal 3: Evaluate and simplify. Evaluate integer division: %d / 2 = %d.", n, n, n, ans)
+
+	case 2:
+		kind = "complete"
+		n := 3 + rand.Intn(3) + mathutil.ScaleInt(ctx.Difficulty, 0, 5) // 3..10
+		ans = 1
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("What is the diameter of the complete graph K_%d?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. In a complete graph \\(K_n\\) with \\(n \\ge 2\\), every pair of distinct vertices is connected by an edge of length 1. Hence the distance between every distinct pair is 1, and \\(\\text{diam}(K_n) = 1\\).\nSubgoal 2: Substitute parameters. For \\(K_%d\\), all %d vertices are mutually adjacent.\nSubgoal 3: Evaluate and simplify. The diameter of any complete graph on at least 2 vertices is 1.", n, n)
+
+	case 3:
+		kind = "grid"
+		r := 2 + rand.Intn(2) + mathutil.ScaleInt(ctx.Difficulty, 0, 3) // 2..6
+		c := 2 + rand.Intn(3) + mathutil.ScaleInt(ctx.Difficulty, 0, 3) // 2..7
+		ans = r + c - 2
+		facts["rows"] = strconv.Itoa(r)
+		facts["cols"] = strconv.Itoa(c)
+		prompt = fmt.Sprintf("What is the diameter of the %d-by-%d grid graph?", r, c)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. A grid graph of dimensions \\(r \\times c\\) is the Cartesian product \\(P_r \\square P_c\\). The diameter is the distance between opposite corners: \\(\\text{diam}(P_r \\square P_c) = (r - 1) + (c - 1) = r + c - 2\\).\nSubgoal 2: Substitute parameters. Substitute \\(r = %d\\) and \\(c = %d\\): (%d - 1) + (%d - 1).\nSubgoal 3: Evaluate and simplify. Sum the coordinate distances: %d + %d = %d.", r, c, r, c, r-1, c-1, ans)
 	}
-	claims := []claim{
-		{question: "What is the diameter of the path P_5? (enter a number)", answer: "4", kind: "path", n: 5, reason: "The endpoints are four edges apart, and no pair is farther."},
-		{question: "What is the diameter of the cycle C_6? (enter a number)", answer: "3", kind: "cycle", n: 6, reason: "The farthest pair is three steps apart around the cycle."},
-		{question: "What is the diameter of the complete graph K_5? (enter a number)", answer: "1", kind: "complete", n: 5, reason: "Every pair of distinct vertices is adjacent, so every distance is 1."},
-		{question: "What is the diameter of the path P_7? (enter a number)", answer: "6", kind: "path", n: 7, reason: "The endpoints are six edges apart."},
-		{question: "What is the diameter of the cycle C_8? (enter a number)", answer: "4", kind: "cycle", n: 8, reason: "The farthest pair is half the cycle apart."},
-		{question: "What is the diameter of the 3-by-4 grid graph? (enter a number)", answer: "5", kind: "grid", rows: 3, cols: 4, reason: "Opposite corners are (3-1) + (4-1) = 5 steps apart."},
+
+	facts["kind"] = kind
+	facts["answer"] = strconv.Itoa(ans)
+
+	return generator.Problem{
+		Question:    prompt,
+		Answer:      strconv.Itoa(ans),
+		Explanation: expl,
+		Facts:       facts,
 	}
-	c := claims[rand.Intn(len(claims))]
-	facts := map[string]string{"kind": c.kind, "answer": c.answer}
-	if c.kind == "grid" {
-		facts["rows"] = strconv.Itoa(c.rows)
-		facts["cols"] = strconv.Itoa(c.cols)
-	} else {
-		facts["n"] = strconv.Itoa(c.n)
-	}
-	return generator.Problem{Question: c.question, Answer: c.answer, Explanation: c.reason, Facts: facts}
 }
 
 // ---------------------------------------------------------------------------
@@ -282,27 +304,52 @@ func (g *distanceGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type cutVertexGen struct{}
 
 func (g *cutVertexGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		kind     string
-		n        int
-		reason   string
+	mode := rand.Intn(4)
+	var prompt, expl, kind string
+	var ans int
+	facts := map[string]string{}
+
+	switch mode {
+	case 0:
+		kind = "path"
+		n := 4 + rand.Intn(3) + mathutil.ScaleInt(ctx.Difficulty, 0, 5) // 4..11
+		ans = n - 2
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("How many cut vertices does the path graph P_%d have?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. A cut vertex is a vertex whose removal increases the number of connected components. In a path graph \\(P_n\\), removing an endpoint leaves a connected path \\(P_{n-1}\\), while removing any of the internal vertices disconnects the path into two components. Total cut vertices: \\(n - 2\\).\nSubgoal 2: Substitute parameters. For \\(n = %d\\), there are 2 endpoints and \\(%d - 2\\) internal vertices.\nSubgoal 3: Evaluate and simplify. Compute the internal vertex count: %d - 2 = %d.", n, n, n, ans)
+
+	case 1:
+		kind = "star"
+		n := 3 + rand.Intn(3) + mathutil.ScaleInt(ctx.Difficulty, 0, 5) // 3..10
+		ans = 1
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("How many cut vertices does the star graph K_{1,%d} have?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. A star graph \\(K_{1,k}\\) consists of one central vertex connected to \\(k\\) leaves. Removing any leaf leaves the remaining star connected. Removing the central vertex isolates all \\(k\\) leaves into disconnected components.\nSubgoal 2: Substitute parameters. In \\(K_{1,%d}\\), only the single central vertex disconnects the graph.\nSubgoal 3: Evaluate and simplify. The star graph has exactly 1 cut vertex.", n)
+
+	case 2:
+		kind = "cycle"
+		n := 3 + rand.Intn(4) + mathutil.ScaleInt(ctx.Difficulty, 0, 5) // 3..11
+		ans = 0
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("How many cut vertices does the cycle graph C_%d have?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. In a cycle graph \\(C_n\\) with \\(n \\ge 3\\), removing any single vertex leaves a connected path graph \\(P_{n-1}\\). Because no single vertex removal disconnects the graph, cycles have no cut vertices.\nSubgoal 2: Substitute parameters. For \\(C_%d\\), removing any vertex leaves a single connected component \\(P_%d\\).\nSubgoal 3: Evaluate and simplify. The number of cut vertices in \\(C_%d\\) is 0.", n, n-1, n)
+
+	case 3:
+		kind = "bowtie"
+		ans = 1
+		prompt = "How many cut vertices does the bowtie graph (two triangles sharing exactly one common vertex) have?"
+		expl = "Subgoal 1: State governing formula. A cut vertex is a vertex whose removal strictly increases the number of connected components.\nSubgoal 2: Substitute parameters. The shared central vertex belongs to both triangles. Removing any of the four non-shared vertices leaves the rest connected. Removing the shared central vertex disconnects the graph into two independent edges (components).\nSubgoal 3: Evaluate and simplify. Exactly 1 vertex (the central bridge junction) is a cut vertex."
 	}
-	claims := []claim{
-		{question: "How many cut vertices does the path P_4 have? (enter a number)", answer: "2", kind: "path", n: 4, reason: "The two internal vertices disconnect the path when removed."},
-		{question: "How many cut vertices does the path P_5 have? (enter a number)", answer: "3", kind: "path", n: 5, reason: "All three internal vertices are cut vertices."},
-		{question: "How many cut vertices does the star K_{1,4} have? (enter a number)", answer: "1", kind: "star", n: 4, reason: "Removing the centre isolates all four leaves; no leaf is a cut vertex."},
-		{question: "How many cut vertices does the cycle C_5 have? (enter a number)", answer: "0", kind: "cycle", n: 5, reason: "A cycle stays connected after any single vertex is removed."},
-		{question: "How many cut vertices does a path on 6 vertices have? (enter a number)", answer: "4", kind: "path", n: 6, reason: "Every internal vertex is a cut vertex, and there are n - 2 = 4."},
-		{question: "How many cut vertices does the bowtie graph (two triangles sharing one vertex) have? (enter a number)", answer: "1", kind: "bowtie", reason: "The shared vertex disconnects the two triangles; no other vertex does."},
+
+	facts["kind"] = kind
+	facts["answer"] = strconv.Itoa(ans)
+
+	return generator.Problem{
+		Question:    prompt,
+		Answer:      strconv.Itoa(ans),
+		Explanation: expl,
+		Facts:       facts,
 	}
-	c := claims[rand.Intn(len(claims))]
-	facts := map[string]string{"kind": c.kind, "answer": c.answer}
-	if c.n > 0 {
-		facts["n"] = strconv.Itoa(c.n)
-	}
-	return generator.Problem{Question: c.question, Answer: c.answer, Explanation: c.reason, Facts: facts}
 }
 
 // ---------------------------------------------------------------------------
@@ -312,27 +359,66 @@ func (g *cutVertexGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type bridgeGen struct{}
 
 func (g *bridgeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		kind     string
-		n        int
-		reason   string
+	mode := rand.Intn(6)
+	var prompt, expl, kind string
+	var ans int
+	facts := map[string]string{}
+
+	switch mode {
+	case 0:
+		kind = "path"
+		n := 3 + rand.Intn(3) + mathutil.ScaleInt(ctx.Difficulty, 0, 5) // 3..10
+		ans = n - 1
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("How many bridges does the path graph P_%d have?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. A bridge (cut edge) is an edge whose removal increases the number of connected components. In any tree or path graph \\(P_n\\), removing any edge disconnects the graph into two components. Total bridges: \\(n - 1\\).\nSubgoal 2: Substitute parameters. A path on \\(n = %d\\) vertices has %d total edges.\nSubgoal 3: Evaluate and simplify. Since every edge in a path is a bridge, the total number of bridges is %d - 1 = %d.", n, n-1, n, ans)
+
+	case 1:
+		kind = "cycle"
+		n := 3 + rand.Intn(4) + mathutil.ScaleInt(ctx.Difficulty, 0, 5) // 3..11
+		ans = 0
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("How many bridges does the cycle graph C_%d have?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. By Whitney's bridge theorem, an edge is a bridge if and only if it belongs to no cycle. In a cycle graph \\(C_n\\), every edge lies on the cycle itself.\nSubgoal 2: Substitute parameters. For \\(C_%d\\), every edge is part of a cycle.\nSubgoal 3: Evaluate and simplify. The cycle graph contains 0 bridges.", n)
+
+	case 2:
+		kind = "star"
+		n := 3 + rand.Intn(3) + mathutil.ScaleInt(ctx.Difficulty, 0, 5) // 3..10
+		ans = n
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("How many bridges does the star graph K_{1,%d} have?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. A star graph \\(K_{1,k}\\) is a tree with \\(k\\) leaves connected to a central vertex. Removing any leaf edge isolates that leaf.\nSubgoal 2: Substitute parameters. In \\(K_{1,%d}\\), there are %d leaf edges incident to the central vertex.\nSubgoal 3: Evaluate and simplify. Since every leaf edge is a bridge, there are %d bridges.", n, n, ans)
+
+	case 3:
+		kind = "tree"
+		n := 4 + rand.Intn(3) + mathutil.ScaleInt(ctx.Difficulty, 0, 6) // 4..12
+		ans = n - 1
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("How many bridges does a tree on %d vertices have?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. A tree on \\(n\\) vertices is a connected acyclic graph containing exactly \\(n - 1\\) edges. Because it contains no cycles, every edge in a tree is a bridge.\nSubgoal 2: Substitute parameters. For \\(n = %d\\) vertices, the tree contains \\(%d - 1\\) edges.\nSubgoal 3: Evaluate and simplify. All %d edges are bridges: %d - 1 = %d.", n, n, n-1, n, ans)
+
+	case 4:
+		kind = "join"
+		ans = 1
+		prompt = "How many bridges does a graph made of two complete graphs K_3 joined by a single edge have?"
+		expl = "Subgoal 1: State governing formula. An edge is a bridge if and only if its removal disconnects the graph (or equivalently, if it belongs to no cycle).\nSubgoal 2: Substitute parameters. Within each \\(K_3\\), every edge belongs to a 3-cycle and cannot be a bridge. The single edge connecting the two cliques belongs to no cycle and connects two disjoint components.\nSubgoal 3: Evaluate and simplify. Only the connecting edge is a bridge, so the graph has exactly 1 bridge."
+
+	case 5:
+		kind = "chord"
+		ans = 0
+		prompt = "How many bridges does a square cycle graph with an added diagonal chord have?"
+		expl = "Subgoal 1: State governing formula. An edge is a bridge if and only if it belongs to no cycle.\nSubgoal 2: Substitute parameters. Adding a diagonal chord to a 4-cycle creates two 3-cycles sharing the chord. Every edge in the graph belongs to at least one 3-cycle or the outer 4-cycle.\nSubgoal 3: Evaluate and simplify. Since every edge belongs to a cycle, the graph contains 0 bridges."
 	}
-	claims := []claim{
-		{question: "How many bridges does the path P_4 have? (enter a number)", answer: "3", kind: "path", n: 4, reason: "Every edge of a path is a bridge."},
-		{question: "How many bridges does the cycle C_5 have? (enter a number)", answer: "0", kind: "cycle", n: 5, reason: "Every edge of a cycle lies on a cycle, so none is a bridge."},
-		{question: "How many bridges does the star K_{1,4} have? (enter a number)", answer: "4", kind: "star", n: 4, reason: "Each leaf edge is a bridge."},
-		{question: "How many bridges does a tree on 6 vertices have? (enter a number)", answer: "5", kind: "tree", n: 6, reason: "Every edge of a tree is a bridge, and a tree on n vertices has n - 1 edges."},
-		{question: "How many bridges does a graph made of two triangles joined by a single edge have? (enter a number)", answer: "1", kind: "join", reason: "Only the joining edge disconnects the graph when removed."},
-		{question: "How many bridges does a square with one diagonal have? (enter a number)", answer: "0", kind: "chord", reason: "Every edge lies on a cycle, so none is a bridge."},
+
+	facts["kind"] = kind
+	facts["answer"] = strconv.Itoa(ans)
+
+	return generator.Problem{
+		Question:    prompt,
+		Answer:      strconv.Itoa(ans),
+		Explanation: expl,
+		Facts:       facts,
 	}
-	c := claims[rand.Intn(len(claims))]
-	facts := map[string]string{"kind": c.kind, "answer": c.answer}
-	if c.n > 0 {
-		facts["n"] = strconv.Itoa(c.n)
-	}
-	return generator.Problem{Question: c.question, Answer: c.answer, Explanation: c.reason, Facts: facts}
 }
 
 // ---------------------------------------------------------------------------
@@ -426,27 +512,45 @@ func (g *mengerGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type matchingGen struct{}
 
 func (g *matchingGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		kind     string
-		n        int
-		reason   string
+	mode := rand.Intn(3)
+	var prompt, expl, kind string
+	var ans int
+	facts := map[string]string{}
+
+	switch mode {
+	case 0:
+		kind = "path"
+		n := 3 + rand.Intn(4) + mathutil.ScaleInt(ctx.Difficulty, 0, 6) // 3..12
+		ans = n / 2
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("What is the maximum matching size in the path graph P_%d?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. A matching is a set of pairwise non-adjacent edges. In a path graph \\(P_n\\), each matched edge covers 2 vertices, and alternating edges yield the maximum matching: \\(\\nu(P_n) = \\lfloor n / 2 \\rfloor\\).\nSubgoal 2: Substitute parameters. For \\(n = %d\\), compute \\(\\lfloor %d / 2 \\rfloor\\).\nSubgoal 3: Evaluate and simplify. Evaluate integer division: %d / 2 = %d.", n, n, n, ans)
+
+	case 1:
+		kind = "cycle"
+		n := 3 + rand.Intn(4) + mathutil.ScaleInt(ctx.Difficulty, 0, 6) // 3..12
+		ans = n / 2
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("What is the maximum matching size in the cycle graph C_%d?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. In a cycle graph \\(C_n\\), choosing alternating edges around the perimeter yields the maximum matching size: \\(\\nu(C_n) = \\lfloor n / 2 \\rfloor\\).\nSubgoal 2: Substitute parameters. For \\(n = %d\\), compute \\(\\lfloor %d / 2 \\rfloor\\).\nSubgoal 3: Evaluate and simplify. Evaluate integer division: %d / 2 = %d.", n, n, n, ans)
+
+	case 2:
+		kind = "star"
+		n := 3 + rand.Intn(3) + mathutil.ScaleInt(ctx.Difficulty, 0, 5) // 3..10
+		ans = 1
+		facts["n"] = strconv.Itoa(n)
+		prompt = fmt.Sprintf("What is the maximum matching size in the star graph K_{1,%d}?", n)
+		expl = fmt.Sprintf("Subgoal 1: State governing formula. A matching requires edges that do not share any common vertices. In a star graph \\(K_{1,k}\\), every edge is incident to the single central vertex.\nSubgoal 2: Substitute parameters. Since any two edges share the central vertex, no two edges can be included in the same matching.\nSubgoal 3: Evaluate and simplify. The maximum matching size of \\(K_{1,%d}\\) is 1.", n)
 	}
-	claims := []claim{
-		{question: "What is the maximum matching size in the path P_4? (enter a number)", answer: "2", kind: "path", n: 4, reason: "Two disjoint edges cover all four vertices."},
-		{question: "What is the maximum matching size in the path P_5? (enter a number)", answer: "2", kind: "path", n: 5, reason: "Two disjoint edges is the best possible; one vertex must be left out."},
-		{question: "What is the maximum matching size in the cycle C_6? (enter a number)", answer: "3", kind: "cycle", n: 6, reason: "Alternate edges around the cycle give three disjoint edges."},
-		{question: "What is the maximum matching size in the star K_{1,5}? (enter a number)", answer: "1", kind: "star", n: 5, reason: "Every edge shares the centre, so no two are disjoint."},
-		{question: "What is the maximum matching size in the cycle C_5? (enter a number)", answer: "2", kind: "cycle", n: 5, reason: "Two disjoint edges is the maximum; an odd cycle cannot be perfectly matched."},
-		{question: "What is the maximum matching size in the path P_6? (enter a number)", answer: "3", kind: "path", n: 6, reason: "Three disjoint edges cover all six vertices."},
-	}
-	c := claims[rand.Intn(len(claims))]
+
+	facts["kind"] = kind
+	facts["answer"] = strconv.Itoa(ans)
+
 	return generator.Problem{
-		Question:    c.question,
-		Answer:      c.answer,
-		Explanation: c.reason,
-		Facts:       map[string]string{"kind": c.kind, "n": strconv.Itoa(c.n), "answer": c.answer},
+		Question:    prompt,
+		Answer:      strconv.Itoa(ans),
+		Explanation: expl,
+		Facts:       facts,
 	}
 }
 
