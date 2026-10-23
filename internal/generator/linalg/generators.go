@@ -757,44 +757,74 @@ func (g *parametricGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type innerProductGen struct{}
 
 func (g *innerProductGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
-	}
-	easy := []entry{
-		{"Is inner product 〈u,v〉=u·v positive definite? (yes/no)", "yes", "u·u=|u|²≥0 and =0 iff u=0."},
-		{"Are orthogonal vectors u·v=0? (yes/no)", "yes", "Definition of orthogonality."},
-		{"Does Cauchy-Schwarz state |〈u,v〉|≤||u||·||v||? (yes/no)", "yes", "Cauchy-Schwarz inequality."},
-		{"Is every symmetric bilinear form an inner product? (yes/no)", "no", "Needs positive definiteness too: xᵀAx with indefinite A fails."},
-	}
-	hard := []entry{
-		{"Is 〈u,v〉=2u₁v₁+u₂v₂ an inner product on R²? (yes/no)", "yes", "Weighted dot with positive weights is inner product."},
-		{"Does Gram-Schmidt use projections via inner products? (yes/no)", "yes", "Orthogonalization via subtract projections."},
-		{"Is every inner product induced by a positive-definite matrix? (yes/no)", "yes", "〈u,v〉=uᵀAv with A SPD."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	if rand.Intn(3) == 0 {
-		// production: dot products and norms (unique answers).
-		type dotEntry struct {
-			question string
-			answer   string
-			reason   string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Weighted inner product
+		w1 := smallInt(1, 4)
+		w2 := smallInt(1, 4)
+		u1 := smallInt(1, 4)
+		u2 := smallInt(1, 4)
+		v1 := smallInt(1, 4)
+		v2 := smallInt(1, 4)
+		ans := w1*u1*v1 + w2*u2*v2
+		return generator.Problem{
+			Question:    fmt.Sprintf("Compute the weighted inner product \\(\\langle u, v \\rangle = %d u_1 v_1 + %d u_2 v_2\\) for \\(u = (%d,%d)\\) and \\(v = (%d,%d)\\).", w1, w2, u1, u2, v1, v2),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Substituting components gives \\(\\langle u, v \\rangle = %d(%d)(%d) + %d(%d)(%d) = %d\\).", w1, u1, v1, w2, u2, v2, ans),
 		}
-		dotTable := []dotEntry{
-			{"Compute (1,2)·(3,4) (enter a number)", "11", "1·3+2·4 = 11."},
-			{"What is (1,0)·(0,1)? (enter a number)", "0", "Perpendicular unit vectors: dot is 0."},
-			{"What is ||(3,4)||? (enter a number)", "5", "sqrt(9+16) = 5."},
+	case 1:
+		// Orthogonality parameter k
+		a := smallInt(1, 4)
+		b := smallInt(1, 4)
+		m := smallInt(1, 3)
+		c := m * b
+		k := -m * a
+		return generator.Problem{
+			Question:    fmt.Sprintf("For what integer value of \\(k\\) are the vectors \\(u = (%d,%d)\\) and \\(v = (%d,k)\\) orthogonal under the standard dot product?", a, b, c),
+			Answer:      fmt.Sprintf("%d", k),
+			Explanation: fmt.Sprintf("Vectors are orthogonal when their inner product is zero: \\((%d)(%d) + (%d)(k) = 0\\), which gives \\(k = %d\\).", a, c, b, k),
 		}
-		d := dotTable[rand.Intn(len(dotTable))]
-		return generator.Problem{Question: d.question, Answer: d.answer, Explanation: d.reason}
+	case 2:
+		// Matrix-induced inner product
+		d1 := smallInt(1, 3)
+		d2 := smallInt(1, 3)
+		u1 := smallInt(1, 3)
+		u2 := smallInt(1, 3)
+		v1 := smallInt(1, 3)
+		v2 := smallInt(1, 3)
+		ans := d1*u1*v1 + d2*u2*v2
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the diagonal matrix \\(A = \\begin{pmatrix} %d & 0 \\\\ 0 & %d \\end{pmatrix}\\), compute the induced inner product \\(\\langle u, v \\rangle_A = u^T A v\\) for \\(u = (%d,%d)\\) and \\(v = (%d,%d)\\).", d1, d2, u1, u2, v1, v2),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("Evaluating \\(u^T A v = %d(%d)(%d) + %d(%d)(%d)\\) gives %d.", d1, u1, v1, d2, u2, v2, ans),
+		}
+	case 3:
+		// Polynomial inner product \int_0^1 (2m x) * b dx = m b
+		m := smallInt(1, 4)
+		a := 2 * m
+		b := smallInt(1, 5)
+		ans := m * b
+		return generator.Problem{
+			Question:    fmt.Sprintf("On the vector space of polynomials with inner product \\(\\langle f, g \\rangle = \\int_0^1 f(x) g(x) \\, dx\\), compute \\(\\langle %d x, %d \\rangle\\).", a, b),
+			Answer:      fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf("The integral is \\(\\int_0^1 %d x \\cdot %d \\, dx = %d \\left[ \\frac{x^2}{2} \\right]_0^1 = %d \\left(\\frac{1}{2}\\right) = %d\\).", a, b, a*b, a*b, ans),
+		}
+	default:
+		// Orthogonal projection coefficient
+		v1 := smallInt(1, 3)
+		v2 := smallInt(1, 3)
+		vNormSq := v1*v1 + v2*v2
+		m := smallInt(1, 4+int(ctx.Difficulty*2))
+		u1 := m * v1
+		u2 := m * v2
+		dot := u1*v1 + u2*v2
+		return generator.Problem{
+			Question:    fmt.Sprintf("Find the scalar projection coefficient \\(c = \\frac{\\langle u, v \\rangle}{\\langle v, v \\rangle}\\) of \\(u = (%d,%d)\\) onto \\(v = (%d,%d)\\) under the standard dot product.", u1, u2, v1, v2),
+			Answer:      fmt.Sprintf("%d", m),
+			Explanation: fmt.Sprintf("We have \\(\\langle u, v \\rangle = %d(%d) + %d(%d) = %d\\) and \\(\\langle v, v \\rangle = %d^2 + %d^2 = %d\\). The projection coefficient is %d / %d = %d.", u1, v1, u2, v2, dot, v1, v2, vNormSq, dot, vNormSq, m),
+		}
 	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 type luGen struct{}

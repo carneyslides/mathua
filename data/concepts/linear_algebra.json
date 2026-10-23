@@ -308,7 +308,7 @@
     "label": "Inner products and orthogonality",
     "domain": "linear_algebra",
     "subdomain": "linear_algebra.inner_product",
-    "grading_type": "multiple_choice",
+    "grading_type": "numeric",
     "prerequisites": [
       "linalg.vector.dot",
       "linalg.vec.span"
