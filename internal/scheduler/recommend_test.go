@@ -444,7 +444,7 @@ func TestRecommend_TargetedRemediation_KeyPrerequisitesInjectedAtFront(t *testin
 	d, err := concepts.Build([]concepts.Concept{
 		{
 			ID: "a", Label: "Concept A", Domain: "d", Subdomain: "s-a",
-			Prerequisites: []string{},
+			Prerequisites:    []string{},
 			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
 		},
 		{
@@ -496,7 +496,7 @@ func TestRecommend_TargetedRemediation_OutranksQuizDue(t *testing.T) {
 	d, err := concepts.Build([]concepts.Concept{
 		{
 			ID: "a", Label: "Concept A", Domain: "d", Subdomain: "s-a",
-			Prerequisites: []string{},
+			Prerequisites:    []string{},
 			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
 		},
 		{
@@ -537,12 +537,12 @@ func TestRecommend_TargetedRemediation_MultipleKeyPrerequisites(t *testing.T) {
 	d, err := concepts.Build([]concepts.Concept{
 		{
 			ID: "a", Label: "Concept A", Domain: "d", Subdomain: "s-a",
-			Prerequisites: []string{},
+			Prerequisites:    []string{},
 			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
 		},
 		{
 			ID: "b", Label: "Concept B", Domain: "d", Subdomain: "s-b",
-			Prerequisites: []string{},
+			Prerequisites:    []string{},
 			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
 		},
 		{
@@ -582,7 +582,7 @@ func TestRecommend_TargetedRemediation_GracefulFallbackWhenNoKeyPrerequisites(t 
 	d, err := concepts.Build([]concepts.Concept{
 		{
 			ID: "a", Label: "Concept A", Domain: "d", Subdomain: "s-a",
-			Prerequisites: []string{},
+			Prerequisites:    []string{},
 			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
 		},
 	})
