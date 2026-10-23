@@ -749,39 +749,83 @@ func (g *bifurcationGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type waveGen struct{}
 
 func (g *waveGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q string
-		a string
-		e string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Propagation speed c from u_tt = c^2 u_xx
+		c := smallInt(2, 6+int(ctx.Difficulty*4))
+		c2 := c * c
+		return generator.Problem{
+			Question: fmt.Sprintf("For the one-dimensional wave equation \\(u_{tt} = %du_{xx}\\), what is the propagation speed \\(c > 0\\) of traveling wave disturbances?", c2),
+			Answer:   fmt.Sprintf("%d", c),
+			Explanation: fmt.Sprintf(
+				"The wave equation is written as \\(u_{tt} = c^2 u_{xx}\\). Setting \\(c^2 = %d\\) gives the positive wave speed \\(c = \\sqrt{%d} = %d\\).",
+				c2, c2, c,
+			),
+		}
+
+	case 1:
+		// d'Alembert with quadratic initial displacement u(x, 0) = x^2 and u_t(x, 0) = 0
+		c := smallInt(1, 3)
+		x0 := smallInt(1, 5)
+		t0 := smallInt(1, 4)
+		ans := x0*x0 + c*c*t0*t0
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider the wave equation \\(u_{tt} = %du_{xx}\\) with initial conditions \\(u(x, 0) = x^2\\) and \\(u_t(x, 0) = 0\\). Evaluate \\(u(%d, %d)\\).", c*c, x0, t0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"By d'Alembert's formula with zero initial velocity, \\(u(x, t) = \\frac{1}{2}[(x - %dt)^2 + (x + %dt)^2] = x^2 + %dt^2\\). Substituting \\((x, t) = (%d, %d)\\) gives \\(u(%d, %d) = %d^2 + %d(%d^2) = %d + %d = %d\\).",
+				c, c, c*c, x0, t0, x0, t0, x0, c*c, t0, x0*x0, c*c*t0*t0, ans,
+			),
+		}
+
+	case 2:
+		// Constant initial velocity u_t(x, 0) = v0 and u(x, 0) = 0
+		c := smallInt(1, 4)
+		v0 := smallInt(2, 7)
+		x0 := smallInt(1, 8)
+		t0 := smallInt(1, 5)
+		ans := v0 * t0
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider the wave equation \\(u_{tt} = %du_{xx}\\) with initial conditions \\(u(x, 0) = 0\\) and constant initial velocity \\(u_t(x, 0) = %d\\). Evaluate \\(u(%d, %d)\\).", c*c, v0, x0, t0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Applying d'Alembert's velocity integral: \\(u(x, t) = \\frac{1}{2(%d)}\\int_{x - %dt}^{x + %dt} %d\\,ds = \\frac{%d}{2(%d)}(2 \\cdot %dt) = %dt\\). At \\(t = %d\\), \\(u(%d, %d) = %d \\cdot %d = %d\\).",
+				c, c, c, v0, v0, c, c, v0, t0, x0, t0, v0, t0, ans,
+			),
+		}
+
+	case 3:
+		// Length of domain of dependence interval [x - ct, x + ct]
+		c := smallInt(2, 5)
+		t0 := smallInt(2, 5)
+		length := 2 * c * t0
+		return generator.Problem{
+			Question: fmt.Sprintf("For the wave equation \\(u_{tt} = %du_{xx}\\), what is the length of the domain of dependence interval \\([x - ct, x + ct]\\) on the initial axis at time \\(t = %d\\)?", c*c, t0),
+			Answer:   fmt.Sprintf("%d", length),
+			Explanation: fmt.Sprintf(
+				"The domain of dependence on the line \\(t = 0\\) for a point \\((x, t)\\) is the interval \\([x - ct, x + ct]\\). With wave velocity \\(c = %d\\) and time \\(t = %d\\), the length of this interval is \\(2ct = 2(%d)(%d) = %d\\).",
+				c, t0, c, t0, length,
+			),
+		}
+
+	default:
+		// Linear initial displacement u(x, 0) = mx + k and u_t(x, 0) = 0
+		c := smallInt(1, 4)
+		m := smallInt(2, 5)
+		k := smallInt(1, 9)
+		x0 := smallInt(1, 8)
+		t0 := smallInt(1, 4)
+		ans := m*x0 + k
+		return generator.Problem{
+			Question: fmt.Sprintf("Consider the wave equation \\(u_{tt} = %du_{xx}\\) with initial conditions \\(u(x, 0) = %dx + %d\\) and \\(u_t(x, 0) = 0\\). Evaluate \\(u(%d, %d)\\).", c*c, m, k, x0, t0),
+			Answer:   fmt.Sprintf("%d", ans),
+			Explanation: fmt.Sprintf(
+				"Using d'Alembert's formula with zero initial velocity gives \\(u(x, t) = \\frac{1}{2}[(%d(x - %dt) + %d) + (%d(x + %dt) + %d)] = %dx + %d\\). At \\((x, t) = (%d, %d)\\), \\(u(%d, %d) = %d(%d) + %d = %d\\).",
+				m, c, k, m, c, k, m, k, x0, t0, x0, t0, m, x0, k, ans,
+			),
+		}
 	}
-	easy := []entry{
-		{"Is wave equation hyperbolic? (yes/no)", "yes", "Classification via discriminant."},
-		{"Do characteristics for wave equation have slopes ±c? (yes/no)", "yes", "Lines x±ct=const."},
-	}
-	// Parameterized production: d'Alembert with f(x) = x^2, zero initial velocity.
-	cs := []int{1, 2}
-	xs := []int{3, 5}
-	c := cs[rand.Intn(len(cs))]
-	x := xs[rand.Intn(len(xs))]
-	lo, hi := x-c, x+c
-	v := (lo*lo + hi*hi) / 2
-	easy = append(easy, entry{
-		q: fmt.Sprintf("For u_tt = %du_xx with u(x,0) = x^2 and u_t(x,0) = 0, what is u(%d,1)? (enter a number)", c*c, x),
-		a: fmt.Sprintf("%d", v),
-		e: fmt.Sprintf("d'Alembert: u = [(x-ct)^2+(x+ct)^2]/2 = [%d^2+%d^2]/2 = %d.", lo, hi, v),
-	})
-	hard := []entry{
-		{"Does d'Alembert with initial u(x,0)=f(x), u_t(x,0)=0 give u(x,t)=[f(x-ct)+f(x+ct)]/2? (yes/no)", "yes", "Even reflection of initial displacement."},
-		{"Is domain of dependence for wave equation an interval [x-ct,x+ct]? (yes/no)", "yes", "Value at (x,t) depends on initial data there."},
-		{"Does wave equation conserve energy ∫(u_t^2+c^2 u_x^2)dx? (yes/no)", "yes", "Energy conservation."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type heatGen struct{}
