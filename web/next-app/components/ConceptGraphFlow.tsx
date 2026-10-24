@@ -58,6 +58,7 @@ const STATUS_COLORS: Record<GraphStatus, string> = {
   decaying: '#b45309',
   practicing: '#60a5fa',
   learning: '#f59e0b',
+  placed: '#38bdf8',
   unseen: '#71717a',
   locked: '#52525b',
 }
@@ -67,6 +68,7 @@ const STATUS_LABELS: Record<GraphStatus, string> = {
   decaying: 'Due for review',
   practicing: 'Practicing',
   learning: 'Learning',
+  placed: 'Placed (Diagnostic)',
   unseen: 'Unseen',
   locked: 'Locked',
 }

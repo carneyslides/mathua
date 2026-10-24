@@ -107,4 +107,15 @@ describe('decaying', () => {
     expect(decayed['div']).toBe('unseen')
     expect(practising['div']).toBe('locked')
   })
+
+  it('marks diagnostic placement as placed and unlocks downstream successors', () => {
+    // Placement seeds reachability without permanent mastery (ADR-051).
+    const placed = deriveStatuses(withPrereq(), {
+      add: { status: 'MASTERED' },
+      mul: { status: 'PRACTICING', placement_seeded: true },
+    })
+    expect(placed['mul']).toBe('placed')
+    expect(placed['div']).toBe('unseen')
+  })
 })
+

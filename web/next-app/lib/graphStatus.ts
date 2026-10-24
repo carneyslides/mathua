@@ -1,13 +1,14 @@
-import { countsAsMastered, masteryState, type MasteryState } from './progress'
+import { countsAsMastered, masteryState, prereqMet, type MasteryState } from './progress'
+import type { ConceptProgress } from './api'
 
 /**
- * A concept's state on the graph, plus the one thing that is not a mastery state.
+ * A concept's state on the graph, plus locked and placed states.
  *
- * `locked` is not stored and not derived from a status: it means *a prerequisite is
- * not yet satisfied*, which is a position in the DAG rather than a fact about this
- * learner. It is kept in the same union because every caller has to handle both.
+ * `locked` is not stored and not derived from a status: it means a prerequisite is
+ * not yet satisfied, which is a position in the DAG rather than a fact about this
+ * learner. `placed` marks reachability seeded by the diagnostic (ADR-051).
  */
-export type GraphStatus = MasteryState | 'locked'
+export type GraphStatus = MasteryState | 'locked' | 'placed'
 
 export interface GraphConceptInput {
   id: string
@@ -35,13 +36,18 @@ export { type MasteryState }
  */
 export function deriveStatuses(
   concepts: GraphConceptInput[],
-  progress: Record<string, { status?: string }> = {},
+  progress: Record<string, ConceptProgress | { status?: string; placement_seeded?: boolean; completed?: boolean }> = {},
 ) {
   const knownIds = new Set(concepts.map(c => c.id))
-  const states = new Map<string, MasteryState>()
+  const states = new Map<string, GraphStatus>()
 
   for (const [id, p] of Object.entries(progress)) {
     if (!knownIds.has(id)) continue
+    // If explicitly seeded by diagnostic placement and not yet genuinely mastered:
+    if (p && 'placement_seeded' in p && p.placement_seeded && !countsAsMastered(p)) {
+      states.set(id, 'placed')
+      continue
+    }
     const state = masteryState(p)
     // `unseen` here means "no usable progress row", which is the same as having no row
     // at all, so it is not recorded and the concept is judged on its prerequisites.
@@ -58,7 +64,7 @@ export function deriveStatuses(
       continue
     }
     const blockingPrereq = (c.prerequisites ?? []).some(
-      pid => knownIds.has(pid) && !countsAsMastered(progress[pid]),
+      pid => knownIds.has(pid) && !prereqMet(progress as Record<string, ConceptProgress>, pid),
     )
     result[c.id] = blockingPrereq ? 'locked' : 'unseen'
   }

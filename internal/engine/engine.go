@@ -2531,7 +2531,7 @@ func (e *Engine) ApplyDiagnosticReport(studentID string, report *diagnostic.Diag
 				// learner can work the frontier, and it is deliberately not mastery. The
 				// row used to be written MASTERED, which unlocked dependents and, through
 				// hysteresis, quietly became permanent after one correct answer.
-				Status:          string(mastery.StatusLearning),
+				Status:          string(mastery.StatusPracticing),
 				PlacementSeeded: true,
 				IsProvisional:   true,
 				SM2EFactor:      2.5,
@@ -2544,7 +2544,7 @@ func (e *Engine) ApplyDiagnosticReport(studentID string, report *diagnostic.Diag
 				continue
 			}
 			existing.IsProvisional = true
-			existing.Status = string(mastery.StatusLearning)
+			existing.Status = string(mastery.StatusPracticing)
 			existing.PlacementSeeded = true
 			if existing.LastAttempted == nil {
 				existing.LastAttempted = &now

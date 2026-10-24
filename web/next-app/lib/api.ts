@@ -240,6 +240,8 @@ export interface ConceptProgress {
   // Set by the lesson-completion endpoint (PR1, server-owned). Optional so
   // pre-PR1 payloads keep validating; unlock rules treat absent as false.
   completed?: boolean
+  placement_seeded?: boolean
+  is_provisional?: boolean
 }
 
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- catch value: unknown is the correct error contract

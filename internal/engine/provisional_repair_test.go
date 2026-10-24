@@ -30,8 +30,8 @@ func TestPlacementStaysProvisionalUntilEvidenceCertifies(t *testing.T) {
 	if err != nil || p == nil {
 		t.Fatalf("get progress: %v", err)
 	}
-	if p.Status != string(mastery.StatusLearning) {
-		t.Errorf("status = %q, want LEARNING: a placement must not read as mastery", p.Status)
+	if p.Status != string(mastery.StatusPracticing) {
+		t.Errorf("status = %q, want PRACTICING: a placement must not read as mastery", p.Status)
 	}
 	if !p.PlacementSeeded || !p.IsProvisional {
 		t.Fatalf("seed flags lost: placement=%v provisional=%v", p.PlacementSeeded, p.IsProvisional)

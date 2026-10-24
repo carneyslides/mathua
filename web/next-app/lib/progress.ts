@@ -74,14 +74,14 @@ export function masteryState(p: MaybeProgress): MasteryState {
   }
 }
 
-// prereqMet: a prerequisite is satisfied when it counts as mastered OR
-// completed. The lesson-completion endpoint sets `completed`, which unlocks
-// successors, while mastery still gates the quiz. Same rule as the server's
-// Available(); an absent `completed` (pre-PR1 payload) behaves exactly as
-// before.
+// prereqMet: a prerequisite is satisfied when it counts as mastered,
+// completed or placement-seeded. The lesson-completion endpoint sets `completed`
+// and the diagnostic sets `placement_seeded`, which unlock successors for
+// reachability (ADR-051), while mastery still gates the quiz. Same rule as the
+// server's scheduler.prereqsMet.
 export function prereqMet(progress: Record<string, ConceptProgress>, pid: string): boolean {
   const p = progress[pid]
-  return countsAsMastered(p) || p?.completed === true
+  return countsAsMastered(p) || p?.completed === true || p?.placement_seeded === true
 }
 
 export interface CatalogueConcept {

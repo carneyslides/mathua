@@ -100,3 +100,67 @@ func TestApplyGoalResults_PlacementUnlocksWithoutMastery(t *testing.T) {
 		t.Errorf("b = %+v, want eligible unlocked via placement", child)
 	}
 }
+
+// Conditionally completed concepts from the diagnostic report seed reachability
+// as PRACTICING, unlocking their successors at the frontier. A struggle on the
+// successor demotes the provisional prerequisite to LEARNING, which relocks
+// dependent progress until remedial practice certifies it.
+func TestApplyDiagnosticReport_SuccessorIsEligibleUntilFallbackDemotion(t *testing.T) {
+	e := testEngine(t)
+	st, err := e.CreateStudent("placed-diagnostic-learner")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+
+	report := &diagnostic.DiagnosticReport{
+		ConditionallyCompleted: []string{"Concept A"},
+	}
+	if err := e.ApplyDiagnosticReport(st.ID, report); err != nil {
+		t.Fatalf("apply diagnostic report: %v", err)
+	}
+
+	// Prerequisite a is seeded PRACTICING with placement and provisional flags.
+	pa, err := e.repo.GetProgress(st.ID, "a")
+	if err != nil || pa == nil {
+		t.Fatalf("get progress a: %v", err)
+	}
+	if pa.Status != "PRACTICING" || !pa.PlacementSeeded || !pa.IsProvisional {
+		t.Fatalf("a progress = %+v, want PRACTICING with placement and provisional flags", pa)
+	}
+
+	// Successor b is unlocked and startable.
+	child, err := e.EligibilityFor(st.ID, "b")
+	if err != nil {
+		t.Fatalf("eligibility b: %v", err)
+	}
+	if !child.Eligible || child.State != scheduler.StateUnlocked {
+		t.Fatalf("b = %+v, want eligible unlocked via placement", child)
+	}
+
+	// Learner struggles on b: provisional fallback demotes prerequisite a.
+	demoted, err := e.CheckProvisionalFallback(st.ID, "b")
+	if err != nil {
+		t.Fatalf("check fallback: %v", err)
+	}
+	if len(demoted) == 0 || demoted[0] != "a" {
+		t.Fatalf("expected demoted a, got %v", demoted)
+	}
+
+	// Demoted prerequisite a is now LEARNING with elevated weakness.
+	paAfter, err := e.repo.GetProgress(st.ID, "a")
+	if err != nil || paAfter == nil {
+		t.Fatalf("get progress a after fallback: %v", err)
+	}
+	if paAfter.Status != "LEARNING" || paAfter.WeaknessScore != 0.8 {
+		t.Fatalf("a progress after demotion = %+v, want LEARNING and weakness 0.8", paAfter)
+	}
+
+	// Successor b is now relocked until a is remediated.
+	childAfter, err := e.EligibilityFor(st.ID, "b")
+	if err != nil {
+		t.Fatalf("eligibility b after fallback: %v", err)
+	}
+	if childAfter.Eligible || childAfter.State == scheduler.StateUnlocked {
+		t.Fatalf("b after fallback = %+v, want locked due to demoted prerequisite", childAfter)
+	}
+}
