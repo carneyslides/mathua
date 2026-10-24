@@ -41,7 +41,8 @@ func (g *leastSquaresGen) Generate(ctx generator.GeneratorContext) generator.Pro
 	var answer string
 	var xbar, ybar, sxx, sxy float64
 
-	for iter := 0; iter < 10; iter++ {
+	collision := true
+	for iter := 0; iter < 100; iter++ {
 		numPoints := 3
 		if tier == 2 {
 			numPoints = 4
@@ -88,7 +89,7 @@ func (g *leastSquaresGen) Generate(ctx generator.GeneratorContext) generator.Pro
 		answer = decimal6(bVal)
 
 		// Avoid read-off: answer should not match any x or y
-		collision := false
+		collision = false
 		for _, x := range xs {
 			if strconv.Itoa(x) == answer {
 				collision = true
@@ -104,6 +105,14 @@ func (g *leastSquaresGen) Generate(ctx generator.GeneratorContext) generator.Pro
 		if !collision {
 			break
 		}
+	}
+
+	if collision {
+		xs = []int{1, 3, 5}
+		ys = []int{3, 6, 12}
+		xbar, ybar, sxx, sxy = 3, 7, 8, 18
+		bVal = 2.25
+		answer = "2.25"
 	}
 
 	xsStrs := make([]string, len(xs))
@@ -143,7 +152,8 @@ func (g *normalEquationsGen) Generate(ctx generator.GeneratorContext) generator.
 	var answer string
 	var xbar, ybar, sxx, sxy float64
 
-	for iter := 0; iter < 10; iter++ {
+	collision := true
+	for iter := 0; iter < 100; iter++ {
 		numPoints := 3
 		if tier == 2 {
 			numPoints = 4
@@ -191,7 +201,7 @@ func (g *normalEquationsGen) Generate(ctx generator.GeneratorContext) generator.
 		answer = decimal6(aVal)
 
 		// Avoid read-off: answer should not match any x or y
-		collision := false
+		collision = false
 		for _, x := range xs {
 			if strconv.Itoa(x) == answer {
 				collision = true
@@ -207,6 +217,15 @@ func (g *normalEquationsGen) Generate(ctx generator.GeneratorContext) generator.
 		if !collision {
 			break
 		}
+	}
+
+	if collision {
+		xs = []int{1, 3, 5}
+		ys = []int{3, 6, 12}
+		xbar, ybar, sxx, sxy = 3, 7, 8, 18
+		bVal = 2.25
+		aVal = 0.25
+		answer = "0.25"
 	}
 
 	xsStrs := make([]string, len(xs))

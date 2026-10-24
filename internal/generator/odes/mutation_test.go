@@ -45,4 +45,13 @@ func TestMutationAntiReadOffODEs(t *testing.T) {
 	t.Run("homogeneousGen", func(t *testing.T) {
 		assertNoReadOffAndDiverse(t, "homogeneousGen", &homogeneousGen{})
 	})
+	t.Run("nonhomogeneousGen", func(t *testing.T) {
+		assertNoReadOffAndDiverse(t, "nonhomogeneousGen", &nonhomogeneousGen{})
+	})
+	t.Run("linearFirstGen", func(t *testing.T) {
+		assertNoReadOffAndDiverse(t, "linearFirstGen", &linearFirstGen{})
+	})
+	t.Run("exactGen", func(t *testing.T) {
+		assertNoReadOffAndDiverse(t, "exactGen", &exactGen{})
+	})
 }

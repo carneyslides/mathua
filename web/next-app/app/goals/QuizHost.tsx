@@ -41,6 +41,7 @@ export default function QuizHost() {
   const [startError, setStartError] = useState('')
 
   const quizSessionId = useRef('')
+  const quizAttemptId = useRef('')
   const quizInputRef = useRef<MathFocusHandle | null>(null)
   const quizShownAt = useRef<number | null>(null)
   const quizConceptId = useRef('')

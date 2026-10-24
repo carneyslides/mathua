@@ -218,89 +218,119 @@ func (g *separableGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type linearFirstGen struct{}
 
 func (g *linearFirstGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
-	switch mode {
-	case 0:
-		// Integrating factor evaluation at x0: y' + (a/x) y = Q(x)
-		a := smallInt(2, 4)
-		x0 := smallInt(2, 4)
-		// I(x) = exp(int a/x dx) = x^a
-		val := 1
-		for i := 0; i < a; i++ {
-			val *= x0
-		}
-		return generator.Problem{
-			Question: fmt.Sprintf("For the first-order linear differential equation \\(y' + \\frac{%d}{x}y = x^2\\) (with \\(x > 0\\)), what is the value of the integrating factor \\(I(x) = \\exp\\left(\\int P(x)dx\\right)\\) evaluated at \\(x = %d\\)?", a, x0),
-			Answer:   fmt.Sprintf("%d", val),
-			Explanation: fmt.Sprintf(
-				"The coefficient is \\(P(x) = \\frac{%d}{x}\\). The integrating factor is \\(I(x) = \\exp\\left(\\int \\frac{%d}{x} dx\\right) = \\exp(%d \\ln x) = x^{%d}\\). Evaluating at \\(x = %d\\) gives %d.",
-				a, a, a, a, x0, val,
-			),
-		}
+	for {
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			// Integrating factor evaluation at x0: y' + (a/x) y = Q(x)
+			a := smallInt(2, 4)
+			x0 := smallInt(2, 4)
+			// I(x) = exp(int a/x dx) = x^a
+			val := 1
+			for i := 0; i < a; i++ {
+				val *= x0
+			}
+			ansStr := fmt.Sprintf("%d", val)
+			q := fmt.Sprintf("For the first-order linear differential equation \\(y' + \\frac{%d}{x}y = x^2\\) (with \\(x > 0\\)), what is the value of the integrating factor \\(I(x) = \\exp\\left(\\int P(x)dx\\right)\\) evaluated at \\(x = %d\\)?", a, x0)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"The coefficient is \\(P(x) = \\frac{%d}{x}\\). The integrating factor is \\(I(x) = \\exp\\left(\\int \\frac{%d}{x} dx\\right) = \\exp(%d \\ln x) = x^{%d}\\). Evaluating at \\(x = %d\\) gives %d.",
+					a, a, a, a, x0, val,
+				),
+			}
 
-	case 1:
-		// IVP integration constant C in y' + a y = b with y(0) = y0
-		a := smallInt(2, 5)
-		k := smallInt(1, 4)
-		b := a * k
-		y0 := smallInt(1, 8)
-		constC := y0 - k
-		return generator.Problem{
-			Question: fmt.Sprintf("For the first-order linear initial value problem \\(y' + %d y = %d\\) with \\(y(0) = %d\\), what is the value of the integration constant \\(C\\) in the general solution \\(y(x) = %d + C e^{-%d x}\\)?", a, b, y0, k, a),
-			Answer:   fmt.Sprintf("%d", constC),
-			Explanation: fmt.Sprintf(
-				"The differential equation has particular solution \\(y_p = \\frac{%d}{%d} = %d\\) and homogeneous solution \\(y_h = C e^{-%d x}\\). Setting \\(x = 0\\) gives \\(y(0) = %d + C = %d\\), so \\(C = %d - %d = %d\\).",
-				b, a, k, a, k, y0, y0, k, constC,
-			),
-		}
+		case 1:
+			// IVP integration constant C in y' + a y = b with y(0) = y0
+			a := smallInt(2, 5)
+			k := smallInt(2, 4)
+			b := a * k
+			y0 := smallInt(1, 8)
+			constC := y0 - k
+			if constC == 0 {
+				continue
+			}
+			ansStr := fmt.Sprintf("%d", constC)
+			q := fmt.Sprintf("For the first-order linear initial value problem \\(y' + %d y = %d\\) with \\(y(0) = %d\\), what is the value of the integration constant \\(C\\) in the general solution \\(y(x) = y_p + C e^{-%d x}\\)?", a, b, y0, a)
+			if strings.Contains(q, ansStr) || strings.Contains(q, strings.TrimPrefix(ansStr, "-")) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"The differential equation has particular solution \\(y_p = \\frac{%d}{%d} = %d\\) and homogeneous solution \\(y_h = C e^{-%d x}\\). Setting \\(x = 0\\) gives \\(y(0) = %d + C = %d\\), so \\(C = %d - %d = %d\\).",
+					b, a, k, a, k, y0, y0, k, constC,
+				),
+			}
 
-	case 2:
-		// Long-term equilibrium limit lim_{x -> inf} y(x) for y' + a y = b (a > 0)
-		a := smallInt(2, 6)
-		k := smallInt(1, 8+int(ctx.Difficulty*3))
-		b := a * k
-		return generator.Problem{
-			Question: fmt.Sprintf("For the stable first-order linear differential equation \\(y' + %d y = %d\\), what is the long-term equilibrium limit \\(\\lim_{x \\to \\infty} y(x)\\)?", a, b),
-			Answer:   fmt.Sprintf("%d", k),
-			Explanation: fmt.Sprintf(
-				"The general solution is \\(y(x) = %d + C e^{-%d x}\\). Because the damping coefficient %d is positive, the transient exponential term \\(C e^{-%d x} \\to 0\\) as \\(x \\to \\infty\\). Thus the steady-state equilibrium limit is %d.",
-				k, a, a, a, k,
-			),
-		}
+		case 2:
+			// Long-term equilibrium limit lim_{x -> inf} y(x) for y' + a y = b (a > 0)
+			a := smallInt(2, 6)
+			k := smallInt(1, 8+int(ctx.Difficulty*3))
+			b := a * k
+			ansStr := fmt.Sprintf("%d", k)
+			q := fmt.Sprintf("For the stable first-order linear differential equation \\(y' + %d y = %d\\), what is the long-term equilibrium limit \\(\\lim_{x \\to \\infty} y(x)\\)?", a, b)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"The general solution is \\(y(x) = %d + C e^{-%d x}\\). Because the damping coefficient %d is positive, the transient exponential term \\(C e^{-%d x} \\to 0\\) as \\(x \\to \\infty\\). Thus the steady-state equilibrium limit is %d.",
+					k, a, a, a, k,
+				),
+			}
 
-	case 3:
-		// Homogeneous solution evaluation: x y' - k y = 0 with y(1) = y0, evaluate at x1
-		k := smallInt(1, 3)
-		y0 := smallInt(1, 4)
-		x1 := smallInt(2, 3)
-		xPow := 1
-		for i := 0; i < k; i++ {
-			xPow *= x1
-		}
-		val := y0 * xPow
-		return generator.Problem{
-			Question: fmt.Sprintf("Solve the initial value problem \\(x y' - %d y = 0\\) with \\(y(1) = %d\\) for \\(x > 0\\). What is the value of \\(y(%d)\\)?", k, y0, x1),
-			Answer:   fmt.Sprintf("%d", val),
-			Explanation: fmt.Sprintf(
-				"Separating variables yields \\(\\frac{dy}{y} = \\frac{%d}{x} dx\\), giving \\(\\ln|y| = %d \\ln x + C\\) and general solution \\(y(x) = C x^{%d}\\). Applying initial condition \\(y(1) = %d\\) yields \\(C(1)^{%d} = %d\\), so \\(y(x) = %d x^{%d}\\). Evaluating at \\(x = %d\\) gives %d.",
-				k, k, k, y0, k, y0, y0, k, x1, val,
-			),
-		}
+		case 3:
+			// Homogeneous solution evaluation: x y' - k y = 0 with y(1) = y0, evaluate at x1
+			k := smallInt(1, 3)
+			y0 := smallInt(1, 4)
+			x1 := smallInt(2, 3)
+			xPow := 1
+			for i := 0; i < k; i++ {
+				xPow *= x1
+			}
+			val := y0 * xPow
+			ansStr := fmt.Sprintf("%d", val)
+			q := fmt.Sprintf("Solve the initial value problem \\(x y' - %d y = 0\\) with \\(y(1) = %d\\) for \\(x > 0\\). What is the value of \\(y(%d)\\)?", k, y0, x1)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"Separating variables yields \\(\\frac{dy}{y} = \\frac{%d}{x} dx\\), giving \\(\\ln|y| = %d \\ln x + C\\) and general solution \\(y(x) = C x^{%d}\\). Applying initial condition \\(y(1) = %d\\) yields \\(C(1)^{%d} = %d\\), so \\(y(x) = %d x^{%d}\\). Evaluating at \\(x = %d\\) gives %d.",
+					k, k, k, y0, k, y0, y0, k, x1, val,
+				),
+			}
 
-	default:
-		// Particular solution polynomial constant coefficient B in y' + a y = b x + c
-		a := smallInt(2, 4)
-		k := smallInt(1, 4)
-		b := a * k
-		m := smallInt(1, 5)
-		c := k + a*m
-		return generator.Problem{
-			Question: fmt.Sprintf("The differential equation \\(y' + %d y = %d x + %d\\) possesses a linear particular solution of the form \\(y_p(x) = A x + B\\). What is the value of the constant coefficient \\(B\\)?", a, b, c),
-			Answer:   fmt.Sprintf("%d", m),
-			Explanation: fmt.Sprintf(
-				"Substituting \\(y_p = A x + B\\) into the differential equation gives \\(A + %d(A x + B) = %d A x + (A + %d B) = %d x + %d\\). Equating coefficients of \\(x\\) yields \\(%d A = %d\\), so \\(A = %d\\). Equating constant terms gives \\(%d + %d B = %d\\), so \\(%d B = %d\\), which yields \\(B = %d\\).",
-				a, a, a, b, c, a, b, k, k, a, c, a, c-k, m,
-			),
+		default:
+			// Particular solution polynomial constant coefficient B in y' + a y = b x + c
+			a := smallInt(2, 4)
+			k := smallInt(1, 4)
+			b := a * k
+			m := smallInt(1, 5)
+			c := k + a*m
+			ansStr := fmt.Sprintf("%d", m)
+			q := fmt.Sprintf("The differential equation \\(y' + %d y = %d x + %d\\) possesses a linear particular solution of the form \\(y_p(x) = A x + B\\). What is the value of the constant coefficient \\(B\\)?", a, b, c)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"Substituting \\(y_p = A x + B\\) into the differential equation gives \\(A + %d(A x + B) = %d A x + (A + %d B) = %d x + %d\\). Equating coefficients of \\(x\\) yields \\(%d A = %d\\), so \\(A = %d\\). Equating constant terms gives \\(%d + %d B = %d\\), so \\(%d B = %d\\), which yields \\(B = %d\\).",
+					a, a, a, b, c, a, b, k, k, a, c, a, c-k, m,
+				),
+			}
 		}
 	}
 }
@@ -308,83 +338,113 @@ func (g *linearFirstGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type exactGen struct{}
 
 func (g *exactGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
-	switch mode {
-	case 0:
-		// Exactness condition: partial M / partial y = partial N / partial x
-		c := smallInt(2, 6+int(ctx.Difficulty*2))
-		b := smallInt(1, 8)
-		d := smallInt(1, 8)
-		return generator.Problem{
-			Question: fmt.Sprintf("What value of the constant \\(k\\) makes the differential equation \\((k x y^2 + %d x) dx + (%d x^2 y + %d y) dy = 0\\) exact?", b, c, d),
-			Answer:   fmt.Sprintf("%d", c),
-			Explanation: fmt.Sprintf(
-				"A first-order differential equation \\(M dx + N dy = 0\\) is exact when \\(\\frac{\\partial M}{\\partial y} = \\frac{\\partial N}{\\partial x}\\). Here \\(\\frac{\\partial M}{\\partial y} = 2k x y\\) and \\(\\frac{\\partial N}{\\partial x} = 2(%d) x y = %d x y\\). Equating these partial derivatives requires \\(2k = %d\\), so \\(k = %d\\).",
-				c, 2*c, 2*c, c,
-			),
-		}
+	for {
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			// Exactness condition: partial M / partial y = partial N / partial x
+			// M = (k x^2 y + b x) dx, N = (c x^3 + d y) dy
+			// dM/dy = k x^2, dN/dx = 3 c x^2 => k = 3 c
+			c := smallInt(2, 6+int(ctx.Difficulty*2))
+			b := smallInt(1, 8)
+			d := smallInt(1, 8)
+			kVal := 3 * c
+			ansStr := fmt.Sprintf("%d", kVal)
+			q := fmt.Sprintf("What value of the constant \\(k\\) makes the differential equation \\((k x^2 y + %d x) dx + (%d x^3 + %d y) dy = 0\\) exact?", b, c, d)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"A first-order differential equation \\(M dx + N dy = 0\\) is exact when \\(\\frac{\\partial M}{\\partial y} = \\frac{\\partial N}{\\partial x}\\). Here \\(\\frac{\\partial M}{\\partial y} = k x^2\\) and \\(\\frac{\\partial N}{\\partial x} = 3(%d) x^2 = %d x^2\\). Equating partial derivatives gives \\(k = %d\\).",
+					c, kVal, kVal,
+				),
+			}
 
-	case 1:
-		// Partial derivative evaluation dM/dy at (x0, y0)
-		a := smallInt(2, 5)
-		b := smallInt(2, 6)
-		x0 := smallInt(1, 3)
-		y0 := smallInt(1, 3)
-		val := 2 * a * x0 * y0
-		return generator.Problem{
-			Question: fmt.Sprintf("For the differential equation \\(M dx + N dy = 0\\) with \\(M(x, y) = %d x y^2 + %d x^2\\), what is the value of the partial derivative \\(\\frac{\\partial M}{\\partial y}\\) evaluated at the point \\((%d, %d)\\)?", a, b, x0, y0),
-			Answer:   fmt.Sprintf("%d", val),
-			Explanation: fmt.Sprintf(
-				"Differentiating \\(M(x, y) = %d x y^2 + %d x^2\\) with respect to \\(y\\) treats \\(x\\) as constant, giving \\(\\frac{\\partial M}{\\partial y} = 2(%d) x y = %d x y\\). Evaluating at \\((%d, %d)\\) gives \\(%d(%d)(%d) = %d\\).",
-				a, b, a, 2*a, x0, y0, 2*a, x0, y0, val,
-			),
-		}
+		case 1:
+			// Partial derivative evaluation dM/dy at (x0, y0)
+			a := smallInt(2, 5)
+			b := smallInt(2, 6)
+			x0 := smallInt(1, 3)
+			y0 := smallInt(1, 3)
+			val := 2 * a * x0 * y0
+			ansStr := fmt.Sprintf("%d", val)
+			q := fmt.Sprintf("For the differential equation \\(M dx + N dy = 0\\) with \\(M(x, y) = %d x y^2 + %d x^2\\), what is the value of the partial derivative \\(\\frac{\\partial M}{\\partial y}\\) evaluated at the point \\((%d, %d)\\)?", a, b, x0, y0)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"Differentiating \\(M(x, y) = %d x y^2 + %d x^2\\) with respect to \\(y\\) treats \\(x\\) as constant, giving \\(\\frac{\\partial M}{\\partial y} = 2(%d) x y = %d x y\\). Evaluating at \\((%d, %d)\\) gives \\(%d(%d)(%d) = %d\\).",
+					a, b, a, 2*a, x0, y0, 2*a, x0, y0, val,
+				),
+			}
 
-	case 2:
-		// Potential function evaluation Psi(x0, y0) with Psi(0, 0) = 0
-		a := smallInt(1, 4)
-		b := smallInt(1, 4)
-		c := smallInt(1, 4)
-		x0 := smallInt(1, 3)
-		y0 := smallInt(1, 3)
-		val := a*x0*x0*y0 + b*x0*x0 + c*y0*y0
-		return generator.Problem{
-			Question: fmt.Sprintf("The exact differential equation \\((%d x y + %d x) dx + (%d x^2 + %d y) dy = 0\\) possesses a potential function \\(\\Psi(x, y)\\) such that \\(d\\Psi = M dx + N dy\\) and \\(\\Psi(0, 0) = 0\\). Evaluate \\(\\Psi(%d, %d)\\).", 2*a, 2*b, a, 2*c, x0, y0),
-			Answer:   fmt.Sprintf("%d", val),
-			Explanation: fmt.Sprintf(
-				"Integrating \\(M(x, y)\\) with respect to \\(x\\) yields \\(\\Psi(x, y) = %d x^2 y + %d x^2 + g(y)\\). Differentiating with respect to \\(y\\) gives \\(\\frac{\\partial \\Psi}{\\partial y} = %d x^2 + g'(y) = %d x^2 + %d y\\), meaning \\(g'(y) = %d y\\) and \\(g(y) = %d y^2\\). With \\(\\Psi(0,0)=0\\), the potential function is \\(\\Psi(x, y) = %d x^2 y + %d x^2 + %d y^2\\). Evaluating at \\((%d, %d)\\) gives %d.",
-				a, b, a, a, 2*c, 2*c, c, a, b, c, x0, y0, val,
-			),
-		}
+		case 2:
+			// Potential function evaluation Psi(x0, y0) with Psi(0, 0) = 0
+			a := smallInt(1, 4)
+			b := smallInt(1, 4)
+			c := smallInt(1, 4)
+			x0 := smallInt(1, 3)
+			y0 := smallInt(1, 3)
+			val := a*x0*x0*y0 + b*x0*x0 + c*y0*y0
+			ansStr := fmt.Sprintf("%d", val)
+			q := fmt.Sprintf("The exact differential equation \\((%d x y + %d x) dx + (%d x^2 + %d y) dy = 0\\) possesses a potential function \\(\\Psi(x, y)\\) such that \\(d\\Psi = M dx + N dy\\) and \\(\\Psi(0, 0) = 0\\). Evaluate \\(\\Psi(%d, %d)\\).", 2*a, 2*b, a, 2*c, x0, y0)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"Integrating \\(M(x, y)\\) with respect to \\(x\\) yields \\(\\Psi(x, y) = %d x^2 y + %d x^2 + g(y)\\). Differentiating with respect to \\(y\\) gives \\(\\frac{\\partial \\Psi}{\\partial y} = %d x^2 + g'(y) = %d x^2 + %d y\\), meaning \\(g'(y) = %d y\\) and \\(g(y) = %d y^2\\). With \\(\\Psi(0,0)=0\\), the potential function is \\(\\Psi(x, y) = %d x^2 y + %d x^2 + %d y^2\\). Evaluating at \\((%d, %d)\\) gives %d.",
+					a, b, a, a, 2*c, 2*c, c, a, b, c, x0, y0, val,
+				),
+			}
 
-	case 3:
-		// Integrating factor exponent p for mu(x) = x^p
-		p := smallInt(1, 4+int(ctx.Difficulty*2))
-		coeff := p + 1
-		return generator.Problem{
-			Question: fmt.Sprintf("The differential equation \\((%d y) dx + x dy = 0\\) is not exact, but multiplying by an integrating factor of the form \\(\\mu(x) = x^p\\) transforms it into an exact equation. What is the value of the exponent \\(p\\)?", coeff),
-			Answer:   fmt.Sprintf("%d", p),
-			Explanation: fmt.Sprintf(
-				"Computing \\(\\frac{1}{N}\\left(\\frac{\\partial M}{\\partial y} - \\frac{\\partial N}{\\partial x}\\right) = \\frac{%d - 1}{x} = \\frac{%d}{x}\\). The integrating factor is \\(\\mu(x) = \\exp\\left(\\int \\frac{%d}{x} dx\\right) = x^{%d}\\), giving exponent \\(p = %d\\).",
-				coeff, p, p, p, p,
-			),
-		}
+		case 3:
+			// Integrating factor exponent p for mu(x) = x^p
+			p := smallInt(2, 5+int(ctx.Difficulty*2))
+			coeff := p + 1
+			ansStr := fmt.Sprintf("%d", p)
+			q := fmt.Sprintf("The differential equation \\((%d y) dx + x dy = 0\\) is not exact, but multiplying by an integrating factor of the form \\(\\mu(x) = x^p\\) transforms it into an exact equation. What is the value of the exponent \\(p\\)?", coeff)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"Computing \\(\\frac{1}{N}\\left(\\frac{\\partial M}{\\partial y} - \\frac{\\partial N}{\\partial x}\\right) = \\frac{%d - 1}{x} = \\frac{%d}{x}\\). The integrating factor is \\(\\mu(x) = \\exp\\left(\\int \\frac{%d}{x} dx\\right) = x^{%d}\\), giving exponent \\(p = %d\\).",
+					coeff, p, p, p, p,
+				),
+			}
 
-	default:
-		// First integral IVP constant C
-		a := smallInt(1, 3)
-		b := smallInt(1, 3)
-		c := smallInt(1, 3)
-		x0 := smallInt(1, 3)
-		y0 := smallInt(1, 3)
-		constC := a*x0*x0 + b*x0*y0 + c*y0*y0
-		return generator.Problem{
-			Question: fmt.Sprintf("The exact differential equation \\((%d x + %d y) dx + (%d x + %d y) dy = 0\\) has first integral \\(%d x^2 + %d x y + %d y^2 = C\\). Given the initial condition \\(y(%d) = %d\\), what is the value of the constant \\(C\\)?", 2*a, b, b, 2*c, a, b, c, x0, y0),
-			Answer:   fmt.Sprintf("%d", constC),
-			Explanation: fmt.Sprintf(
-				"Substituting the initial condition \\(x = %d\\) and \\(y = %d\\) into the first integral yields \\(C = %d(%d)^2 + %d(%d)(%d) + %d(%d)^2 = %d + %d + %d = %d\\).",
-				x0, y0, a, x0, b, x0, y0, c, y0, a*x0*x0, b*x0*y0, c*y0*y0, constC,
-			),
+		default:
+			// First integral IVP constant C
+			a := smallInt(1, 3)
+			b := smallInt(1, 3)
+			c := smallInt(1, 3)
+			x0 := smallInt(1, 3)
+			y0 := smallInt(1, 3)
+			constC := a*x0*x0 + b*x0*y0 + c*y0*y0
+			ansStr := fmt.Sprintf("%d", constC)
+			q := fmt.Sprintf("The exact differential equation \\((%d x + %d y) dx + (%d x + %d y) dy = 0\\) has first integral \\(%d x^2 + %d x y + %d y^2 = C\\). Given the initial condition \\(y(%d) = %d\\), what is the value of the constant \\(C\\)?", 2*a, b, b, 2*c, a, b, c, x0, y0)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"Substituting the initial condition \\(x = %d\\) and \\(y = %d\\) into the first integral yields \\(C = %d(%d)^2 + %d(%d)(%d) + %d(%d)^2 = %d + %d + %d = %d\\).",
+					x0, y0, a, x0, b, x0, y0, c, y0, a*x0*x0, b*x0*y0, c*y0*y0, constC,
+				),
+			}
 		}
 	}
 }
@@ -557,84 +617,103 @@ func (g *homogeneousGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type nonhomogeneousGen struct{}
 
 func (g *nonhomogeneousGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
-	switch mode {
-	case 0:
-		// Constant particular solution y_p for y'' + b y' + c y = K
-		b := smallInt(1, 5)
-		c := smallInt(2, 6)
-		m := smallInt(1, 7+int(ctx.Difficulty*3))
-		kVal := c * m
-		return generator.Problem{
-			Question: fmt.Sprintf("Find the constant particular solution \\(y_p\\) for the differential equation \\(y'' + %dy' + %dy = %d\\).", b, c, kVal),
-			Answer:   fmt.Sprintf("%d", m),
-			Explanation: fmt.Sprintf(
-				"For a constant particular solution \\(y_p = A\\), the derivatives vanish: \\(y_p' = 0\\) and \\(y_p'' = 0\\). Substituting gives \\(0 + 0 + %d A = %d\\), which yields \\(A = \\frac{%d}{%d} = %d\\).",
-				c, kVal, kVal, c, m,
-			),
+	for attempt := 0; attempt < 200; attempt++ {
+		mode := rand.Intn(5)
+		var prob generator.Problem
+		switch mode {
+		case 0:
+			// Constant particular solution y_p for y'' + b y' + c y = K
+			b := smallInt(1, 5)
+			c := smallInt(2, 6)
+			m := smallInt(1, 7+int(ctx.Difficulty*3))
+			kVal := c * m
+			prob = generator.Problem{
+				Question: fmt.Sprintf("Find the constant particular solution \\(y_p\\) for the differential equation \\(y'' + %dy' + %dy = %d\\).", b, c, kVal),
+				Answer:   fmt.Sprintf("%d", m),
+				Explanation: fmt.Sprintf(
+					"For a constant particular solution \\(y_p = A\\), the derivatives vanish: \\(y_p' = 0\\) and \\(y_p'' = 0\\). Substituting gives \\(0 + 0 + %d A = %d\\), which yields \\(A = \\frac{%d}{%d} = %d\\).",
+					c, kVal, kVal, c, m,
+				),
+			}
+
+		case 1:
+			// Undamped resonance angular frequency omega_0 for a y'' + b y = cos(omega t)
+			omega0 := smallInt(2, 9)
+			a := smallInt(1, 4)
+			b := a * omega0 * omega0
+			prob = generator.Problem{
+				Question: fmt.Sprintf("At what driving angular frequency \\(\\omega\\) does pure resonance occur for the driven undamped oscillator \\(%d y'' + %d y = \\cos(\\omega t)\\)?", a, b),
+				Answer:   fmt.Sprintf("%d", omega0),
+				Explanation: fmt.Sprintf(
+					"Pure resonance occurs when the driving frequency matches the natural frequency \\(\\omega_0 = \\sqrt{\\frac{%d}{%d}} = %d\\).",
+					b, a, omega0,
+				),
+			}
+
+		case 2:
+			// Exponential particular solution amplitude A for y'' - a^2 y = K e^(b x)
+			a := smallInt(1, 3)
+			b := smallInt(4, 6)
+			m := smallInt(1, 5)
+			aSq := a * a
+			bSq := b * b
+			denom := bSq - aSq
+			kVal := m * denom
+			prob = generator.Problem{
+				Question: fmt.Sprintf("The differential equation \\(y'' - %d y = %d e^{%d x}\\) has a particular solution of the form \\(y_p(x) = A e^{%d x}\\). What is the value of the amplitude coefficient \\(A\\)?", aSq, kVal, b, b),
+				Answer:   fmt.Sprintf("%d", m),
+				Explanation: fmt.Sprintf(
+					"Computing derivatives gives \\(y_p' = %d A e^{%d x}\\) and \\(y_p'' = %d A e^{%d x}\\). Substituting into the differential equation yields \\((%d - %d) A e^{%d x} = %d A e^{%d x} = %d e^{%d x}\\). Solving for \\(A\\) gives \\(A = \\frac{%d}{%d} = %d\\).",
+					b, b, bSq, b, bSq, aSq, b, denom, b, kVal, b, kVal, denom, m,
+				),
+			}
+
+		case 3:
+			// Polynomial particular solution linear coefficient A_1 for y'' + c y = K x
+			c := smallInt(2, 5)
+			m := smallInt(1, 6)
+			kVal := c * m
+			prob = generator.Problem{
+				Question: fmt.Sprintf("The differential equation \\(y'' + %d y = %d x\\) has a particular solution \\(y_p(x) = A_1 x + A_0\\). What is the value of the linear coefficient \\(A_1\\)?", c, kVal),
+				Answer:   fmt.Sprintf("%d", m),
+				Explanation: fmt.Sprintf(
+					"For \\(y_p(x) = A_1 x + A_0\\), the second derivative is \\(y_p'' = 0\\). Substituting into the differential equation gives \\(0 + %d(A_1 x + A_0) = %d A_1 x + %d A_0 = %d x\\). Equating linear coefficients yields \\(%d A_1 = %d\\), so \\(A_1 = %d\\).",
+					c, c, c, kVal, c, kVal, m,
+				),
+			}
+
+		default:
+			// Initial value problem particular solution constant C_1 in y(x) = C_1 cos(omega x) + y_p with y(0) = y_0
+			omega := smallInt(2, 5)
+			m := smallInt(1, 5)
+			y0 := smallInt(1, 9)
+			if y0 == m {
+				continue
+			}
+			omegaSq := omega * omega
+			kVal := m * omegaSq
+			constC1 := y0 - m
+			prob = generator.Problem{
+				Question: fmt.Sprintf("For the initial value problem \\(y'' + %d y = %d\\) with initial conditions \\(y(0) = %d\\) and \\(y'(0) = 0\\), the general solution is \\(y(x) = C_1 \\cos(%d x) + y_p\\) where \\(y_p\\) is a constant particular solution. What is the value of the constant \\(C_1\\)?", omegaSq, kVal, y0, omega),
+				Answer:   fmt.Sprintf("%d", constC1),
+				Explanation: fmt.Sprintf(
+					"The constant particular solution is \\(y_p = \\frac{%d}{%d} = %d\\). The general solution with zero initial velocity is \\(y(x) = C_1 \\cos(%d x) + %d\\). Applying initial condition \\(y(0) = C_1 + %d = %d\\) yields \\(C_1 = %d - %d = %d\\).",
+					kVal, omegaSq, m, omega, m, m, y0, y0, m, constC1,
+				),
+			}
 		}
 
-	case 1:
-		// Undamped resonance angular frequency omega_0 for y'' + omega_0^2 y = cos(omega t)
-		omega0 := smallInt(2, 9)
-		c := omega0 * omega0
-		return generator.Problem{
-			Question: fmt.Sprintf("At what driving angular frequency \\(\\omega\\) does pure resonance occur for the driven undamped oscillator \\(y'' + %dy = \\cos(\\omega t)\\)?", c),
-			Answer:   fmt.Sprintf("%d", omega0),
-			Explanation: fmt.Sprintf(
-				"Pure resonance occurs when the driving frequency matches the natural frequency of the undamped oscillator \\(\\omega_0 = \\sqrt{%d} = %d\\).",
-				c, omega0,
-			),
+		cleanAns := strings.TrimPrefix(prob.Answer, "-")
+		if strings.Contains(prob.Question, prob.Answer) || (cleanAns != "" && strings.Contains(prob.Question, cleanAns)) {
+			continue
 		}
-
-	case 2:
-		// Exponential particular solution amplitude A for y'' - a^2 y = K e^(b x)
-		a := smallInt(1, 3)
-		b := smallInt(4, 6)
-		m := smallInt(1, 5)
-		aSq := a * a
-		bSq := b * b
-		denom := bSq - aSq
-		kVal := m * denom
-		return generator.Problem{
-			Question: fmt.Sprintf("The differential equation \\(y'' - %d y = %d e^{%d x}\\) has a particular solution of the form \\(y_p(x) = A e^{%d x}\\). What is the value of the amplitude coefficient \\(A\\)?", aSq, kVal, b, b),
-			Answer:   fmt.Sprintf("%d", m),
-			Explanation: fmt.Sprintf(
-				"Computing derivatives gives \\(y_p' = %d A e^{%d x}\\) and \\(y_p'' = %d A e^{%d x}\\). Substituting into the differential equation yields \\((%d - %d) A e^{%d x} = %d A e^{%d x} = %d e^{%d x}\\). Solving for \\(A\\) gives \\(A = \\frac{%d}{%d} = %d\\).",
-				b, b, bSq, b, bSq, aSq, b, denom, b, kVal, b, kVal, denom, m,
-			),
-		}
-
-	case 3:
-		// Polynomial particular solution linear coefficient A_1 for y'' + c y = K x
-		c := smallInt(2, 5)
-		m := smallInt(1, 6)
-		kVal := c * m
-		return generator.Problem{
-			Question: fmt.Sprintf("The differential equation \\(y'' + %d y = %d x\\) has a particular solution \\(y_p(x) = A_1 x + A_0\\). What is the value of the linear coefficient \\(A_1\\)?", c, kVal),
-			Answer:   fmt.Sprintf("%d", m),
-			Explanation: fmt.Sprintf(
-				"For \\(y_p(x) = A_1 x + A_0\\), the second derivative is \\(y_p'' = 0\\). Substituting into the differential equation gives \\(0 + %d(A_1 x + A_0) = %d A_1 x + %d A_0 = %d x\\). Equating linear coefficients yields \\(%d A_1 = %d\\), so \\(A_1 = %d\\).",
-				c, c, c, kVal, c, kVal, m,
-			),
-		}
-
-	default:
-		// Initial value problem particular solution constant C_1 in y(x) = C_1 cos(omega x) + y_p with y(0) = y_0
-		omega := smallInt(2, 5)
-		m := smallInt(1, 5)
-		y0 := smallInt(1, 9)
-		omegaSq := omega * omega
-		kVal := m * omegaSq
-		constC1 := y0 - m
-		return generator.Problem{
-			Question: fmt.Sprintf("For the initial value problem \\(y'' + %d y = %d\\) with initial conditions \\(y(0) = %d\\) and \\(y'(0) = 0\\), the solution is \\(y(x) = C_1 \\cos(%d x) + %d\\). What is the value of the constant \\(C_1\\)?", omegaSq, kVal, y0, omega, m),
-			Answer:   fmt.Sprintf("%d", constC1),
-			Explanation: fmt.Sprintf(
-				"The particular solution is \\(y_p = \\frac{%d}{%d} = %d\\). The general solution with zero initial velocity is \\(y(x) = C_1 \\cos(%d x) + %d\\). Applying initial condition \\(y(0) = C_1 + %d = %d\\) yields \\(C_1 = %d - %d = %d\\).",
-				kVal, omegaSq, m, omega, m, m, y0, y0, m, constC1,
-			),
-		}
+		return prob
+	}
+	// Fallback that is provably free of read-off
+	return generator.Problem{
+		Question:    "Find the constant particular solution \\(y_p\\) for the differential equation \\(y'' + 4y' + 3y = 21\\).",
+		Answer:      "7",
+		Explanation: "Setting derivatives to 0 gives 3*y_p = 21, hence y_p = 7.",
 	}
 }
 

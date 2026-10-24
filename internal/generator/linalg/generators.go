@@ -420,26 +420,33 @@ type det3x3Gen struct{}
 
 func (g *det3x3Gen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	span := mathutil.ScaleInt(ctx.Difficulty, 2, 6)
-	m := make([][]int, 3)
-	for i := range m {
-		m[i] = make([]int, 3)
-		for j := range m[i] {
-			m[i][j] = rand.Intn(2*span+1) - span
+	for {
+		m := make([][]int, 3)
+		for i := range m {
+			m[i] = make([]int, 3)
+			for j := range m[i] {
+				m[i][j] = rand.Intn(2*span+1) - span
+			}
 		}
-	}
-	a, b, c := m[0][0], m[0][1], m[0][2]
-	d, e, f := m[1][0], m[1][1], m[1][2]
-	gVal, h, i := m[2][0], m[2][1], m[2][2]
-	m11 := e*i - f*h
-	m12 := d*i - f*gVal
-	m13 := d*h - e*gVal
-	det := a*m11 - b*m12 + c*m13
-	return generator.Problem{
-		Question: fmt.Sprintf("Find the determinant of the matrix \\(%s\\).", formatMatrix(m)),
-		Answer:   fmt.Sprintf("%d", det),
-		Explanation: fmt.Sprintf("Subgoal 1: State Laplace cofactor expansion along the first row: \\(\\det(A) = a(ei - fh) - b(di - fg) + c(dh - eg)\\).\n"+
-			"Subgoal 2: Substitute row entries and evaluate \\(2 \\times 2\\) minors: \\(M_{11} = %d, M_{12} = %d, M_{13} = %d\\).\n"+
-			"Subgoal 3: Combine with alternating signs: \\(%d(%d) - (%d)(%d) + (%d)(%d) = %d\\).", m11, m12, m13, a, m11, b, m12, c, m13, det),
+		a, b, c := m[0][0], m[0][1], m[0][2]
+		d, e, f := m[1][0], m[1][1], m[1][2]
+		gVal, h, i := m[2][0], m[2][1], m[2][2]
+		m11 := e*i - f*h
+		m12 := d*i - f*gVal
+		m13 := d*h - e*gVal
+		det := a*m11 - b*m12 + c*m13
+		ansStr := fmt.Sprintf("%d", det)
+		matStr := formatMatrix(m)
+		if det == 0 || containsWord(matStr, ansStr) {
+			continue
+		}
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the determinant of the matrix \\(%s\\).", matStr),
+			Answer:   ansStr,
+			Explanation: fmt.Sprintf("Subgoal 1: State Laplace cofactor expansion along the first row: \\(\\det(A) = a(ei - fh) - b(di - fg) + c(dh - eg)\\).\n"+
+				"Subgoal 2: Substitute row entries and evaluate \\(2 \\times 2\\) minors: \\(M_{11} = %d, M_{12} = %d, M_{13} = %d\\).\n"+
+				"Subgoal 3: Combine with alternating signs: \\(%d(%d) - (%d)(%d) + (%d)(%d) = %d\\).", m11, m12, m13, a, m11, b, m12, c, m13, det),
+		}
 	}
 }
 
@@ -1157,6 +1164,68 @@ type diagonalizationGen struct{}
 
 func (g *diagonalizationGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	rng := rand.New(rand.NewSource(rand.Int63()))
+
+	if ctx.Difficulty >= 0.4 {
+		l1 := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		l2 := l1 + 1 + rand.Intn(3)
+		l3 := l2 + 1 + rand.Intn(3)
+		if rand.Intn(2) == 0 {
+			l1 = -l1
+		}
+		mat3, _, ok := mathutil.IntegerEigenvalues3x3(rng, l1, l2, l3, 2)
+		if ok {
+			mode := rand.Intn(4)
+			switch mode {
+			case 0:
+				// Trace of diagonal matrix D
+				tr := l1 + l2 + l3
+				return generator.Problem{
+					Question: fmt.Sprintf("The 3x3 matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the trace of \\(D\\)?", mat3.LaTeX()),
+					Answer:   fmt.Sprintf("%d", tr),
+					Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of trace: \\(\\operatorname{tr}(D) = \\operatorname{tr}(A) = \\lambda_1 + \\lambda_2 + \\lambda_3\\).\n"+
+						"Subgoal 2: Compute the trace of \\(A\\) by summing its diagonal entries: %d + %d + %d.\n"+
+						"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(D) = %d\\).", mat3.Entry[0][0], mat3.Entry[1][1], mat3.Entry[2][2], tr),
+				}
+			case 1:
+				// Determinant of diagonal matrix D
+				det := l1 * l2 * l3
+				return generator.Problem{
+					Question: fmt.Sprintf("The 3x3 matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the determinant of \\(D\\)?", mat3.LaTeX()),
+					Answer:   fmt.Sprintf("%d", det),
+					Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of determinant: \\(\\det(D) = \\det(A) = \\lambda_1 \\lambda_2 \\lambda_3\\).\n"+
+						"Subgoal 2: Compute \\(\\det(A) = %d\\).\n"+
+						"Subgoal 3: Conclude that \\(\\det(D) = %d\\).", det, det),
+				}
+			case 2:
+				// Power trace tr(A^2)
+				ans := l1*l1 + l2*l2 + l3*l3
+				return generator.Problem{
+					Question: fmt.Sprintf("Let \\(A = PDP^{-1}\\) be a 3x3 diagonalizable matrix with diagonal matrix \\(D = \\operatorname{diag}(%d, %d, %d)\\). Compute \\(\\operatorname{tr}(A^2)\\).", l1, l2, l3),
+					Answer:   fmt.Sprintf("%d", ans),
+					Explanation: fmt.Sprintf("Subgoal 1: State the power trace formula: \\(\\operatorname{tr}(A^2) = \\operatorname{tr}(D^2) = \\lambda_1^2 + \\lambda_2^2 + \\lambda_3^2\\).\n"+
+						"Subgoal 2: Substitute the eigenvalues: \\((%d)^2 + (%d)^2 + (%d)^2\\).\n"+
+						"Subgoal 3: Evaluate squares and sum: %d + %d + %d = %d.", l1, l2, l3, l1*l1, l2*l2, l3*l3, ans),
+				}
+			default:
+				// Largest eigenvalue
+				larger := l1
+				if l2 > larger {
+					larger = l2
+				}
+				if l3 > larger {
+					larger = l3
+				}
+				return generator.Problem{
+					Question: fmt.Sprintf("The 3x3 matrix \\(A = %s\\) has distinct integer eigenvalues. Find its largest eigenvalue.", mat3.LaTeX()),
+					Answer:   fmt.Sprintf("%d", larger),
+					Explanation: fmt.Sprintf("Subgoal 1: Compute the characteristic polynomial \\(\\det(A - \\lambda I) = 0\\) to find eigenvalues \\(\\lambda_1 = %d, \\lambda_2 = %d\\) and \\(\\lambda_3 = %d\\).\n"+
+						"Subgoal 2: Compare the eigenvalues to identify the maximum.\n"+
+						"Subgoal 3: Select the largest eigenvalue: %d.", l1, l2, l3, larger),
+				}
+			}
+		}
+	}
+
 	l1 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
 	l2 := l1 + mathutil.ScaleInt(ctx.Difficulty, 1, 4)
 	if rand.Intn(2) == 0 {
@@ -2053,41 +2122,96 @@ type jordanGen struct{}
 
 func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	rng := rand.New(rand.NewSource(rand.Int63()))
+
 	for {
-		mode := rand.Intn(5)
+		if ctx.Difficulty >= 0.3 {
+			lambda := smallInt(2, 4+tier)
+			mu := lambda + 1 + rand.Intn(3)
+			singleBlock := (rand.Intn(2) == 0)
+			mat3, _, ok := mathutil.JordanMatrix3x3(rng, lambda, mu, singleBlock, 2)
+			if ok {
+				mode := rand.Intn(3)
+				switch mode {
+				case 0:
+					// Determinant of non-triangular matrix with Jordan canonical form
+					det := lambda * lambda * mu
+					if singleBlock {
+						det = lambda * lambda * lambda
+					}
+					ansStr := strconv.Itoa(det)
+					q := fmt.Sprintf("Compute the determinant \\(\\det(A)\\) of the matrix \\(A = %s\\).", mat3.LaTeX())
+					if strings.Contains(q, ansStr) || strings.Contains(q, strings.TrimPrefix(ansStr, "-")) {
+						continue
+					}
+					ex := fmt.Sprintf("Subgoal 1: State that the determinant is similarity-invariant: \\(\\det(A) = \\det(J)\\), the product of the diagonal eigenvalues.\n"+
+						"Subgoal 2: Multiply the diagonal entries of the Jordan canonical form: \\((%d)(%d)(%d)\\).\n"+
+						"Subgoal 3: Evaluate the product to find \\(\\det(A) = %d\\).",
+						lambda, lambda, mu, det)
+					return generator.Problem{
+						Question:    q,
+						Answer:      ansStr,
+						Explanation: ex,
+						Facts: map[string]string{
+							"answer": ansStr,
+						},
+					}
+				case 1:
+					// Power trace tr(A^2)
+					trSq := 2*lambda*lambda + mu*mu
+					if singleBlock {
+						trSq = 3 * lambda * lambda
+					}
+					ansStr := strconv.Itoa(trSq)
+					q := fmt.Sprintf("For the matrix \\(A = %s\\) with Jordan canonical form eigenvalues \\(\\lambda_1 = %d, \\lambda_2 = %d\\) and \\(\\lambda_3 = %d\\), compute \\(\\operatorname{tr}(A^2)\\).", mat3.LaTeX(), lambda, lambda, mu)
+					if singleBlock {
+						q = fmt.Sprintf("For the matrix \\(A = %s\\) with eigenvalue \\(\\lambda = %d\\) of algebraic multiplicity 3, compute \\(\\operatorname{tr}(A^2)\\).", mat3.LaTeX(), lambda)
+					}
+					if strings.Contains(q, ansStr) || strings.Contains(q, strings.TrimPrefix(ansStr, "-")) {
+						continue
+					}
+					ex := fmt.Sprintf("Subgoal 1: State that the trace of \\(A^2\\) equals the sum of squares of its eigenvalues: \\(\\operatorname{tr}(A^2) = \\sum \\lambda_i^2\\).\n"+
+						"Subgoal 2: Substitute the eigenvalues into the sum of squares.\n"+
+						"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(A^2) = %d\\).", trSq)
+					return generator.Problem{
+						Question:    q,
+						Answer:      ansStr,
+						Explanation: ex,
+						Facts: map[string]string{
+							"answer": ansStr,
+						},
+					}
+				default:
+					// Trace of A
+					tr := mat3.Trace()
+					ansStr := strconv.Itoa(tr)
+					q := fmt.Sprintf("Compute the trace \\(\\operatorname{tr}(A)\\) of the matrix \\(A = %s\\).", mat3.LaTeX())
+					if strings.Contains(q, ansStr) || strings.Contains(q, strings.TrimPrefix(ansStr, "-")) {
+						continue
+					}
+					ex := fmt.Sprintf("Subgoal 1: State the trace property: \\(\\operatorname{tr}(A)\\) is the sum of the main diagonal entries.\n"+
+						"Subgoal 2: Sum the diagonal entries: %d + %d + %d.\n"+
+						"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(A) = %d\\).",
+						mat3.Entry[0][0], mat3.Entry[1][1], mat3.Entry[2][2], tr)
+					return generator.Problem{
+						Question:    q,
+						Answer:      ansStr,
+						Explanation: ex,
+						Facts: map[string]string{
+							"answer": ansStr,
+						},
+					}
+				}
+			}
+		}
+
+		mode := rand.Intn(3)
 		switch mode {
 		case 0:
-			// Geometric multiplicity (dimension of eigenspace = number of Jordan blocks)
-			eig := smallInt(2, 5+tier)
-			mat := [][]int{
-				{eig, 1, 0},
-				{0, eig, 0},
-				{0, 0, eig},
-			}
-			ansStr := "2"
-			matStr := formatMatrix3(mat)
-			q := fmt.Sprintf("For the matrix in Jordan canonical form \\(J = %s\\), what is the geometric multiplicity of the eigenvalue \\(\\lambda = %d\\)?", matStr, eig)
-			if containsWord(q, ansStr) {
-				continue
-			}
-			ex := fmt.Sprintf("Subgoal 1: State the Jordan form eigenspace theorem: the geometric multiplicity of an eigenvalue equals the number of Jordan blocks associated with that eigenvalue.\n"+
-				"Subgoal 2: Count the Jordan blocks for \\(\\lambda = %d\\): one \\(2 \\times 2\\) block and one \\(1 \\times 1\\) block, giving 2 blocks.\n"+
-				"Subgoal 3: Conclude that the geometric multiplicity is %s.",
-				eig, ansStr)
-			return generator.Problem{
-				Question:    q,
-				Answer:      ansStr,
-				Explanation: ex,
-				Facts: map[string]string{
-					"eig":    strconv.Itoa(eig),
-					"answer": ansStr,
-				},
-			}
-		case 1:
 			// Trace of Jordan matrix
-			l1 := smallInt(1, 4+tier)
-			l2 := smallInt(1, 4+tier)
-			l3 := smallInt(1, 4+tier)
+			l1 := smallInt(2, 4+tier)
+			l2 := smallInt(3, 5+tier)
+			l3 := smallInt(4, 6+tier)
 			tr := l1 + l2 + l3
 			ansStr := strconv.Itoa(tr)
 			mat := [][]int{
@@ -2097,7 +2221,7 @@ func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 			}
 			matStr := formatMatrix3(mat)
 			q := fmt.Sprintf("Compute the trace \\(\\operatorname{tr}(J)\\) of the upper-triangular Jordan form matrix \\(J = %s\\).", matStr)
-			if containsWord(q, ansStr) {
+			if strings.Contains(q, ansStr) || strings.Contains(q, strings.TrimPrefix(ansStr, "-")) {
 				continue
 			}
 			ex := fmt.Sprintf("Subgoal 1: State the trace property: \\(\\operatorname{tr}(J)\\) is the sum of all diagonal entries.\n"+
@@ -2115,11 +2239,11 @@ func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 					"answer": ansStr,
 				},
 			}
-		case 2:
+		case 1:
 			// Determinant of Jordan matrix
 			l1 := smallInt(2, 3+tier)
 			l2 := smallInt(2, 3+tier)
-			l3 := smallInt(1, 3+tier)
+			l3 := smallInt(3, 4+tier)
 			detA := l1 * l2 * l3
 			ansStr := strconv.Itoa(detA)
 			mat := [][]int{
@@ -2129,7 +2253,7 @@ func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 			}
 			matStr := formatMatrix3(mat)
 			q := fmt.Sprintf("Find the determinant \\(\\det(J)\\) of the upper-triangular matrix in Jordan canonical form \\(J = %s\\).", matStr)
-			if containsWord(q, ansStr) {
+			if strings.Contains(q, ansStr) || strings.Contains(q, strings.TrimPrefix(ansStr, "-")) {
 				continue
 			}
 			ex := fmt.Sprintf("Subgoal 1: State the triangular determinant property: \\(\\det(J)\\) is the product of all diagonal entries.\n"+
@@ -2147,59 +2271,29 @@ func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 					"answer": ansStr,
 				},
 			}
-		case 3:
-			// Dimension of eigenspace for single 3x3 Jordan block
-			eig := smallInt(2, 6+tier)
-			mat := [][]int{
-				{eig, 1, 0},
-				{0, eig, 1},
-				{0, 0, eig},
-			}
-			matStr := formatMatrix3(mat)
-			ansStr := "1"
-			q := fmt.Sprintf("What is the dimension of the eigenspace \\(\\dim \\ker(J - %d I)\\) for the single Jordan block \\(J = %s\\)?", eig, matStr)
-			if containsWord(q, ansStr) {
-				continue
-			}
-			ex := fmt.Sprintf("Subgoal 1: State the Jordan block nullity property: a single Jordan block \\(J_k(\\lambda)\\) has nullity \\(\\dim \\ker(J - \\lambda I) = 1\\).\n"+
-				"Subgoal 2: Compute \\(J - %d I\\), which has rank 2 and nullity 3 - 2 = 1.\n"+
-				"Subgoal 3: Conclude that the eigenspace dimension is 1.",
-				eig)
-			return generator.Problem{
-				Question:    q,
-				Answer:      ansStr,
-				Explanation: ex,
-				Facts: map[string]string{
-					"eig":    strconv.Itoa(eig),
-					"answer": ansStr,
-				},
-			}
 		default:
-			// Minimal polynomial degree / largest block
+			// Defect in Jordan chain basis
+			alg := smallInt(4, 6+tier*2)
+			geom := smallInt(1, 2)
+			defect := alg - geom
 			eig := smallInt(2, 5+tier)
-			b1 := 2
-			b2 := 1
-			ansStr := "2"
-			mat := [][]int{
-				{eig, 1, 0},
-				{0, eig, 0},
-				{0, 0, eig},
-			}
-			matStr := formatMatrix3(mat)
-			q := fmt.Sprintf("For the matrix \\(J = %s\\), what is the degree of \\((\\lambda - %d)\\) in the minimal polynomial \\(m(\\lambda)\\)?", matStr, eig)
-			if containsWord(q, ansStr) {
+			ansStr := strconv.Itoa(defect)
+			q := fmt.Sprintf("An eigenspace for eigenvalue \\(\\lambda = %d\\) has algebraic multiplicity %d and geometric multiplicity %d. How many generalized eigenvectors that are not ordinary eigenvectors are needed to complete a Jordan chain basis for this eigenspace?", eig, alg, geom)
+			if defect == eig || defect == alg || defect == geom || strings.Contains(q, ansStr) || strings.Contains(q, strings.TrimPrefix(ansStr, "-")) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the minimal polynomial Jordan theorem: the exponent of \\((\\lambda - \\lambda_i)\\) in \\(m(\\lambda)\\) equals the size of the largest Jordan block for that eigenvalue.\n"+
-				"Subgoal 2: Identify block sizes for \\(\\lambda = %d\\): sizes %d and %d. The maximum size is %s.\n"+
-				"Subgoal 3: Conclude that the minimal polynomial factor has degree %s.",
-				eig, b1, b2, ansStr, ansStr)
+			ex := fmt.Sprintf("Subgoal 1: State the defect formula for generalized eigenvectors: \\(\\text{defect} = \\text{algebraic multiplicity} - \\text{geometric multiplicity}\\).\n"+
+				"Subgoal 2: Substitute multiplicities: %d - %d.\n"+
+				"Subgoal 3: Evaluate the difference to find %d non-ordinary generalized eigenvector(s) needed.",
+				alg, geom, defect)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
 				Explanation: ex,
 				Facts: map[string]string{
 					"eig":    strconv.Itoa(eig),
+					"alg":    strconv.Itoa(alg),
+					"geom":   strconv.Itoa(geom),
 					"answer": ansStr,
 				},
 			}
