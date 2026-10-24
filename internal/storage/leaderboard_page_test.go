@@ -158,6 +158,18 @@ func TestLeaderboardPage_TiesAreDeterministic(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		ids = append(ids, seedBoardStudent(t, store, fmt.Sprintf("Tie %d", i), "", 20))
 	}
+	// Pin created_at to an identical value across all candidates so the tie reaches id.
+	sameCreated := time.Now().UTC().Format(time.RFC3339)
+	switch s := store.(type) {
+	case *SQLiteStore:
+		if _, err := s.db.Exec("UPDATE students SET created_at = ?", sameCreated); err != nil {
+			t.Fatalf("pin created_at: %v", err)
+		}
+	case *PostgresStore:
+		if _, err := s.db.Exec("UPDATE students SET created_at = $1", sameCreated); err != nil {
+			t.Fatalf("pin created_at: %v", err)
+		}
+	}
 	week := time.Now().UTC().Add(-24 * time.Hour)
 
 	first, _, err := store.LeaderboardPage("weekly", week, 25, 0)
