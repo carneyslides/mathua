@@ -234,14 +234,20 @@ func replay(dag *concepts.DAG, repo storage.Repository, studentID, conceptID str
 		}
 		status = next
 
-		q := mastery.SM2Quality(correct[i] && p.Streak >= reqStreak, p.AvgResponseTime/thresh)
+		isReview := status == mastery.StatusMastered || status == "DECAYING"
+		streakMet := correct[i] && p.Streak >= reqStreak
+		if isReview || next == mastery.StatusMastered {
+			streakMet = correct[i]
+		}
+		q := mastery.SM2Quality(streakMet, p.AvgResponseTime/thresh)
 		sm2 = scheduler.ComputeSM2WithSpeed(sm2, q, speed)
 
 		// The decay clock starts at the last attempt that advanced a tier, or
-		// that met the streak and time threshold. Tracking the timestamp here is
-		// what keeps LastReviewed honest: the final attempt may have advanced
-		// nothing, and then it is not the review date.
-		if advanced || (p.Streak >= reqStreak && p.AvgResponseTime <= thresh) {
+		// that was a successful review of a mastered concept, or that met the
+		// streak and time threshold. Tracking the timestamp here is what keeps
+		// LastReviewed honest.
+		isReviewSuccess := isReview && correct[i]
+		if advanced || isReviewSuccess || (p.Streak >= reqStreak && p.AvgResponseTime <= thresh) {
 			ts := a.Timestamp
 			lastReviewAt = &ts
 		}

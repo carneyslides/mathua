@@ -99,14 +99,14 @@ func compareLists(expected, answer string) (Result, bool) {
 	eVals := make([]float64, 0, len(e))
 	aVals := make([]float64, 0, len(a))
 	for _, part := range e {
-		v, _, ok := parseNumeric(part)
+		v, _, ok := parseNumber(part)
 		if !ok {
 			return Result{}, false
 		}
 		eVals = append(eVals, v)
 	}
 	for _, part := range a {
-		v, _, ok := parseNumeric(part)
+		v, _, ok := parseNumber(part)
 		if !ok {
 			return Result{}, false
 		}
@@ -170,7 +170,8 @@ func splitBeforeMinusAfterDot(s string) []string {
 func stripVariablePrefix(s string) string {
 	if i := strings.IndexByte(s, '='); i > 0 {
 		left := strings.TrimSpace(s[:i])
-		if len(left) == 1 && ((left[0] >= 'a' && left[0] <= 'z') || (left[0] >= 'A' && left[0] <= 'Z')) {
+		left = strings.TrimPrefix(left, `\`)
+		if len(left) >= 1 && ((left[0] >= 'a' && left[0] <= 'z') || (left[0] >= 'A' && left[0] <= 'Z')) {
 			return strings.TrimSpace(s[i+1:])
 		}
 	}

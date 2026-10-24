@@ -90,6 +90,29 @@ func TestPickQuizConcepts_FallbackOnNoWeak(t *testing.T) {
 	}
 }
 
+func TestPickQuizConcepts_DrawsFromKnownConceptsWhenNoWeakness(t *testing.T) {
+	d, err := concepts.Build([]concepts.Concept{
+		{ID: "arith.1", Label: "Counting", Domain: "arithmetic", Subdomain: "count", MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10}},
+		{ID: "arith.2", Label: "Addition", Domain: "arithmetic", Subdomain: "add", MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10}},
+		{ID: "calc.1", Label: "Derivative", Domain: "calculus", Subdomain: "diff", MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10}},
+		{ID: "calc.2", Label: "Integral", Domain: "calculus", Subdomain: "int", MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10}},
+	})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	// Advanced student has 0 weakness on calculus concepts, 0 arithmetic concepts practiced
+	weakness := map[string]float64{"calc.1": 0.0, "calc.2": 0.0}
+	picked := PickQuizConcepts(d, weakness)
+	if len(picked) != 2 {
+		t.Fatalf("expected 2 picked, got %d", len(picked))
+	}
+	for _, c := range picked {
+		if c.Domain != "calculus" {
+			t.Errorf("expected calculus concept, got %s (%s)", c.ID, c.Domain)
+		}
+	}
+}
+
 func TestEngine_RecordAnswerAdvances(t *testing.T) {
 	d := miniDAG(t)
 	r := generator.NewRegistry()

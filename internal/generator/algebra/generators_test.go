@@ -347,3 +347,32 @@ func TestACMethodTrinomialMultipliesOut(t *testing.T) {
 		t.Fatalf("only %d of 300 draws had a leading coefficient above 1", wideLead)
 	}
 }
+
+func TestRootsAcceptReversedAndVariablePrefix(t *testing.T) {
+	r := grader.NewRouter()
+	gens := map[string]generator.Generator{
+		"alg.eq.absolute_value": &eqAbsValGen{},
+		"alg.eq.polynomial":     &eqPolyGen{},
+		"alg.quad.incomplete":   &quadIncompleteGen{},
+		"alg.poly.roots":        &polyRootsGen{},
+	}
+	for id, gen := range gens {
+		for i := 0; i < 20; i++ {
+			p := gen.Generate(generator.GeneratorContext{Seed: int64(100 + i)})
+			parts := strings.Split(p.Answer, ",")
+			if len(parts) != 2 {
+				continue
+			}
+			// Swapped order must grade as correct
+			swapped := parts[1] + "," + parts[0]
+			if res := r.Grade(grader.GradingNumeric, p.Answer, swapped); !res.Correct {
+				t.Fatalf("%s: expected swapped %q to match %q: %v", id, swapped, p.Answer, res.Feedback)
+			}
+			// With variable prefix "x = " must grade as correct
+			withPrefix := "x = " + parts[1] + ", x = " + parts[0]
+			if res := r.Grade(grader.GradingNumeric, p.Answer, withPrefix); !res.Correct {
+				t.Fatalf("%s: expected prefix %q to match %q: %v", id, withPrefix, p.Answer, res.Feedback)
+			}
+		}
+	}
+}

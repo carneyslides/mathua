@@ -283,7 +283,7 @@
     "label": "Basic trigonometric equations",
     "domain": "trigonometry",
     "subdomain": "trigonometry.identities",
-    "grading_type": "tuple",
+    "grading_type": "numeric",
     "prerequisites": [
       "trig.basics.sin_cos_def"
     ],

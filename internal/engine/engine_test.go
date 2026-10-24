@@ -2723,3 +2723,63 @@ func TestEngine_AntiGuessing_SlowMissBreaksTheRun(t *testing.T) {
 		t.Errorf("expected %d XP for two consecutive rapid misses, got %d", xppolicy.RushPenalty, res.XP)
 	}
 }
+
+func TestPickQuizConcepts_AdvancedStudentPicksMasteredTopics(t *testing.T) {
+	d, err := concepts.Build([]concepts.Concept{
+		{
+			ID: "arith.1", Label: "Counting", Domain: "arithmetic", Subdomain: "count",
+			GradingType: "numeric", Prerequisites: []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 60},
+		},
+		{
+			ID: "arith.2", Label: "Addition", Domain: "arithmetic", Subdomain: "add",
+			GradingType: "numeric", Prerequisites: []string{"arith.1"},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 60},
+		},
+		{
+			ID: "calc.1", Label: "Derivative", Domain: "calculus", Subdomain: "diff",
+			GradingType: "numeric", Prerequisites: []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 60},
+		},
+		{
+			ID: "calc.2", Label: "Integral", Domain: "calculus", Subdomain: "int",
+			GradingType: "numeric", Prerequisites: []string{"calc.1"},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 60},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build DAG: %v", err)
+	}
+	store, err := storage.NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+	e := New(store, d, generator.NewRegistry(), nil, nil)
+
+	st, _ := e.CreateStudent("calc_student")
+
+	// Set progress for two calculus concepts as MASTERED with 0 weakness
+	e.repo.UpsertProgress(&storage.ConceptProgress{
+		StudentID:     st.ID,
+		ConceptID:     "calc.1",
+		Status:        string(mastery.StatusMastered),
+		WeaknessScore: 0.0,
+	})
+	e.repo.UpsertProgress(&storage.ConceptProgress{
+		StudentID:     st.ID,
+		ConceptID:     "calc.2",
+		Status:        string(mastery.StatusMastered),
+		WeaknessScore: 0.0,
+	})
+
+	picked := e.PickQuizConcepts(st.ID)
+	if len(picked) != 2 {
+		t.Fatalf("expected 2 quiz concepts to be picked, got %d", len(picked))
+	}
+	for _, c := range picked {
+		if c.Domain != "calculus" {
+			t.Errorf("expected calculus concept, got kindergarten/other: %s", c.ID)
+		}
+	}
+}

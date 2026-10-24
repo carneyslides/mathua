@@ -356,34 +356,159 @@ func (e *Engine) StartWithPathFocus(path []*concepts.Concept, focusIDs []string)
 	return s
 }
 
-// compressedCover returns the smallest covering set: roots + evenly spaced
-// concepts across the topo order at coverSize granularity.
+// compressedCover returns a topological path-covering set: roots, terminal targets
+// and intermediate nodes stratified by depth and subdomain so parallel curriculum tracks
+// are all represented.
 func (e *Engine) compressedCover(s *Session) []*concepts.Concept {
-	if len(s.order) <= coverSize {
-		return s.order
+	return graphCover(s.order, coverSize)
+}
+
+func graphCover(order []*concepts.Concept, targetSize int) []*concepts.Concept {
+	if len(order) <= targetSize {
+		return order
 	}
-	step := int(math.Ceil(float64(len(s.order)) / float64(coverSize)))
-	// Root concepts (no prerequisites within the path) are always covered.
-	isRoot := func(c *concepts.Concept) bool {
-		return len(c.Prerequisites) == 0
+
+	inOrder := make(map[string]*concepts.Concept, len(order))
+	for _, c := range order {
+		inOrder[c.ID] = c
 	}
+
+	inDegree := make(map[string]int, len(order))
+	children := make(map[string][]string, len(order))
+	for _, c := range order {
+		for _, p := range c.Prerequisites {
+			if _, ok := inOrder[p]; ok {
+				inDegree[c.ID]++
+				children[p] = append(children[p], c.ID)
+			}
+		}
+	}
+
+	// Compute longest path depth from roots
+	depth := make(map[string]int, len(order))
+	maxDepth := 0
+	for _, c := range order {
+		d := depth[c.ID]
+		if d > maxDepth {
+			maxDepth = d
+		}
+		for _, ch := range children[c.ID] {
+			if depth[ch] < d+1 {
+				depth[ch] = d + 1
+			}
+		}
+	}
+
+	var roots []*concepts.Concept
+	var leaves []*concepts.Concept
+	for _, c := range order {
+		if inDegree[c.ID] == 0 {
+			roots = append(roots, c)
+		}
+		if len(children[c.ID]) == 0 {
+			leaves = append(leaves, c)
+		}
+	}
+
+	selected := make(map[string]bool, targetSize)
 	var out []*concepts.Concept
-	seen := make(map[string]bool)
 	add := func(c *concepts.Concept) {
-		if !seen[c.ID] {
-			seen[c.ID] = true
+		if c != nil && !selected[c.ID] {
+			selected[c.ID] = true
 			out = append(out, c)
 		}
 	}
-	for i := 0; i < len(s.order); i += step {
-		add(s.order[i])
+
+	// 1. Add all roots (foundational prerequisites)
+	for _, r := range roots {
+		add(r)
 	}
-	for _, c := range s.order {
-		if isRoot(c) {
-			add(c)
+
+	// 2. Add all leaves (terminal assessment targets)
+	for _, l := range leaves {
+		add(l)
+	}
+
+	// 3. For parallel tracks and chains, sample intermediate nodes by depth tier and subdomain
+	if maxDepth > 1 && len(out) < targetSize {
+		tiers := 4
+		for tier := 1; tier < tiers; tier++ {
+			targetD := (maxDepth * tier) / tiers
+			bySub := make(map[string]*concepts.Concept)
+			minDist := make(map[string]int)
+			for _, c := range order {
+				if selected[c.ID] {
+					continue
+				}
+				dist := depth[c.ID] - targetD
+				if dist < 0 {
+					dist = -dist
+				}
+				sub := c.Subdomain
+				if sub == "" {
+					sub = c.Domain
+				}
+				if cur, ok := minDist[sub]; !ok || dist < cur {
+					minDist[sub] = dist
+					bySub[sub] = c
+				}
+			}
+			for _, c := range bySub {
+				if len(out) >= targetSize {
+					break
+				}
+				add(c)
+			}
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return s.index(out[i].ID) < s.index(out[j].ID) })
+
+	// 4. Fill to targetSize if short
+	if len(out) < targetSize {
+		step := int(math.Ceil(float64(len(order)) / float64(targetSize)))
+		if step < 1 {
+			step = 1
+		}
+		for i := 0; i < len(order); i += step {
+			add(order[i])
+			if len(out) >= targetSize {
+				break
+			}
+		}
+	}
+
+	// 5. If roots + leaves exceed targetSize, retain roots and uniform samples
+	if len(out) > targetSize {
+		var trimmed []*concepts.Concept
+		for _, r := range roots {
+			trimmed = append(trimmed, r)
+		}
+		nonRoots := make([]*concepts.Concept, 0, len(out)-len(trimmed))
+		for _, c := range out {
+			if inDegree[c.ID] > 0 {
+				nonRoots = append(nonRoots, c)
+			}
+		}
+		rem := targetSize - len(trimmed)
+		if rem > 0 && len(nonRoots) > 0 {
+			stride := float64(len(nonRoots)) / float64(rem)
+			for i := 0; i < rem; i++ {
+				idx := int(float64(i) * stride)
+				if idx >= len(nonRoots) {
+					idx = len(nonRoots) - 1
+				}
+				trimmed = append(trimmed, nonRoots[idx])
+			}
+		}
+		out = trimmed
+	}
+
+	indexMap := make(map[string]int, len(order))
+	for i, c := range order {
+		indexMap[c.ID] = i
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return indexMap[out[i].ID] < indexMap[out[j].ID]
+	})
 	return out
 }
 
@@ -938,27 +1063,7 @@ func (s *Session) shouldStop() bool {
 // compressedCoverSafe mirrors compressedCover without an Engine receiver
 // (session-only helper for stop conditions).
 func (s *Session) compressedCoverSafe() []*concepts.Concept {
-	if len(s.order) <= coverSize {
-		return s.order
-	}
-	step := int(math.Ceil(float64(len(s.order)) / float64(coverSize)))
-	var out []*concepts.Concept
-	seen := make(map[string]bool)
-	add := func(c *concepts.Concept) {
-		if !seen[c.ID] {
-			seen[c.ID] = true
-			out = append(out, c)
-		}
-	}
-	for i := 0; i < len(s.order); i += step {
-		add(s.order[i])
-	}
-	for _, c := range s.order {
-		if len(c.Prerequisites) == 0 {
-			add(c)
-		}
-	}
-	return out
+	return graphCover(s.order, coverSize)
 }
 
 func (e *Engine) IsComplete(s *Session) bool {

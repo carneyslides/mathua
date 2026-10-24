@@ -41,15 +41,21 @@ COMMON_SYMBOLS = {
 random.seed(42)
 
 
-def preprocess(s: str) -> str:
+def preprocess(s: str, is_integral: bool = False) -> str:
     s = s.strip()
 
     # Strip variable assignments: "y = ..." -> "..."
     s = re.sub(r"^[a-zA-Z_]\w*\s*=\s*", "", s)
 
-    # Strip trailing "+ C", "- C", "+C", "-C" (constant of integration)
-    s = re.sub(r"\s*[+-]\s*[Cc]\s*$", "", s)
+    # Strip trailing "+ C", "- C", "+C", "-C" (constant of integration).
+    # Capital 'C' / 'C_\d+' is the standard integration constant notation.
+    # Lowercase 'c' is only stripped when is_integral is true, preventing
+    # silent stripping of regular algebraic variables in formulas like "a + b + c".
+    s = re.sub(r"\s*[+-]\s*C\s*$", "", s)
     s = re.sub(r"\s*[+-]\s*C_\d+\s*$", "", s)
+    if is_integral:
+        s = re.sub(r"\s*[+-]\s*c\s*$", "", s)
+        s = re.sub(r"\s*[+-]\s*c_\d+\s*$", "", s)
 
     # Normalize Euler's number: e^x -> exp(x), xe^x -> x*exp(x)
     # Only skip if 'e' is part of a known function name (exp, log, etc.)
@@ -204,8 +210,9 @@ def grade(expected: str, answer: str) -> tuple[bool, str]:
     if not set(expected).issubset(ALLOWED_CHARS) or not set(answer).issubset(ALLOWED_CHARS):
         return False, "Input contains disallowed characters"
 
-    e = preprocess(expected)
-    a = preprocess(answer)
+    is_integral = bool(re.search(r"\s*[+-]\s*C(_\d+)?\s*$", expected))
+    e = preprocess(expected, is_integral=is_integral)
+    a = preprocess(answer, is_integral=is_integral)
 
     ee = _try_parse(e)
     ea = _try_parse(a)

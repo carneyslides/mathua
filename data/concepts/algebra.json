@@ -677,7 +677,7 @@
     "label": "Equations involving absolute value",
     "domain": "algebra",
     "subdomain": "algebra.equations",
-    "grading_type": "tuple",
+    "grading_type": "numeric",
     "prerequisites": [
       "alg.eq.multi_step"
     ],
@@ -747,7 +747,7 @@
     "label": "Polynomial equations (higher degree)",
     "domain": "algebra",
     "subdomain": "algebra.equations",
-    "grading_type": "tuple",
+    "grading_type": "numeric",
     "prerequisites": [
       "alg.quad.formula"
     ],
@@ -820,7 +820,7 @@
     "label": "Incomplete quadratic equations",
     "domain": "algebra",
     "subdomain": "algebra.quadratics",
-    "grading_type": "tuple",
+    "grading_type": "numeric",
     "prerequisites": [
       "alg.quad.solve_factor"
     ],
@@ -1132,7 +1132,7 @@
     "label": "Roots of a polynomial",
     "domain": "algebra",
     "subdomain": "algebra.polynomials",
-    "grading_type": "tuple",
+    "grading_type": "numeric",
     "prerequisites": [
       "alg.poly.concept",
       "alg.quad.formula"

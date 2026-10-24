@@ -100,15 +100,27 @@ func TestSympyGrade_ExpressionAndPolynomialBothRoute(t *testing.T) {
 	}
 }
 
-func TestSympyGrade_MultipleRequests(t *testing.T) {
+func TestSympyGrade_IntegrationConstantVsAlgebraicC(t *testing.T) {
 	if !sympyAvailable(t) {
 		t.Skip("SymPy not available")
 	}
 	r := NewRouter()
-	for i := 0; i < 5; i++ {
-		res := r.Grade(GradingExpression, "x^2+2x+1", "(x+1)^2")
-		if !res.Correct {
-			t.Errorf("request %d: expected correct, got %q", i, res.Feedback)
-		}
+
+	// 1. In algebra, 'c' is a regular variable: omitting it must NOT be marked correct
+	if res := r.Grade(GradingExpression, "a + b + c", "a + b"); res.Correct {
+		t.Errorf("Grade(a + b + c, a + b) = correct, want incorrect (algebraic 'c' stripped)")
+	}
+
+	// 2. Equivalent algebraic order with 'c' must be correct
+	if res := r.Grade(GradingExpression, "a + b + c", "a + c + b"); !res.Correct {
+		t.Errorf("Grade(a + b + c, a + c + b) = incorrect: %q", res.Feedback)
+	}
+
+	// 3. In calculus integration, '+ C' is a constant of integration: omitting it or writing '+ c' matches
+	if res := r.Grade(GradingExpression, "x^2 + C", "x^2"); !res.Correct {
+		t.Errorf("Grade(x^2 + C, x^2) = incorrect: %q", res.Feedback)
+	}
+	if res := r.Grade(GradingExpression, "x^2 + C", "x^2 + c"); !res.Correct {
+		t.Errorf("Grade(x^2 + C, x^2 + c) = incorrect: %q", res.Feedback)
 	}
 }

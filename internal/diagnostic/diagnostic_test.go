@@ -134,6 +134,62 @@ func TestEngine_CompressedCover(t *testing.T) {
 	}
 }
 
+func TestEngine_CompressedCover_CoversParallelTracks(t *testing.T) {
+	var raw []concepts.Concept
+	// 20 algebra concepts in a chain
+	for i := 0; i < 20; i++ {
+		c := concepts.Concept{
+			ID:               fmt.Sprintf("alg.%d", i),
+			Label:            fmt.Sprintf("Alg %d", i),
+			Domain:           "algebra",
+			Subdomain:        "alg_sub",
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
+		}
+		if i > 0 {
+			c.Prerequisites = []string{fmt.Sprintf("alg.%d", i-1)}
+		}
+		raw = append(raw, c)
+	}
+	// 20 geometry concepts in a chain (parallel track)
+	for i := 0; i < 20; i++ {
+		c := concepts.Concept{
+			ID:               fmt.Sprintf("geo.%d", i),
+			Label:            fmt.Sprintf("Geo %d", i),
+			Domain:           "geometry",
+			Subdomain:        "geo_sub",
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
+		}
+		if i > 0 {
+			c.Prerequisites = []string{fmt.Sprintf("geo.%d", i-1)}
+		}
+		raw = append(raw, c)
+	}
+	d, err := concepts.Build(raw)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	e := NewEngine(d, mustRegistry(t))
+	s := e.Start()
+	cover := e.compressedCover(s)
+
+	algCount := 0
+	geoCount := 0
+	for _, c := range cover {
+		if c.Domain == "algebra" {
+			algCount++
+		}
+		if c.Domain == "geometry" {
+			geoCount++
+		}
+	}
+	if algCount < 5 {
+		t.Errorf("expected at least 5 algebra concepts in cover, got %d", algCount)
+	}
+	if geoCount < 5 {
+		t.Errorf("expected at least 5 geometry concepts in cover, got %d", geoCount)
+	}
+}
+
 func TestEngine_InfoGain_UncertaintyFirst(t *testing.T) {
 	e := NewEngine(testDAG(t), mustRegistry(t))
 	s := e.Start()

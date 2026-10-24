@@ -179,8 +179,19 @@ func (p *sympyPool) Grade(ctx context.Context, expected, answer string) Result {
 			p.idleWorkers <- w
 			return res
 		}
-		// Worker crashed or timed out: terminate it and replace with fresh worker
+		// Worker crashed or timed out: terminate it and replace with fresh worker.
+		// Retry once on the replacement worker so grading never penalizes an
+		// infrastructure fault (ADR-006).
 		w.close()
+		rep, err := newSympyWorker(p.path)
+		if err == nil {
+			retryRes, retryOk := p.execOnWorker(rep, expected, answer)
+			p.idleWorkers <- rep
+			if retryOk {
+				return retryRes
+			}
+			return retryRes
+		}
 		go p.spawnReplacement()
 		return res
 	case <-ctx.Done():

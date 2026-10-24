@@ -178,7 +178,7 @@
     "label": "Compute eigenvalues of a 2x2 matrix",
     "domain": "linear_algebra",
     "subdomain": "linear_algebra.eigenvalues",
-    "grading_type": "tuple",
+    "grading_type": "numeric",
     "prerequisites": [
       "linalg.eigen.concept"
     ],

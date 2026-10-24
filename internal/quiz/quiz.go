@@ -113,7 +113,11 @@ func (e *Engine) SkipQuestion(s *Session) {
 }
 
 // PickQuizConcepts selects diverse recent weak concepts for quiz.
-// Stub: sorts by weakness desc, picks top 5 distinct subdomains if possible.
+// It prioritizes concepts where the student showed weakness (weakness > 0.3).
+// If no concept exceeds the weakness threshold, it draws from concepts present
+// in the weakness map (i.e. concepts the student has encountered), rather than
+// blindly falling back to the start of the curriculum. Only when the weakness map
+// is empty does it fall back to the initial frontier.
 func PickQuizConcepts(dag *concepts.DAG, weakness map[string]float64) []*concepts.Concept {
 	type scored struct {
 		c *concepts.Concept
@@ -124,6 +128,13 @@ func PickQuizConcepts(dag *concepts.DAG, weakness map[string]float64) []*concept
 		w := weakness[c.ID]
 		if w > 0.3 {
 			list = append(list, scored{c, w})
+		}
+	}
+	if len(list) == 0 && len(weakness) > 0 {
+		for _, c := range dag.Order() {
+			if w, ok := weakness[c.ID]; ok {
+				list = append(list, scored{c, w})
+			}
 		}
 	}
 	if len(list) == 0 {

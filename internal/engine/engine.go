@@ -22,6 +22,7 @@ import (
 	"github.com/chuma-beep/mathua/internal/lessons"
 	"github.com/chuma-beep/mathua/internal/mastery"
 	"github.com/chuma-beep/mathua/internal/planning"
+	"github.com/chuma-beep/mathua/internal/quiz"
 	"github.com/chuma-beep/mathua/internal/repetition"
 	"github.com/chuma-beep/mathua/internal/scheduler"
 	"github.com/chuma-beep/mathua/internal/scoring"
@@ -2672,7 +2673,6 @@ func (e *Engine) weaknessMapFromProgress(progress map[string]*storage.ConceptPro
 	for _, c := range e.dag.Order() {
 		p, ok := progress[c.ID]
 		if !ok {
-			result[c.ID] = 0.5
 			continue
 		}
 		if p.Status == string(mastery.StatusMastered) {
@@ -2682,6 +2682,22 @@ func (e *Engine) weaknessMapFromProgress(progress map[string]*storage.ConceptPro
 		result[c.ID] = p.WeaknessScore
 	}
 	return result
+}
+
+// PickQuizConcepts selects up to 5 concepts for an adaptive quiz.
+// It prioritizes concepts the student has struggled with (WeaknessScore > 0.3),
+// decaying or unreviewed mastered concepts, and in-progress concepts across diverse subdomains.
+// It falls back to initial DAG concepts only for brand new students with zero history.
+func (e *Engine) PickQuizConcepts(studentID string) []*concepts.Concept {
+	if studentID == "" {
+		return quiz.PickQuizConcepts(e.dag, nil)
+	}
+	progress, err := e.repo.GetAllProgress(studentID)
+	if err != nil || len(progress) == 0 {
+		return quiz.PickQuizConcepts(e.dag, nil)
+	}
+	weak := e.weaknessMapFromProgress(progress)
+	return quiz.PickQuizConcepts(e.dag, weak)
 }
 
 // CorpusSize reports how many concepts and domains this engine was loaded with.
@@ -3139,8 +3155,16 @@ func (e *Engine) applyGradedAttempt(progress *storage.ConceptProgress, o gradedA
 	}
 
 	// SM-2 update, PR 1.2 student model: scale interval by per-topic learningSpeed
+	// On a review of a mastered concept, each review is an individual spaced trial;
+	// streakMet is determined by correctness and response speed on the trial, not by
+	// re-accumulating the full learning streak.
+	isReview := mastery.Status(oldStatus) == mastery.StatusMastered || oldStatus == "DECAYING"
+	streakMet := o.correct && progress.Streak >= o.requiredStreak
+	if isReview || newStatus == mastery.StatusMastered {
+		streakMet = o.correct
+	}
 	quality := mastery.SM2Quality(
-		o.correct && progress.Streak >= o.requiredStreak,
+		streakMet,
 		progress.AvgResponseTime/o.timeThreshold,
 	)
 	prevSM2 := scheduler.SM2{
@@ -3257,9 +3281,10 @@ func (e *Engine) applyGradedAttempt(progress *storage.ConceptProgress, o gradedA
 	// depending on which rule fired first. Seen in the engine tests as the ladder passing
 	// through DECAYING on its way up.
 	//
-	// A tier attainment is exactly what the decay clock should measure from: the last time
-	// the learner demonstrated this concept.
-	if advanced || (progress.Streak >= o.requiredStreak && progress.AvgResponseTime <= o.timeThreshold) {
+	// A tier attainment or successful review of a mastered concept is exactly what the decay
+	// clock should measure from: the last time the learner demonstrated this concept.
+	isReviewSuccess := isReview && o.correct
+	if advanced || isReviewSuccess || (progress.Streak >= o.requiredStreak && progress.AvgResponseTime <= o.timeThreshold) {
 		now := nowUTC()
 		progress.LastReviewed = &now
 		progress.FSRSLastReview = &now

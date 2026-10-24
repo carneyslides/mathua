@@ -16,6 +16,10 @@ func TestNumericListsIgnoreOrder(t *testing.T) {
 		{"-3,4", "-3, 4"},
 		{"6;8", "8,6"},
 		{"[4,-3]", "( -3 , 4 )"},
+		{"2,-2", "-2,2"},
+		{"2,-2", "x = -2, x = 2"},
+		{"1,2,3", "3,1,2"},
+		{"1/2,-1/2", "-1/2,1/2"},
 	} {
 		if res := r.Grade(GradingNumeric, tc.expected, tc.answer); !res.Correct {
 			t.Errorf("expected %q and %q to match, got %q", tc.expected, tc.answer, res.Feedback)

@@ -3257,10 +3257,10 @@ func (s *Server) handleQuizSession(w http.ResponseWriter, r *http.Request) {
 	// Build quiz picking diverse recent weak concepts; fallback to DAG order
 	var quizConcepts []*concepts.Concept
 	if studentID != "" {
-		weak := s.eng.WeaknessMap(studentID)
-		if weak != nil {
-			quizConcepts = quiz.PickQuizConcepts(s.eng.GetDAG(), weak)
-		}
+		quizConcepts = s.eng.PickQuizConcepts(studentID)
+	}
+	if len(quizConcepts) == 0 {
+		quizConcepts = quiz.PickQuizConcepts(s.eng.GetDAG(), nil)
 	}
 	qEng := quiz.NewEngine(s.eng.GetDAG(), s.eng.GetGeneratorRegistry())
 	sess := qEng.Start(quizConcepts)
