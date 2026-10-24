@@ -590,12 +590,53 @@ type openSetGen struct{}
 
 func (g *openSetGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	type entry struct{ set, class, why string }
-	entries := []entry{
-		{"{z : |z| < 3}", "open, not closed", "the boundary |z| = 3 is excluded, and every point inside has a small disk that stays inside"},
-		{"{z : |z| \u2264 3}", "closed, not open", "the boundary circle is included as well as the interior, and an interior point can never move in every direction and stay inside"},
-		{"{z : Re z > 0}", "open, not closed", "the boundary line Re z = 0 is excluded, and each point has room to its left and right"},
-		{"{z : Re z \u2265 0}", "closed, not open", "the boundary line is included, and a point on it cannot move left at all"},
+
+	r := 1 + rand.Intn(6)
+	c := 1 + rand.Intn(5)
+	c2 := c + 1 + rand.Intn(4)
+
+	var entries []entry
+	switch rand.Intn(5) {
+	case 0:
+		// Discs (open vs closed)
+		entries = []entry{
+			{fmt.Sprintf("{z : |z| < %d}", r), "open, not closed", fmt.Sprintf("the boundary circle |z| = %d is excluded, so every interior point has an open neighborhood staying inside", r)},
+			{fmt.Sprintf("{z : |z| \u2264 %d}", r), "closed, not open", fmt.Sprintf("the boundary circle |z| = %d is included, so boundary points have no open neighborhood staying inside", r)},
+			{fmt.Sprintf("{z : |z - %d| < %d}", c, r), "open, not closed", fmt.Sprintf("the boundary circle centered at %d is excluded", c)},
+			{fmt.Sprintf("{z : |z - %di| \u2264 %d}", c, r), "closed, not open", fmt.Sprintf("the boundary circle centered at %di is included", c)},
+		}
+	case 1:
+		// Half-planes (open vs closed)
+		entries = []entry{
+			{fmt.Sprintf("{z : Re z > %d}", c), "open, not closed", fmt.Sprintf("the vertical boundary line Re z = %d is excluded", c)},
+			{fmt.Sprintf("{z : Re z \u2265 %d}", c), "closed, not open", fmt.Sprintf("the vertical boundary line Re z = %d is included", c)},
+			{fmt.Sprintf("{z : Im z < %d}", c), "open, not closed", fmt.Sprintf("the horizontal boundary line Im z = %d is excluded", c)},
+			{fmt.Sprintf("{z : Im z \u2264 %d}", c), "closed, not open", fmt.Sprintf("the horizontal boundary line Im z = %d is included", c)},
+		}
+	case 2:
+		// Strips and Annuli
+		entries = []entry{
+			{fmt.Sprintf("{z : %d < Re z < %d}", c, c2), "open, not closed", "both vertical boundary lines are excluded"},
+			{fmt.Sprintf("{z : %d \u2264 Re z \u2264 %d}", c, c2), "closed, not open", "both vertical boundary lines are included"},
+			{fmt.Sprintf("{z : %d < |z| < %d}", r, r+c), "open, not closed", "the boundary circles of the annulus are excluded"},
+			{fmt.Sprintf("{z : %d \u2264 |z| \u2264 %d}", r, r+c), "closed, not open", "the boundary circles of the annulus are included"},
+		}
+	case 3:
+		// Half-open (neither open nor closed)
+		entries = []entry{
+			{fmt.Sprintf("{z : %d < Re z \u2264 %d}", c, c2), "neither open nor closed", "one boundary line is included while the other is excluded"},
+			{fmt.Sprintf("{z : %d < |z| \u2264 %d}", r, r+c), "neither open nor closed", "the outer boundary circle is included while the inner boundary circle is excluded"},
+			{fmt.Sprintf("{z : |z| < %d} \u222a {%d}", r, r), "neither open nor closed", "a single boundary point is included while the rest of the boundary circle is excluded"},
+		}
+	default:
+		// Clopen and singletons
+		entries = []entry{
+			{"\\mathbb{C} (the entire complex plane)", "both open and closed", "the entire space has no boundary and is clopen by definition"},
+			{"\\emptyset (the empty set)", "both open and closed", "the empty set contains all its limit points vacuously and is clopen by definition"},
+			{fmt.Sprintf("{%d + %di}", c, r), "closed, not open", "a singleton point contains its limit point (itself) and has no open neighborhood inside it"},
+		}
 	}
+
 	e := entries[rand.Intn(len(entries))]
 	pr := generator.MultipleChoice(
 		fmt.Sprintf("Classify the set \\(%s\\) in the complex plane.", e.set),

@@ -43,34 +43,112 @@ func Register(reg *generator.Registry) {
 type pointsLinesGen struct{}
 
 func (g *pointsLinesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	items := []string{"point", "line", "ray", "line segment"}
-	// Predicates, not noun phrases, because the stem supplies the noun. The
-	// earlier stem was `What is: %s?` with `has two endpoints`, which asked
-	// "What is: has two endpoints?", a sentence with its subject missing, on a
-	// screen where the learner had one field and no way to say "the question,
-	// not me, is broken".
-	descs := []string{
-		"is an exact location with no size",
-		"goes forever in two directions",
-		"has one endpoint and goes forever",
-		"has two endpoints",
+	type entry struct {
+		q       string
+		desc    string
+		correct string
+		dist    []string
+		exp     string
 	}
-	i := rand.Intn(4)
-	// The answer is a phrase, so it has to be recognisable rather than typeable:
-	// a learner who knows the term was still stuck behind a math field, which
-	// dropped the space in "line segment" and compared the wreckage to the
-	// authored string. The options carry the phrase intact.
-	others := make([]string, 0, len(items)-1)
-	for j, it := range items {
-		if j != i {
-			others = append(others, it)
-		}
+
+	entries := []entry{
+		{
+			q:       "Which geometric term describes an exact location with no size, length or width?",
+			desc:    "an exact location with no size, length or width",
+			correct: "point",
+			dist:    []string{"line", "ray", "line segment"},
+			exp:     "A point represents an exact location and has zero dimensions (no length, width or depth).",
+		},
+		{
+			q:       "Which geometric term describes a straight path that extends infinitely in two opposite directions?",
+			desc:    "a straight path extending infinitely in two opposite directions",
+			correct: "line",
+			dist:    []string{"line segment", "ray", "point"},
+			exp:     "A line has no endpoints and extends forever in both directions.",
+		},
+		{
+			q:       "Which geometric term describes a straight path that has one endpoint and extends infinitely in one direction?",
+			desc:    "a straight path with one endpoint extending infinitely",
+			correct: "ray",
+			dist:    []string{"line", "line segment", "point"},
+			exp:     "A ray begins at a single endpoint and extends forever in one direction.",
+		},
+		{
+			q:       "Which geometric term describes a straight path that has exactly two endpoints and a measurable length?",
+			desc:    "a straight path with two endpoints and a measurable length",
+			correct: "line segment",
+			dist:    []string{"line", "ray", "point"},
+			exp:     "A line segment is the portion of a line bounded by two distinct endpoints.",
+		},
+		{
+			q:       "Given two distinct points A and B, how many straight lines can pass through both points?",
+			desc:    "the number of straight lines passing through two distinct points",
+			correct: "exactly 1",
+			dist:    []string{"0", "2", "infinitely many"},
+			exp:     "By the foundational postulate of Euclidean geometry, exactly one straight line passes through any two distinct points.",
+		},
+		{
+			q:       "How many endpoints does a ray have?",
+			desc:    "the number of endpoints a ray possesses",
+			correct: "1",
+			dist:    []string{"0", "2", "infinitely many"},
+			exp:     "A ray has exactly one endpoint, extending infinitely in the other direction.",
+		},
+		{
+			q:       "How many endpoints does a line segment have?",
+			desc:    "the number of endpoints a line segment possesses",
+			correct: "2",
+			dist:    []string{"0", "1", "infinitely many"},
+			exp:     "A line segment is bounded by two distinct endpoints.",
+		},
+		{
+			q:       "How many endpoints does a geometric line have?",
+			desc:    "the number of endpoints a geometric line possesses",
+			correct: "0",
+			dist:    []string{"1", "2", "infinitely many"},
+			exp:     "A geometric line extends infinitely in both directions, so it has no endpoints.",
+		},
+		{
+			q:       "Three or more points that lie on the exact same straight line are called...",
+			desc:    "points lying on the exact same straight line",
+			correct: "collinear points",
+			dist:    []string{"coplanar points", "skew points", "concurrent points"},
+			exp:     "Points that lie along the same line are collinear.",
+		},
+		{
+			q:       "Points or lines that lie entirely in the same geometric plane are called...",
+			desc:    "figures lying entirely in the same plane",
+			correct: "coplanar",
+			dist:    []string{"collinear", "concurrent", "orthogonal"},
+			exp:     "Figures that share a single common plane are coplanar.",
+		},
+		{
+			q:       "Two straight lines in the same plane that never intersect are called...",
+			desc:    "two coplanar straight lines that never intersect",
+			correct: "parallel lines",
+			dist:    []string{"perpendicular lines", "skew lines", "intersecting lines"},
+			exp:     "Coplanar lines that do not intersect are parallel.",
+		},
+		{
+			q:       "Two straight lines that intersect at a right angle (90 degrees) are called...",
+			desc:    "two straight lines that intersect at a 90 degree angle",
+			correct: "perpendicular lines",
+			dist:    []string{"parallel lines", "skew lines", "collinear lines"},
+			exp:     "Lines intersecting at 90 degrees are perpendicular.",
+		},
+		{
+			q:       "Two lines that do not intersect and do not lie in the same plane are called...",
+			desc:    "two non-coplanar lines that never intersect",
+			correct: "skew lines",
+			dist:    []string{"parallel lines", "perpendicular lines", "coplanar lines"},
+			exp:     "Non-coplanar lines that never meet are skew lines.",
+		},
 	}
-	p := generator.MultipleChoice(
-		fmt.Sprintf("Which geometric term describes something that %s?", descs[i]),
-		items[i], others...)
-	p.Explanation = fmt.Sprintf("A %s is a figure that %s.", items[i], descs[i])
-	p.Facts = map[string]string{"term": items[i], "desc": descs[i]}
+
+	e := entries[rand.Intn(len(entries))]
+	p := generator.MultipleChoice(e.q, e.correct, e.dist...)
+	p.Explanation = e.exp
+	p.Facts = map[string]string{"term": e.correct, "desc": e.desc, "answer": e.correct}
 	return p
 }
 
@@ -422,18 +500,161 @@ func (g *quadPerimGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type circlePartsGen struct{}
 
 func (g *circlePartsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	parts := []string{"radius", "diameter", "circumference", "chord"}
-	descs := []string{"distance from center to edge", "distance across the circle through center", "distance around the circle", "a line from one edge to another (not through center)"}
-	i := rand.Intn(4)
-	others := make([]string, 0, len(parts)-1)
-	for _, part := range parts {
-		if part != parts[i] {
-			others = append(others, part)
-		}
+	type circleSpec struct {
+		q       string
+		desc    string
+		correct string
+		dist    []string
+		exp     string
 	}
-	p := generator.MultipleChoice(fmt.Sprintf("The %s is the:", descs[i]), parts[i], others...)
-	p.Explanation = descs[i] + " = " + parts[i] + "."
-	p.Facts = map[string]string{"term": parts[i], "desc": descs[i]}
+
+	specs := []circleSpec{
+		{
+			q:       "A line segment connecting the center of a circle to any point on its circumference is a...",
+			desc:    "a line segment connecting the center of a circle to any point on its circumference",
+			correct: "radius",
+			dist:    []string{"diameter", "chord", "secant"},
+			exp:     "A radius connects the center to the circle boundary.",
+		},
+		{
+			q:       "A line segment connecting two points on a circle that passes through the center is a...",
+			desc:    "a line segment connecting two points on a circle that passes through the center",
+			correct: "diameter",
+			dist:    []string{"radius", "chord", "tangent"},
+			exp:     "A diameter is a chord that passes through the center of the circle.",
+		},
+		{
+			q:       "The distance around the entire outer boundary of a circle is its...",
+			desc:    "the distance around the entire outer boundary of a circle",
+			correct: "circumference",
+			dist:    []string{"diameter", "radius", "area"},
+			exp:     "The circumference is the boundary perimeter of a circle.",
+		},
+		{
+			q:       "A line segment connecting any two distinct points on a circle is called a...",
+			desc:    "a line segment connecting any two distinct points on a circle",
+			correct: "chord",
+			dist:    []string{"radius", "tangent", "secant"},
+			exp:     "Any line segment joining two points on the circle boundary is a chord.",
+		},
+		{
+			q:       "A straight line that touches a circle at exactly one point without crossing it is a...",
+			desc:    "a straight line that touches a circle at exactly one point without crossing it",
+			correct: "tangent line",
+			dist:    []string{"secant line", "chord", "diameter"},
+			exp:     "A tangent line intersects a circle at exactly one single point of tangency.",
+		},
+		{
+			q:       "A straight line that intersects a circle at two distinct points is a...",
+			desc:    "a straight line that intersects a circle at two distinct points",
+			correct: "secant line",
+			dist:    []string{"tangent line", "chord", "radius"},
+			exp:     "A secant line passes through the circle, cutting it at two points.",
+		},
+		{
+			q:       "A curved portion or section along the boundary circumference of a circle is an...",
+			desc:    "a curved portion or section along the boundary circumference of a circle",
+			correct: "arc",
+			dist:    []string{"chord", "sector", "segment"},
+			exp:     "An arc is a connected portion of the circumference of a circle.",
+		},
+		{
+			q:       "A pie-shaped region bounded by two radii and an arc is called a...",
+			desc:    "a pie-shaped region bounded by two radii and an arc",
+			correct: "sector",
+			dist:    []string{"segment", "chord", "secant"},
+			exp:     "A circular sector is bounded by two radii and the intercepted arc.",
+		},
+		{
+			q:       "A region of a circle bounded by a chord and the arc connecting its endpoints is a...",
+			desc:    "a region of a circle bounded by a chord and the arc connecting its endpoints",
+			correct: "segment",
+			dist:    []string{"sector", "tangent", "annulus"},
+			exp:     "A circular segment is bounded by a chord and an arc.",
+		},
+		{
+			q:       "An angle whose vertex is at the center of the circle is called a...",
+			desc:    "an angle whose vertex is at the center of the circle",
+			correct: "central angle",
+			dist:    []string{"inscribed angle", "circumscribed angle", "tangent angle"},
+			exp:     "A central angle has its vertex located at the circle center.",
+		},
+		{
+			q:       "An angle whose vertex lies on the circle and whose sides are chords is an...",
+			desc:    "an angle whose vertex lies on the circle and whose sides are chords",
+			correct: "inscribed angle",
+			dist:    []string{"central angle", "right angle", "tangent angle"},
+			exp:     "An inscribed angle has its vertex on the circle and chords as sides.",
+		},
+		{
+			q:       "The longest possible chord in any circle is the...",
+			desc:    "the longest possible chord in any circle",
+			correct: "diameter",
+			dist:    []string{"radius", "secant", "tangent"},
+			exp:     "The diameter is the chord of maximum length in a circle.",
+		},
+		{
+			q:       "Circles that share the exact same center point but have different radii are called...",
+			desc:    "circles that share the exact same center point but have different radii",
+			correct: "concentric circles",
+			dist:    []string{"tangent circles", "orthogonal circles", "cyclic circles"},
+			exp:     "Concentric circles have the same center with different radii.",
+		},
+		{
+			q:       "A ring-shaped region between two concentric circles is called an...",
+			desc:    "a ring-shaped region between two concentric circles",
+			correct: "annulus",
+			dist:    []string{"sector", "segment", "torus"},
+			exp:     "An annulus is the region bounded by two concentric circles.",
+		},
+		{
+			q:       "An arc that represents exactly one-half of the complete circle circumference is a...",
+			desc:    "an arc that represents exactly one-half of the complete circle circumference",
+			correct: "semicircle",
+			dist:    []string{"quadrant", "sector", "segment"},
+			exp:     "A semicircle is an arc of 180 degrees, exactly half a circle.",
+		},
+		{
+			q:       "A circular sector that represents exactly one-quarter of the total circle area is a...",
+			desc:    "a circular sector that represents exactly one-quarter of the total circle area",
+			correct: "quadrant",
+			dist:    []string{"semicircle", "octant", "segment"},
+			exp:     "A quadrant is a circular sector with a 90 degree central angle.",
+		},
+		{
+			q:       "The single point where a tangent line touches a circle is called the...",
+			desc:    "the single point where a tangent line touches a circle",
+			correct: "point of tangency",
+			dist:    []string{"center", "vertex", "focus"},
+			exp:     "The point of tangency is where the tangent line intersects the circle.",
+		},
+		{
+			q:       "An arc whose angular measure is strictly less than 180 degrees is called a...",
+			desc:    "an arc whose angular measure is strictly less than 180 degrees",
+			correct: "minor arc",
+			dist:    []string{"major arc", "semicircle", "subtended arc"},
+			exp:     "A minor arc measures strictly less than 180 degrees.",
+		},
+		{
+			q:       "An arc whose angular measure is strictly greater than 180 degrees is called a...",
+			desc:    "an arc whose angular measure is strictly greater than 180 degrees",
+			correct: "major arc",
+			dist:    []string{"minor arc", "semicircle", "reflex arc"},
+			exp:     "A major arc measures strictly more than 180 degrees.",
+		},
+		{
+			q:       "A polygon whose vertices all lie on a single circle is called an...",
+			desc:    "a polygon whose vertices all lie on a single circle",
+			correct: "inscribed polygon",
+			dist:    []string{"circumscribed polygon", "regular polygon", "tangential polygon"},
+			exp:     "An inscribed polygon has all vertices positioned on the circle.",
+		},
+	}
+
+	s := specs[rand.Intn(len(specs))]
+	p := generator.MultipleChoice(s.q, s.correct, s.dist...)
+	p.Explanation = s.exp
+	p.Facts = map[string]string{"term": s.correct, "desc": s.desc, "answer": s.correct}
 	return p
 }
 

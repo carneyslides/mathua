@@ -428,42 +428,91 @@ func (g *completeGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type basisGen struct{}
 
 func (g *basisGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question    string
-		correct     string
-		distractors []string
-		reason      string
+	mode := rand.Intn(6)
+	switch mode {
+	case 0:
+		a := rand.Intn(10) - 5
+		b := a + 1 + rand.Intn(6)
+		q := fmt.Sprintf("Let \\mathcal{S} = \\{(-\\infty, c), (c, \\infty) \\mid c \\in \\mathbb{R}\\} be the standard subbasis of open rays for \\mathbb{R}. What basis element is produced by the intersection $(-\\infty, %d) \\cap (%d, \\infty)$?", b, a)
+		correct := fmt.Sprintf("(%d, %d)", a, b)
+		dist := []string{
+			fmt.Sprintf("[%d, %d]", a, b),
+			fmt.Sprintf("(%d, %d)", a-1, b+1),
+			fmt.Sprintf("(-\\infty, %d)", a),
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = fmt.Sprintf("The intersection of rays (-inf, %d) and (%d, inf) is the bounded open interval (%d, %d).", b, a, a, b)
+		p.Facts = map[string]string{"a": strconv.Itoa(a), "b": strconv.Itoa(b), "answer": correct}
+		return p
+	case 1:
+		dim := 1 + rand.Intn(4)
+		q := fmt.Sprintf("Which countable collection forms a basis for the Euclidean topology on \\mathbb{R}^%d?", dim)
+		var correct, d1, d2, d3 string
+		if dim == 1 {
+			correct = "open intervals (p, q) with rational endpoints p, q in Q"
+			d1 = "closed intervals [p, q] with rational endpoints p, q in Q"
+			d2 = "singletons {q} for all rational points q in Q"
+			d3 = "all open intervals (a, b) with arbitrary real endpoints"
+		} else {
+			correct = fmt.Sprintf("open balls B_r(q) with rational centers q in Q^%d and rational radii r in Q_{>0}", dim)
+			d1 = fmt.Sprintf("closed balls \\bar{B}_r(q) with rational centers q in Q^%d and rational radii r in Q_{>0}", dim)
+			d2 = fmt.Sprintf("singletons {q} for all rational points q in Q^%d", dim)
+			d3 = fmt.Sprintf("all open balls B_r(x) with arbitrary real centers in R^%d", dim)
+		}
+		p := generator.MultipleChoice(q, correct, d1, d2, d3)
+		p.Explanation = "Rational centers and rational radii form a countable collection that generates the Euclidean topology."
+		p.Facts = map[string]string{"dim": strconv.Itoa(dim), "answer": correct}
+		return p
+	case 2:
+		q := "A collection B of open subsets of a topological space X forms a basis for the topology if and only if..."
+		correct := "every open set in X can be written as a union of elements of B"
+		dist := []string{
+			"every element of B is compact and closed",
+			"the collection B is closed under arbitrary unions",
+			"the collection B is closed under complements",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = "A basis generates the topology because every open set decomposes into a union of basis elements."
+		p.Facts = map[string]string{"topic": "basis_definition", "answer": correct}
+		return p
+	case 3:
+		q := "If B is a basis for a topology on X and x in B_1 \\cap B_2 for basis elements B_1, B_2, then the basis axioms guarantee..."
+		correct := "there exists B_3 in B such that x in B_3 \\subseteq B_1 \\cap B_2"
+		dist := []string{
+			"B_1 \\cap B_2 must itself be a member of B",
+			"B_1 \\cap B_2 is a singleton {x}",
+			"B_1 and B_2 must be disjoint sets",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = "The second basis axiom requires that every point in an intersection of basis sets is contained in a smaller basis set inside that intersection."
+		p.Facts = map[string]string{"topic": "basis_intersection_axiom", "answer": correct}
+		return p
+	case 4:
+		n := 3 + rand.Intn(4)
+		q := fmt.Sprintf("Let X be a set with %d elements. If a basis B contains every singleton {x} for each x in X, what topology does B generate?", n)
+		correct := "the discrete topology"
+		dist := []string{
+			"the indiscrete topology",
+			"the cofinite topology",
+			"a non-Hausdorff topology",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = "When singletons are basis elements, every subset is a union of singletons and therefore open, giving the discrete topology."
+		p.Facts = map[string]string{"n": strconv.Itoa(n), "answer": correct}
+		return p
+	default:
+		q := "Let (X, T_X) and (Y, T_Y) have bases B_X and B_Y. A standard basis for the product topology on X x Y is..."
+		correct := "{ U x V | U in B_X and V in B_Y }"
+		dist := []string{
+			"{ U U V | U in B_X and V in B_Y }",
+			"{ U x Y | U in B_X }",
+			"all arbitrary subsets of X x Y",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = "The product topology basis consists of open boxes formed by products of basis elements from each factor."
+		p.Facts = map[string]string{"topic": "product_basis", "answer": correct}
+		return p
 	}
-	claims := []claim{
-		{
-			question:    "A basis for a topology is a collection of open sets such that...",
-			correct:     "every open set is a union of basis elements",
-			distractors: []string{"every basis element is compact", "the basis is closed under complements", "the basis has finitely many sets"},
-			reason:      "The basis generates the topology: each open set is assembled from basis elements, and the basis axioms make that assembly consistent.",
-		},
-		{
-			question:    "Which collection is a basis for the usual topology on R?",
-			correct:     "the open intervals (a, b)",
-			distractors: []string{"the closed intervals [a, b]", "the singletons {x}", "the half-open intervals [a, b)"},
-			reason:      "Open intervals generate the usual opens; closed intervals generate the discrete topology and half-open intervals generate the Sorgenfrey topology.",
-		},
-		{
-			question:    "In a metric space, the collection of open balls is a basis for...",
-			correct:     "the metric topology",
-			distractors: []string{"the discrete topology", "the cofinite topology", "the indiscrete topology"},
-			reason:      "Open sets in a metric space are unions of balls, which is the defining property of a basis for the metric topology.",
-		},
-		{
-			question:    "A subbasis differs from a basis because...",
-			correct:     "finite intersections of subbasis elements form a basis",
-			distractors: []string{"it must be countable", "it contains the empty set", "it is closed under arbitrary unions"},
-			reason:      "A subbasis is the raw generating family; taking finite intersections produces a basis, and unions of that basis produce the topology.",
-		},
-	}
-	c := claims[rand.Intn(len(claims))]
-	p := generator.MultipleChoice(c.question, c.correct, c.distractors...)
-	p.Explanation = c.reason
-	return p
 }
 
 // ---------------------------------------------------------------------------
@@ -473,42 +522,112 @@ func (g *basisGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type subspaceGen struct{}
 
 func (g *subspaceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question    string
-		correct     string
-		distractors []string
-		reason      string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		a := rand.Intn(6) - 3
+		b := a + 3 + rand.Intn(5)
+		c := a + 1 + rand.Intn(b-a-1)
+		q := fmt.Sprintf("Consider the subspace Y = [%d, %d] of \\mathbb{R} with the Euclidean topology. Is the half-open interval [%d, %d) open in Y?", a, b, a, c)
+		correct := fmt.Sprintf("Yes, because [%d, %d) = (%d, %d) \\cap [%d, %d] where (%d, %d) is open in R", a, c, a-1, c, a, b, a-1, c)
+		dist := []string{
+			fmt.Sprintf("No, because [%d, %d) is not open in the ambient space R", a, c),
+			fmt.Sprintf("No, because Y = [%d, %d] is closed in R", a, b),
+			"Yes, because every subset of Y inherits the discrete topology",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = fmt.Sprintf("[%d, %d) is the trace of the ambient open interval (%d, %d) on Y, so it is open in the subspace topology.", a, c, a-1, c)
+		p.Facts = map[string]string{"a": strconv.Itoa(a), "b": strconv.Itoa(b), "c": strconv.Itoa(c), "answer": correct}
+		return p
+	case 1:
+		a := rand.Intn(6) - 3
+		b := a + 3 + rand.Intn(5)
+		c := a + 1 + rand.Intn(b-a-1)
+		q := fmt.Sprintf("Consider the subspace Y = [%d, %d] of \\mathbb{R} with the Euclidean topology. Is the half-open interval (%d, %d] open in Y?", a, b, c, b)
+		correct := fmt.Sprintf("Yes, because (%d, %d] = (%d, %d) \\cap [%d, %d] where (%d, %d) is open in R", c, b, c, b+1, a, b, c, b+1)
+		dist := []string{
+			fmt.Sprintf("No, because (%d, %d] contains its right endpoint and cannot be open", c, b),
+			fmt.Sprintf("No, because (%d, %d] is not closed in R", c, b),
+			"No, because boundary points cannot belong to open subspace sets",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = fmt.Sprintf("(%d, %d] is the intersection of the ambient open interval (%d, %d) with Y, so it is open in the subspace Y.", c, b, c, b+1)
+		p.Facts = map[string]string{"a": strconv.Itoa(a), "b": strconv.Itoa(b), "c": strconv.Itoa(c), "answer": correct}
+		return p
+	case 2:
+		a := rand.Intn(6) - 3
+		b := a + 4 + rand.Intn(4)
+		c1 := a + 1
+		c2 := b - 1
+		q := fmt.Sprintf("Consider the subspace Y = [%d, %d] of \\mathbb{R} with the Euclidean topology. The interval (%d, %d) is...", a, b, c1, c2)
+		correct := "open in both the subspace Y and the ambient space R"
+		dist := []string{
+			"open in the subspace Y but not in R",
+			"closed in the subspace Y and open in R",
+			"neither open in Y nor open in R",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = fmt.Sprintf("(%d, %d) is open in R and entirely contained in Y, so it is open in both.", c1, c2)
+		p.Facts = map[string]string{"a": strconv.Itoa(a), "b": strconv.Itoa(b), "c1": strconv.Itoa(c1), "c2": strconv.Itoa(c2), "answer": correct}
+		return p
+	case 3:
+		type propSpec struct {
+			prop    string
+			correct string
+			dist    []string
+			exp     string
+		}
+		props := []propSpec{
+			{
+				prop:    "Hausdorff (T_2)",
+				correct: "every subspace of a Hausdorff space is Hausdorff",
+				dist: []string{
+					"subspaces of Hausdorff spaces are generally not Hausdorff",
+					"only closed subspaces of Hausdorff spaces are Hausdorff",
+					"only open subspaces of Hausdorff spaces are Hausdorff",
+				},
+				exp: "Hausdorff separation is hereditary: any two points can be separated by ambient opens whose traces remain disjoint.",
+			},
+			{
+				prop:    "Metrizability",
+				correct: "every subspace of a metrizable space is metrizable",
+				dist: []string{
+					"subspaces of metrizable spaces are rarely metrizable",
+					"only compact subspaces of metric spaces are metrizable",
+					"subspaces lose their metric structure",
+				},
+				exp: "The restriction of the ambient metric to the subset defines the subspace topology.",
+			},
+			{
+				prop:    "Second-countability",
+				correct: "every subspace of a second-countable space is second-countable",
+				dist: []string{
+					"subspaces can have uncountable minimal bases",
+					"only countable subspaces are second-countable",
+					"second-countability is not preserved by subspaces",
+				},
+				exp: "Intersecting a countable ambient basis with the subspace yields a countable basis for the subspace.",
+			},
+		}
+		s := props[rand.Intn(len(props))]
+		q := fmt.Sprintf("Regarding the %s property under the subspace topology, which statement is true?", s.prop)
+		p := generator.MultipleChoice(q, s.correct, s.dist...)
+		p.Explanation = s.exp
+		p.Facts = map[string]string{"property": s.prop, "answer": s.correct}
+		return p
+	default:
+		q := "Let A be a subset of a topological space X. The subspace topology on A is characterized as..."
+		correct := "the coarsest topology on A for which the inclusion map i: A -> X is continuous"
+		dist := []string{
+			"the finest topology on A for which the inclusion map i: A -> X is continuous",
+			"the quotient topology induced by the inclusion map",
+			"the discrete topology restricted to A",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = "A map into X is continuous if preimages of opens are open; the coarsest topology having this property is the subspace topology."
+		p.Facts = map[string]string{"topic": "subspace_universal_property", "answer": correct}
+		return p
 	}
-	claims := []claim{
-		{
-			question:    "For a subset A of a space X, a set U is open in the subspace topology exactly when...",
-			correct:     "U is the intersection of A with an open set of X",
-			distractors: []string{"U is open in X", "U is closed in X", "U contains every limit point of A"},
-			reason:      "The subspace opens are the traces A intersect V of the ambient opens V, by definition.",
-		},
-		{
-			question:    "In the subspace [0, 1] of R, the set [0, 1/2) is...",
-			correct:     "open in the subspace but not in R",
-			distractors: []string{"open in R", "closed in the subspace", "neither open nor closed"},
-			reason:      "It is [0, 1] intersect (-1, 1/2), so it is a subspace open; in R it is not open because no ball around 0 stays inside it.",
-		},
-		{
-			question:    "The subspace topology on A is the...",
-			correct:     "coarsest topology making the inclusion of A into X continuous",
-			distractors: []string{"finest topology making the inclusion continuous", "quotient topology of A", "product topology on A"},
-			reason:      "The inclusion is continuous exactly when each subspace open is a trace of an ambient open, which is the coarsest such choice.",
-		},
-		{
-			question:    "A subspace of a Hausdorff space is...",
-			correct:     "Hausdorff",
-			distractors: []string{"not necessarily Hausdorff", "always compact", "always connected"},
-			reason:      "Separating two points by disjoint ambient opens and intersecting both with the subspace gives disjoint subspace opens.",
-		},
-	}
-	c := claims[rand.Intn(len(claims))]
-	p := generator.MultipleChoice(c.question, c.correct, c.distractors...)
-	p.Explanation = c.reason
-	return p
 }
 
 // ---------------------------------------------------------------------------
@@ -518,42 +637,90 @@ func (g *subspaceGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type denseGen struct{}
 
 func (g *denseGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question    string
-		correct     string
-		distractors []string
-		reason      string
+	mode := rand.Intn(6)
+	switch mode {
+	case 0:
+		primes := []int{2, 3, 5, 7, 10}
+		pVal := primes[rand.Intn(len(primes))]
+		q := fmt.Sprintf("Let S = \\{ m / %d^k \\mid m \\in \\mathbb{Z}, k \\in \\mathbb{N} \\}. In the real line \\mathbb{R} with the Euclidean topology, the set S is...", pVal)
+		correct := "dense in R, because every non-empty open interval contains an element of S"
+		dist := []string{
+			"nowhere dense in R, because S contains only isolated points",
+			"closed in R, because S contains all its limit points",
+			"discrete in R",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = fmt.Sprintf("Numbers of the form m/%d^k can approximate any real number to arbitrary precision.", pVal)
+		p.Facts = map[string]string{"base": strconv.Itoa(pVal), "answer": correct}
+		return p
+	case 1:
+		numPts := 2 + rand.Intn(3)
+		pts := make([]string, numPts)
+		for i := 0; i < numPts; i++ {
+			pts[i] = strconv.Itoa(i*3 - 2)
+		}
+		ptsStr := strings.Join(pts, ", ")
+		q := fmt.Sprintf("Let E = \\{%s\\} be a finite subset of \\mathbb{R}. In \\mathbb{R} with the Euclidean topology, the set D = \\mathbb{R} \\setminus E is...", ptsStr)
+		correct := "dense and open in R"
+		dist := []string{
+			"closed and nowhere dense in R",
+			"dense and closed in R",
+			"compact and dense in R",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = "Removing finitely many points leaves an open set whose closure is all of R, so it is both open and dense."
+		p.Facts = map[string]string{"numPts": strconv.Itoa(numPts), "answer": correct}
+		return p
+	case 2:
+		dim := 2 + rand.Intn(3)
+		q := fmt.Sprintf("In \\mathbb{R}^%d with the Euclidean topology, which of the following subsets is dense?", dim)
+		correct := fmt.Sprintf("the set of rational points Q^%d", dim)
+		dist := []string{
+			fmt.Sprintf("the set of integer points Z^%d", dim),
+			fmt.Sprintf("the coordinate hyperplane { (x_1,...,x_%d) | x_1 = 0 }", dim),
+			fmt.Sprintf("the closed unit ball \\bar{B}_1(0) in R^%d", dim),
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = fmt.Sprintf("Q^%d meets every non-empty open box or ball in R^%d, so its closure is R^%d.", dim, dim, dim)
+		p.Facts = map[string]string{"dim": strconv.Itoa(dim), "answer": correct}
+		return p
+	case 3:
+		q := "A subset D of a topological space X is dense in X if and only if..."
+		correct := "the closure of D is equal to X"
+		dist := []string{
+			"the interior of D is equal to X",
+			"D contains all of its boundary points",
+			"D is homeomorphic to X",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = "By definition, D is dense in X when Cl(D) = X, which is equivalent to every non-empty open set meeting D."
+		p.Facts = map[string]string{"topic": "dense_definition", "answer": correct}
+		return p
+	case 4:
+		q := "Which of the following subsets is NOT dense in the real line \\mathbb{R} with the Euclidean topology?"
+		correct := "the integers Z"
+		dist := []string{
+			"the rational numbers Q",
+			"the irrational numbers R \\ Q",
+			"the dyadic rationals { m/2^k | m in Z, k in N }",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = "The integers Z are discrete and closed in R; their closure is Z, which is not all of R."
+		p.Facts = map[string]string{"topic": "not_dense", "answer": correct}
+		return p
+	default:
+		q := "A topological space X is defined to be separable if..."
+		correct := "it contains a countable dense subset"
+		dist := []string{
+			"every pair of distinct points can be separated by disjoint open sets",
+			"every sequence in X has a convergent subsequence",
+			"its topology has a finite basis",
+		}
+		p := generator.MultipleChoice(q, correct, dist...)
+		p.Explanation = "Separability is the property of possessing a countable dense subset (such as Q in R)."
+		p.Facts = map[string]string{"topic": "separable_definition", "answer": correct}
+		return p
 	}
-	claims := []claim{
-		{
-			question:    "A subset D of a space X is dense exactly when...",
-			correct:     "every nonempty open set meets D",
-			distractors: []string{"D is closed", "D is countable", "D contains every limit point"},
-			reason:      "D is dense when its closure is X, which is the same as every nonempty open set meeting D.",
-		},
-		{
-			question:    "Which subset is dense in R with the usual topology?",
-			correct:     "the rationals",
-			distractors: []string{"the integers", "the integers between 0 and 1", "the set {0}"},
-			reason:      "Every open interval contains a rational, so the rationals meet every nonempty open set; the other sets leave gaps.",
-		},
-		{
-			question:    "A separable space is one with...",
-			correct:     "a countable dense subset",
-			distractors: []string{"a countable basis", "finitely many points", "no limit points"},
-			reason:      "Separability is defined by the existence of a countable dense subset; a countable basis is a different, stronger condition.",
-		},
-		{
-			question:    "The closure of a dense set is...",
-			correct:     "the whole space",
-			distractors: []string{"the empty set", "the set itself", "a proper subset of the space"},
-			reason:      "Dense means closure equal to the whole space; the set itself need not be closed.",
-		},
-	}
-	c := claims[rand.Intn(len(claims))]
-	p := generator.MultipleChoice(c.question, c.correct, c.distractors...)
-	p.Explanation = c.reason
-	return p
 }
 
 // ---------------------------------------------------------------------------
