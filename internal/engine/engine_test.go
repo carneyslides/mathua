@@ -1004,8 +1004,23 @@ func TestResolveChoiceAnswerMapsALetterToTheAuthoredOption(t *testing.T) {
 	if got := resolveChoiceAnswer(question, "D"); got != "down on the left" {
 		t.Errorf("D resolved to %q, want the authored text", got)
 	}
+	if got := resolveChoiceAnswer(question, "D)"); got != "down on the left" {
+		t.Errorf("D) resolved to %q, want the authored text", got)
+	}
+	if got := resolveChoiceAnswer(question, "(d)"); got != "down on the left" {
+		t.Errorf("(d) resolved to %q, want the authored text", got)
+	}
+	if got := resolveChoiceAnswer(question, "Option D"); got != "down on the left" {
+		t.Errorf("Option D resolved to %q, want the authored text", got)
+	}
 	if got := resolveChoiceAnswer(question, " c "); got != `\(x^{2}<0\)` {
 		t.Errorf("lowercase letter with spaces resolved to %q", got)
+	}
+	if got := resolveChoiceAnswer(question, "downontheleft"); got != "down on the left" {
+		t.Errorf("downontheleft without spaces resolved to %q, want the authored text", got)
+	}
+	if got := resolveChoiceAnswer(question, "down on the left."); got != "down on the left" {
+		t.Errorf("down on the left with trailing dot resolved to %q, want the authored text", got)
 	}
 	if got := resolveChoiceAnswer(question, "1 − P(A)"); got != "1 − P(A)" {
 		t.Errorf("a full option text was rewritten to %q", got)
@@ -1019,6 +1034,84 @@ func TestResolveChoiceAnswerMapsALetterToTheAuthoredOption(t *testing.T) {
 	}
 	if got := resolveChoiceAnswer("Solve for x: 2x = 4", "A"); got != "A" {
 		t.Errorf("letter against a free-text question became %q", got)
+	}
+}
+
+type testChoiceGen struct {
+	question string
+	answer   string
+}
+
+func (g *testChoiceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
+	return generator.Problem{
+		Question:    g.question,
+		Answer:      g.answer,
+		Explanation: "Explanation here.",
+	}
+}
+
+func TestEngine_SubmitAnswer_MultipleChoiceLetterResolution(t *testing.T) {
+	d, err := concepts.Build([]concepts.Concept{
+		{
+			ID: "mc-concept", Label: "Ray Concept", Domain: "geometry",
+			GradingType: "multiple_choice", Prerequisites: []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 60},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build DAG: %v", err)
+	}
+	store, err := storage.NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	reg := generator.NewRegistry()
+	reg.Register("mc-concept", &testChoiceGen{
+		question: "Which term describes a part of a line with one endpoint?\n\nA) ray\nB) segment\nC) line\nD) angle",
+		answer:   "ray",
+	})
+	e := New(store, d, reg, nil, nil)
+
+	st, err := e.CreateStudent("luminxyia")
+	if err != nil {
+		t.Fatalf("create student: %v", err)
+	}
+
+	for _, ans := range []string{"A", "a", "Option A", "A)", "(A)"} {
+		sess, err := e.repo.CreateSession(st.ID)
+		if err != nil {
+			t.Fatalf("create session: %v", err)
+		}
+		q, err := e.NextQuestion(sess.ID, st.ID)
+		if err != nil {
+			t.Fatalf("next question: %v", err)
+		}
+		res, err := e.SubmitAnswer(sess.ID, st.ID, q.AttemptID, ans, 2.0)
+		if err != nil {
+			t.Fatalf("submit answer %q: %v", ans, err)
+		}
+		if !res.Correct {
+			t.Errorf("expected answer %q to be marked correct, got incorrect", ans)
+		}
+	}
+
+	// Verify wrong option letter grades false
+	sess, err := e.repo.CreateSession(st.ID)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	q, err := e.NextQuestion(sess.ID, st.ID)
+	if err != nil {
+		t.Fatalf("next question: %v", err)
+	}
+	res, err := e.SubmitAnswer(sess.ID, st.ID, q.AttemptID, "B", 2.0)
+	if err != nil {
+		t.Fatalf("submit answer B: %v", err)
+	}
+	if res.Correct {
+		t.Errorf("expected answer B to be marked incorrect, got correct")
 	}
 }
 
