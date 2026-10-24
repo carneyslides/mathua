@@ -1400,20 +1400,90 @@ func (g *funcCompositeGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type funcDirichletGen struct{}
 
 func (g *funcDirichletGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		question string
-		answer   string
-		exp      string
-	}
-	entries := []entry{
-		{"For the Dirichlet function (1 on rationals, 0 on irrationals), what is D(1/2)? (enter a number)", "1", "The Dirichlet function is D(x) = 1 if x is rational, 0 if x is irrational. Since 1/2 is rational, D(1/2) = 1. It is nowhere continuous."},
-		{"Is the Dirichlet function continuous anywhere? (yes/no)", "no", "The Dirichlet function is discontinuous at every point."},
-		{"Is the Dirichlet function periodic? (yes/no)", "yes", "The Dirichlet function is periodic with any rational period."},
-		{"Is the Dirichlet function Riemann integrable? (yes/no)", "no", "The Dirichlet function is not Riemann integrable on any interval."},
-	}
-	e := entries[rand.Intn(len(entries))]
-	return generator.Problem{
-		Question: e.question, Answer: e.answer, Explanation: e.exp,
+	switch rand.Intn(4) {
+	case 0:
+		// Rational input evaluations
+		type ratSpec struct {
+			val string
+		}
+		rats := []ratSpec{
+			{"1/2"}, {"-1/2"}, {"2/3"}, {"-3/4"}, {"5/7"}, {"-7/9"},
+			{"4/5"}, {"-1/3"}, {"8/5"}, {"-5/6"}, {"22/7"}, {"0"},
+			{"1"}, {"-4"}, {"12"}, {"3/8"}, {"-9/2"}, {"7/10"},
+		}
+		r := rats[rand.Intn(len(rats))]
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the Dirichlet function D(x) (1 on rationals, 0 on irrationals), what is D(%s)? (enter a number)", r.val),
+			Answer:      "1",
+			Explanation: fmt.Sprintf("%s is a rational number, so by definition D(%s) = 1.", r.val, r.val),
+			Facts:       map[string]string{"input": r.val, "kind": "rational", "answer": "1"},
+		}
+	case 1:
+		// Irrational input evaluations
+		type irratSpec struct {
+			val string
+		}
+		irrats := []irratSpec{
+			{"\\sqrt{2}"}, {"\\sqrt{3}"}, {"\\sqrt{5}"}, {"\\pi"}, {"e"},
+			{"\\sqrt{7}"}, {"\\pi/2"}, {"\\pi/4"}, {"\\sqrt{11}"}, {"\\ln(2)"},
+			{"1 + \\sqrt{2}"}, {"\\sqrt{10}"}, {"2\\pi"}, {"\\sqrt{6}"},
+		}
+		ir := irrats[rand.Intn(len(irrats))]
+		return generator.Problem{
+			Question:    fmt.Sprintf("For the Dirichlet function D(x) (1 on rationals, 0 on irrationals), what is D(%s)? (enter a number)", ir.val),
+			Answer:      "0",
+			Explanation: fmt.Sprintf("%s is an irrational number, so by definition D(%s) = 0.", ir.val, ir.val),
+			Facts:       map[string]string{"input": ir.val, "kind": "irrational", "answer": "0"},
+		}
+	case 2:
+		// Scaled combination a * D(x) + b
+		a := rand.Intn(6) + 2
+		b := rand.Intn(6) + 1
+		isRat := rand.Intn(2) == 0
+		if isRat {
+			rats := []string{"3/5", "-2/7", "5/2", "1/4", "-4/3", "7/8"}
+			val := rats[rand.Intn(len(rats))]
+			ans := strconv.Itoa(a + b)
+			return generator.Problem{
+				Question:    fmt.Sprintf("Let D(x) be the Dirichlet function. What is %d D(%s) + %d? (enter a number)", a, val, b),
+				Answer:      ans,
+				Explanation: fmt.Sprintf("Since %s is rational, D(%s) = 1. Thus %d(1) + %d = %s.", val, val, a, b, ans),
+				Facts:       map[string]string{"a": strconv.Itoa(a), "b": strconv.Itoa(b), "input": val, "answer": ans},
+			}
+		}
+		irrats := []string{"\\sqrt{3}", "\\pi", "e", "\\sqrt{5}", "\\pi/3"}
+		val := irrats[rand.Intn(len(irrats))]
+		ans := strconv.Itoa(b)
+		return generator.Problem{
+			Question:    fmt.Sprintf("Let D(x) be the Dirichlet function. What is %d D(%s) + %d? (enter a number)", a, val, b),
+			Answer:      ans,
+			Explanation: fmt.Sprintf("Since %s is irrational, D(%s) = 0. Thus %d(0) + %d = %s.", val, val, a, b, ans),
+			Facts:       map[string]string{"a": strconv.Itoa(a), "b": strconv.Itoa(b), "input": val, "answer": ans},
+		}
+	default:
+		// Conceptual properties
+		type propSpec struct {
+			q   string
+			ans string
+			exp string
+		}
+		props := []propSpec{
+			{"Is the Dirichlet function continuous anywhere? (yes/no)", "no", "The Dirichlet function is discontinuous at every real point because both rationals and irrationals are dense."},
+			{"Is the Dirichlet function periodic? (yes/no)", "yes", "The Dirichlet function is periodic with every rational number as a period."},
+			{"Does the Dirichlet function have a fundamental (smallest positive) period? (yes/no)", "no", "There is no smallest positive rational number, so no fundamental period exists."},
+			{"Is the Dirichlet function Riemann integrable on [0, 1]? (yes/no)", "no", "Upper Darboux sums equal 1 and lower sums equal 0, so it is not Riemann integrable."},
+			{"Is the Dirichlet function Lebesgue integrable on [0, 1]? (yes/no)", "yes", "The rationals have Lebesgue measure 0, so the function equals 0 almost everywhere and is Lebesgue integrable."},
+			{"What is the Lebesgue integral of the Dirichlet function over [0, 1]? (enter a number)", "0", "Since rationals have measure 0, the Lebesgue integral over [0, 1] is exactly 0."},
+			{"Is the Dirichlet function an even function satisfying D(-x) = D(x)? (yes/no)", "yes", "-x is rational if and only if x is rational, so D(-x) = D(x)."},
+			{"Is the Dirichlet function bounded on the real line? (yes/no)", "yes", "The range of D(x) is {0, 1}, which is bounded."},
+		}
+		p := props[rand.Intn(len(props))]
+		return generator.Problem{
+			Question:    p.q,
+			Answer:      p.ans,
+			Explanation: p.exp,
+			Facts:       map[string]string{"question": p.q, "answer": p.ans},
+		}
 	}
 }
 

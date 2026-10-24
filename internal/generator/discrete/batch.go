@@ -110,27 +110,97 @@ func (g *inferenceGen) Generate(ctx generator.GeneratorContext) generator.Proble
 		name, premises, conclusion string
 		valid                      bool
 	}
-	forms := []form{
-		{"modus ponens", "p \u2192 q and p", "q", true},
-		{"modus tollens", "p \u2192 q and \u00acq", "\u00acp", true},
-		{"affirming the consequent", "p \u2192 q and q", "p", false},
-		{"denying the antecedent", "p \u2192 q and \u00acp", "\u00acq", false},
+
+	var forms []form
+
+	// Choose randomized variable pairs to prevent static text caching
+	varSets := [][3]string{
+		{"p", "q", "r"},
+		{"A", "B", "C"},
+		{"P", "Q", "R"},
+		{"u", "v", "w"},
+		{"x", "y", "z"},
 	}
+	vs := varSets[rand.Intn(len(varSets))]
+	pVar, qVar, rVar := vs[0], vs[1], vs[2]
+
+	forms = append(forms,
+		form{"modus ponens", fmt.Sprintf("%s \u2192 %s and %s", pVar, qVar, pVar), qVar, true},
+		form{"modus tollens", fmt.Sprintf("%s \u2192 %s and \u00ac%s", pVar, qVar, qVar), fmt.Sprintf("\u00ac%s", pVar), true},
+		form{"affirming the consequent", fmt.Sprintf("%s \u2192 %s and %s", pVar, qVar, qVar), pVar, false},
+		form{"denying the antecedent", fmt.Sprintf("%s \u2192 %s and \u00ac%s", pVar, qVar, pVar), fmt.Sprintf("\u00ac%s", qVar), false},
+		form{"hypothetical syllogism", fmt.Sprintf("%s \u2192 %s and %s \u2192 %s", pVar, qVar, qVar, rVar), fmt.Sprintf("%s \u2192 %s", pVar, rVar), true},
+		form{"disjunctive syllogism", fmt.Sprintf("%s \u2228 %s and \u00ac%s", pVar, qVar, pVar), qVar, true},
+		form{"affirming a disjunct", fmt.Sprintf("%s \u2228 %s and %s", pVar, qVar, pVar), fmt.Sprintf("\u00ac%s", qVar), false},
+		form{"resolution", fmt.Sprintf("%s \u2228 %s and \u00ac%s \u2228 %s", pVar, qVar, pVar, rVar), fmt.Sprintf("%s \u2228 %s", qVar, rVar), true},
+	)
+
+	// Contextual real-world / mathematical implications
+	switch rand.Intn(4) {
+	case 0:
+		k := 2 * (rand.Intn(4) + 2)
+		forms = append(forms, form{
+			"modus ponens",
+			fmt.Sprintf("If n is divisible by %d then n is even, and n is divisible by %d", k, k),
+			"n is even",
+			true,
+		})
+	case 1:
+		c := rand.Intn(5) + 3
+		forms = append(forms, form{
+			"modus tollens",
+			fmt.Sprintf("If x > %d then x > 0, and x \u2264 0", c),
+			fmt.Sprintf("x \u2264 %d", c),
+			true,
+		})
+	case 2:
+		forms = append(forms, form{
+			"affirming the consequent",
+			"If a quadrilateral is a square then it is a rectangle, and the quadrilateral is a rectangle",
+			"it is a square",
+			false,
+		})
+	case 3:
+		forms = append(forms, form{
+			"denying the antecedent",
+			"If f is differentiable at c then f is continuous at c, and f is not differentiable at c",
+			"f is not continuous at c",
+			false,
+		})
+	}
+
 	f := forms[rand.Intn(len(forms))]
 	q := fmt.Sprintf("Consider the argument: premises %s; conclusion %s. Which argument form is it?", f.premises, f.conclusion)
+
+	allFormNames := []string{
+		"modus ponens",
+		"modus tollens",
+		"affirming the consequent",
+		"denying the antecedent",
+		"hypothetical syllogism",
+		"disjunctive syllogism",
+		"affirming a disjunct",
+		"resolution",
+	}
 	var others []string
-	for _, o := range forms {
-		if o.name != f.name {
-			others = append(others, o.name)
+	perm := rand.Perm(len(allFormNames))
+	for _, idx := range perm {
+		name := allFormNames[idx]
+		if name != f.name {
+			others = append(others, name)
+			if len(others) == 3 {
+				break
+			}
 		}
 	}
+
 	p := generator.MultipleChoice(q, f.name, others...)
 	valid := "yes"
 	if !f.valid {
 		valid = "no"
 	}
 	p.Facts = map[string]string{
-		"form": f.name, "valid": valid, "premises": f.premises, "conclusion": f.conclusion,
+		"form": f.name, "valid": valid, "premises": f.premises, "conclusion": f.conclusion, "answer": f.name,
 	}
 	p.Explanation = fmt.Sprintf("%s is %s: from %s the conclusion %s does%s follow.",
 		f.name, map[bool]string{true: "valid", false: "invalid"}[f.valid], f.premises, f.conclusion,
@@ -146,21 +216,113 @@ func (g *predicatesGen) Generate(ctx generator.GeneratorContext) generator.Probl
 	type entry struct {
 		original, negation, swapped, unchanged, wrongQuantifier, note string
 	}
-	entries := []entry{
-		{"\u2200x \u2203y (x < y)", "\u2203x \u2200y (x \u2265 y)",
-			"\u2203y \u2200x (x < y)", "\u2200x \u2203y (x \u2265 y)", "\u2203x \u2203y (x \u2265 y)",
-			"Negating swaps each quantifier and negates the inner statement."},
-		{"\u2203x \u2200y (x + y = 0)", "\u2200x \u2203y (x + y \u2260 0)",
-			"\u2200y \u2203x (x + y = 0)", "\u2203x \u2200y (x + y \u2260 0)", "\u2200x \u2200y (x + y \u2260 0)",
-			"An existential becomes universal, and the equation becomes its negation."},
-		{"\u2200x (x\u00b2 \u2265 0)", "\u2203x (x\u00b2 < 0)",
-			"\u2200x (x\u00b2 < 0)", "\u00ac\u2200x (x\u00b2 \u2265 0)", "\u2200x (x\u00b2 > 0)",
-			"One counterexample refutes a universal claim, and it must satisfy the strict negation."},
+
+	k := rand.Intn(9) + 1
+	k2 := rand.Intn(5) + 2
+
+	var entries []entry
+	switch rand.Intn(5) {
+	case 0:
+		entries = []entry{
+			{
+				fmt.Sprintf("\u2200x \u2203y (x + y = %d)", k),
+				fmt.Sprintf("\u2203x \u2200y (x + y \u2260 %d)", k),
+				fmt.Sprintf("\u2203y \u2200x (x + y = %d)", k),
+				fmt.Sprintf("\u2200x \u2203y (x + y \u2260 %d)", k),
+				fmt.Sprintf("\u2203x \u2203y (x + y \u2260 %d)", k),
+				"Negating swaps each quantifier and negates the inner equation.",
+			},
+			{
+				fmt.Sprintf("\u2203x \u2200y (%dx + y = 0)", k2),
+				fmt.Sprintf("\u2200x \u2203y (%dx + y \u2260 0)", k2),
+				fmt.Sprintf("\u2200y \u2203x (%dx + y = 0)", k2),
+				fmt.Sprintf("\u2203x \u2200y (%dx + y \u2260 0)", k2),
+				fmt.Sprintf("\u2200x \u2200y (%dx + y \u2260 0)", k2),
+				"An existential becomes universal and the inner equation becomes its negation.",
+			},
+		}
+	case 1:
+		entries = []entry{
+			{
+				fmt.Sprintf("\u2200x \u2203y (x < y + %d)", k),
+				fmt.Sprintf("\u2203x \u2200y (x \u2265 y + %d)", k),
+				fmt.Sprintf("\u2203y \u2200x (x < y + %d)", k),
+				fmt.Sprintf("\u2200x \u2203y (x \u2265 y + %d)", k),
+				fmt.Sprintf("\u2203x \u2203y (x \u2265 y + %d)", k),
+				"Negating swaps each quantifier and reverses the strict inequality to greater-or-equal.",
+			},
+			{
+				fmt.Sprintf("\u2203x \u2200y (x\u00b2 + y\u00b2 \u2264 %d)", k*k),
+				fmt.Sprintf("\u2200x \u2203y (x\u00b2 + y\u00b2 > %d)", k*k),
+				fmt.Sprintf("\u2200y \u2203x (x\u00b2 + y\u00b2 \u2264 %d)", k*k),
+				fmt.Sprintf("\u2203x \u2200y (x\u00b2 + y\u00b2 > %d)", k*k),
+				fmt.Sprintf("\u2200x \u2200y (x\u00b2 + y\u00b2 > %d)", k*k),
+				"Existential becomes universal, and non-strict inequality flips to strict.",
+			},
+		}
+	case 2:
+		entries = []entry{
+			{
+				fmt.Sprintf("\u2200x (x\u00b2 \u2265 %d)", k),
+				fmt.Sprintf("\u2203x (x\u00b2 < %d)", k),
+				fmt.Sprintf("\u2200x (x\u00b2 < %d)", k),
+				fmt.Sprintf("\u00ac\u2200x (x\u00b2 \u2265 %d)", k),
+				fmt.Sprintf("\u2200x (x\u00b2 > %d)", k),
+				"One counterexample refutes a universal claim, and it must satisfy the strict negation.",
+			},
+			{
+				fmt.Sprintf("\u2203x (x + %d = 0)", k),
+				fmt.Sprintf("\u2200x (x + %d \u2260 0)", k),
+				fmt.Sprintf("\u2203x (x + %d \u2260 0)", k),
+				fmt.Sprintf("\u2200x (x - %d = 0)", k),
+				fmt.Sprintf("\u2200x (x + %d = 0)", k),
+				"Negating an existential yields a universal with negated predicate.",
+			},
+		}
+	case 3:
+		entries = []entry{
+			{
+				"\u2200x (P(x) \u2192 Q(x))",
+				"\u2203x (P(x) \u2227 \u00acQ(x))",
+				"\u2200x (\u00acP(x) \u2192 \u00acQ(x))",
+				"\u2203x (\u00acP(x) \u2228 Q(x))",
+				"\u2200x (P(x) \u2227 \u00acQ(x))",
+				"The negation of an implication P -> Q is P and not Q; universal becomes existential.",
+			},
+			{
+				"\u2203x (P(x) \u2227 Q(x))",
+				"\u2200x (\u00acP(x) \u2228 \u00acQ(x))",
+				"\u2200x (\u00acP(x) \u2227 \u00acQ(x))",
+				"\u2203x (\u00acP(x) \u2228 \u00acQ(x))",
+				"\u2200x (P(x) \u2228 Q(x))",
+				"By De Morgan's laws for quantifiers and conjunction, existential becomes universal and conjunction becomes disjunction of negations.",
+			},
+		}
+	default:
+		entries = []entry{
+			{
+				fmt.Sprintf("\u2200n \u2208 \u2124 (n > %d \u2192 n\u00b2 > %d)", k, k*k),
+				fmt.Sprintf("\u2203n \u2208 \u2124 (n > %d \u2227 n\u00b2 \u2264 %d)", k, k*k),
+				fmt.Sprintf("\u2200n \u2208 \u2124 (n \u2264 %d \u2192 n\u00b2 \u2264 %d)", k, k*k),
+				fmt.Sprintf("\u2203n \u2208 \u2124 (n > %d \u2192 n\u00b2 \u2264 %d)", k, k*k),
+				fmt.Sprintf("\u2203n \u2208 \u2124 (n \u2264 %d \u2227 n\u00b2 > %d)", k, k*k),
+				"Negating a universal implication produces an existential with the antecedent asserting and consequent negated.",
+			},
+			{
+				fmt.Sprintf("\u2203x \u2208 \u211d (x\u00b2 + %d = 0)", k),
+				fmt.Sprintf("\u2200x \u2208 \u211d (x\u00b2 + %d \u2260 0)", k),
+				fmt.Sprintf("\u2200x \u2208 \u211d (x\u00b2 + %d = 0)", k),
+				fmt.Sprintf("\u2203x \u2208 \u211d (x\u00b2 + %d \u2260 0)", k),
+				fmt.Sprintf("\u2200x \u2208 \u211d (x\u00b2 - %d \u2260 0)", k),
+				"The negation of an existence claim states that the condition fails for all real numbers.",
+			},
+		}
 	}
+
 	e := entries[rand.Intn(len(entries))]
-	q := fmt.Sprintf("Which statement is the negation of %s over the integers?", e.original)
+	q := fmt.Sprintf("Which statement is the negation of %s over the specified domain?", e.original)
 	p := generator.MultipleChoice(q, e.negation, e.swapped, e.unchanged, e.wrongQuantifier)
-	p.Facts = map[string]string{"original": e.original, "negation": e.negation, "why": e.note}
+	p.Facts = map[string]string{"original": e.original, "negation": e.negation, "why": e.note, "answer": e.negation}
 	p.Explanation = e.note
 	return p
 }
@@ -192,11 +354,39 @@ type contrapositiveGen struct{}
 
 func (g *contrapositiveGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	type pair struct{ p, q, notP, notQ string }
-	pairs := []pair{
-		{"n is even", "n\u00b2 is even", "n is odd", "n\u00b2 is odd"},
-		{"x > 3", "x\u00b2 > 9", "x \u2264 3", "x\u00b2 \u2264 9"},
-		{"a divides 12", "a divides 24", "a does not divide 12", "a does not divide 24"},
+
+	k := rand.Intn(8) + 2
+	c := rand.Intn(5) + 2
+
+	var pairs []pair
+	switch rand.Intn(5) {
+	case 0:
+		pairs = []pair{
+			{fmt.Sprintf("x > %d", k), fmt.Sprintf("x\u00b2 > %d", k*k), fmt.Sprintf("x \u2264 %d", k), fmt.Sprintf("x\u00b2 \u2264 %d", k*k)},
+			{fmt.Sprintf("x < -%d", k), fmt.Sprintf("x\u00b2 > %d", k*k), fmt.Sprintf("x \u2265 -%d", k), fmt.Sprintf("x\u00b2 \u2264 %d", k*k)},
+		}
+	case 1:
+		pairs = []pair{
+			{fmt.Sprintf("n is divisible by %d", 2*c), "n is even", fmt.Sprintf("n is not divisible by %d", 2*c), "n is odd"},
+			{fmt.Sprintf("a divides %d", c*2), fmt.Sprintf("a divides %d", c*4), fmt.Sprintf("a does not divide %d", c*2), fmt.Sprintf("a does not divide %d", c*4)},
+		}
+	case 2:
+		pairs = []pair{
+			{fmt.Sprintf("3n + %d is odd", 2*c-1), "n is even", fmt.Sprintf("3n + %d is even", 2*c-1), "n is odd"},
+			{fmt.Sprintf("n\u00b2 - %d is odd", 2*c-1), "n is even", fmt.Sprintf("n\u00b2 - %d is even", 2*c-1), "n is odd"},
+		}
+	case 3:
+		pairs = []pair{
+			{"f is differentiable at x = c", "f is continuous at x = c", "f is not differentiable at x = c", "f is not continuous at x = c"},
+			{"a series \u2211 a_n converges", "the sequence a_n converges to 0", "a series \u2211 a_n diverges", "the sequence a_n does not converge to 0"},
+		}
+	default:
+		pairs = []pair{
+			{fmt.Sprintf("a + b > %d", 2*k), fmt.Sprintf("a > %d or b > %d", k, k), fmt.Sprintf("a + b \u2264 %d", 2*k), fmt.Sprintf("a \u2264 %d and b \u2264 %d", k, k)},
+			{fmt.Sprintf("m \u00b7 n is divisible by %d", c), fmt.Sprintf("m is divisible by %d or n is divisible by %d", c, c), fmt.Sprintf("m \u00b7 n is not divisible by %d", c), fmt.Sprintf("m is not divisible by %d and n is not divisible by %d", c, c)},
+		}
 	}
+
 	s := pairs[rand.Intn(len(pairs))]
 	correct := fmt.Sprintf("If %s then %s", s.notQ, s.notP)
 	converse := fmt.Sprintf("If %s then %s", s.q, s.p)
@@ -205,7 +395,7 @@ func (g *contrapositiveGen) Generate(ctx generator.GeneratorContext) generator.P
 	q := fmt.Sprintf("The statement is: if %s then %s. Which is its contrapositive?", s.p, s.q)
 	p := generator.MultipleChoice(q, correct, converse, inverse, negation)
 	p.Facts = map[string]string{
-		"p": s.p, "q": s.q, "contrapositive": correct, "converse": converse, "inverse": inverse,
+		"p": s.p, "q": s.q, "contrapositive": correct, "converse": converse, "inverse": inverse, "answer": correct,
 	}
 	p.Explanation = fmt.Sprintf("%s is logically equivalent to its contrapositive: proving \u201cif %s then %s\u201d proves the original.",
 		fmt.Sprintf("If %s then %s", s.p, s.q), s.notQ, s.notP)
