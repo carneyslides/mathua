@@ -19,6 +19,7 @@ import (
 	"math"
 	"math/rand"
 	"strconv"
+	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
 )
@@ -131,26 +132,27 @@ func (g *archimedeanGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type sequenceGen struct{}
 
 func (g *sequenceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		a, b, c, d int
+	cDenoms := []int{2, 4, 5, 8, 10}
+	var a, b, c, d int
+	var answer, question string
+	for {
+		c = cDenoms[rand.Intn(len(cDenoms))]
+		a = rand.Intn(40) + 1
+		b = rand.Intn(15) + 1
+		d = rand.Intn(15) + 1
+		answer = decimal6(float64(a) / float64(c))
+		question = "The sequence with terms (" + strconv.Itoa(a) + "n + " + strconv.Itoa(b) + ")/(" +
+			strconv.Itoa(c) + "n + " + strconv.Itoa(d) + ") converges as n tends to infinity. What is its limit? (enter a decimal)"
+		if answer != strconv.Itoa(a) && answer != strconv.Itoa(b) && answer != strconv.Itoa(c) && answer != strconv.Itoa(d) && !strings.Contains(question, answer) {
+			break
+		}
 	}
-	claims := []claim{
-		{a: 2, b: 1, c: 1, d: 3},
-		{a: 3, b: 0, c: 2, d: 1},
-		{a: 1, b: 0, c: 4, d: 7},
-		{a: 5, b: 2, c: 1, d: 1},
-		{a: 6, b: 0, c: 3, d: 1},
-		{a: 7, b: 1, c: 2, d: 3},
-	}
-	c := claims[rand.Intn(len(claims))]
-	answer := decimal6(float64(c.a) / float64(c.c))
 	return generator.Problem{
-		Question: "The sequence with terms (" + strconv.Itoa(c.a) + "n + " + strconv.Itoa(c.b) + ")/(" +
-			strconv.Itoa(c.c) + "n + " + strconv.Itoa(c.d) + ") converges as n tends to infinity. What is its limit? (enter a decimal)",
+		Question:    question,
 		Answer:      answer,
-		Explanation: "Dividing the numerator and denominator by n, the ratio of the leading coefficients is the limit, because the constant terms become negligible; here that ratio is " + strconv.Itoa(c.a) + "/" + strconv.Itoa(c.c) + " = " + answer + ".",
+		Explanation: "Dividing the numerator and denominator by n, the ratio of the leading coefficients is the limit, because the constant terms become negligible; here that ratio is " + strconv.Itoa(a) + "/" + strconv.Itoa(c) + " = " + answer + ".",
 		Facts: map[string]string{
-			"a": strconv.Itoa(c.a), "b": strconv.Itoa(c.b), "c": strconv.Itoa(c.c), "d": strconv.Itoa(c.d), "answer": answer,
+			"a": strconv.Itoa(a), "b": strconv.Itoa(b), "c": strconv.Itoa(c), "d": strconv.Itoa(d), "answer": answer,
 		},
 	}
 }

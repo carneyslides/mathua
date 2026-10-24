@@ -479,42 +479,64 @@ type cramerGen struct{}
 
 func (g *cramerGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	rng := rand.New(rand.NewSource(rand.Int63()))
-	mat := mathutil.RandomUnimodular2x2(rng, 1+int(ctx.Difficulty*3))
-	a, b := mat.A, mat.B
-	c, d := mat.C, mat.D
-	detA := a*d - b*c
+	for attempt := 0; attempt < 100; attempt++ {
+		mat := mathutil.RandomUnimodular2x2(rng, 1+int(ctx.Difficulty*3))
+		a, b := mat.A, mat.B
+		c, d := mat.C, mat.D
+		if b == 0 || c == 0 {
+			continue
+		}
+		detA := a*d - b*c
 
-	x := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
-	y := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
-	if rand.Intn(2) == 0 {
-		x = -x
-	}
-	if rand.Intn(2) == 0 {
-		y = -y
-	}
-	e1 := a*x + b*y
-	e2 := c*x + d*y
+		x := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		y := mathutil.ScaleInt(ctx.Difficulty, 1, 8)
+		if rand.Intn(2) == 0 {
+			x = -x
+		}
+		if rand.Intn(2) == 0 {
+			y = -y
+		}
+		e1 := a*x + b*y
+		e2 := c*x + d*y
 
-	askX := rand.Intn(2) == 0
-	if askX {
-		detX := e1*d - b*e2
-		valX := detX / detA
-		return generator.Problem{
-			Question: fmt.Sprintf("Use Cramer's rule to find \\(x\\) for the linear system: \\(%dx + %dy = %d\\), \\(%dx + %dy = %d\\).", a, b, e1, c, d, e2),
-			Answer:   fmt.Sprintf("%d", valX),
-			Explanation: fmt.Sprintf("Subgoal 1: State Cramer's rule for coordinate \\(x\\): \\(x = \\frac{\\det(A_x)}{\\det(A)}\\).\n"+
+		askX := rand.Intn(2) == 0
+		if askX {
+			detX := e1*d - b*e2
+			valX := detX / detA
+			ansStr := fmt.Sprintf("%d", valX)
+			q := fmt.Sprintf("Use Cramer's rule to find \\(x\\) for the linear system: \\(%dx + %dy = %d\\), \\(%dx + %dy = %d\\).", a, b, e1, c, d, e2)
+			if strings.Contains(q, ansStr) || valX == e1 || valX == e2 || valX == a || valX == b || valX == c || valX == d {
+				continue
+			}
+			ex := fmt.Sprintf("Subgoal 1: State Cramer's rule for coordinate \\(x\\): \\(x = \\frac{\\det(A_x)}{\\det(A)}\\).\n"+
 				"Subgoal 2: Compute coefficient determinant \\(\\det(A) = (%d)(%d) - (%d)(%d) = %d\\) and modified determinant \\(\\det(A_x) = (%d)(%d) - (%d)(%d) = %d\\).\n"+
-				"Subgoal 3: Divide determinants: \\(x = \\frac{%d}{%d} = %d\\).", a, d, b, c, detA, e1, d, b, e2, detX, detX, detA, valX),
+				"Subgoal 3: Divide determinants: \\(x = \\frac{%d}{%d} = %d\\).", a, d, b, c, detA, e1, d, b, e2, detX, detX, detA, valX)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+			}
+		}
+		detY := a*e2 - e1*c
+		valY := detY / detA
+		ansStr := fmt.Sprintf("%d", valY)
+		q := fmt.Sprintf("Use Cramer's rule to find \\(y\\) for the linear system: \\(%dx + %dy = %d\\), \\(%dx + %dy = %d\\).", a, b, e1, c, d, e2)
+		if strings.Contains(q, ansStr) || valY == e1 || valY == e2 || valY == a || valY == b || valY == c || valY == d {
+			continue
+		}
+		ex := fmt.Sprintf("Subgoal 1: State Cramer's rule for coordinate \\(y\\): \\(y = \\frac{\\det(A_y)}{\\det(A)}\\).\n"+
+			"Subgoal 2: Compute coefficient determinant \\(\\det(A) = (%d)(%d) - (%d)(%d) = %d\\) and modified determinant \\(\\det(A_y) = (%d)(%d) - (%d)(%d) = %d\\).\n"+
+			"Subgoal 3: Divide determinants: \\(y = \\frac{%d}{%d} = %d\\).", a, d, b, c, detA, a, e2, e1, c, detY, detY, detA, valY)
+		return generator.Problem{
+			Question:    q,
+			Answer:      ansStr,
+			Explanation: ex,
 		}
 	}
-	detY := a*e2 - e1*c
-	valY := detY / detA
 	return generator.Problem{
-		Question: fmt.Sprintf("Use Cramer's rule to find \\(y\\) for the linear system: \\(%dx + %dy = %d\\), \\(%dx + %dy = %d\\).", a, b, e1, c, d, e2),
-		Answer:   fmt.Sprintf("%d", valY),
-		Explanation: fmt.Sprintf("Subgoal 1: State Cramer's rule for coordinate \\(y\\): \\(y = \\frac{\\det(A_y)}{\\det(A)}\\).\n"+
-			"Subgoal 2: Compute coefficient determinant \\(\\det(A) = (%d)(%d) - (%d)(%d) = %d\\) and modified determinant \\(\\det(A_y) = (%d)(%d) - (%d)(%d) = %d\\).\n"+
-			"Subgoal 3: Divide determinants: \\(y = \\frac{%d}{%d} = %d\\).", a, d, b, c, detA, a, e2, e1, c, detY, detY, detA, valY),
+		Question:    "Use Cramer's rule to find \\(x\\) for the linear system: \\(2x + 1y = 7\\), \\(1x + 1y = 4\\).",
+		Answer:      "3",
+		Explanation: "det(A) = 1, det(Ax) = 3, so x = 3.",
 	}
 }
 
@@ -1165,130 +1187,185 @@ type diagonalizationGen struct{}
 func (g *diagonalizationGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	rng := rand.New(rand.NewSource(rand.Int63()))
 
-	if ctx.Difficulty >= 0.4 {
-		l1 := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
-		l2 := l1 + 1 + rand.Intn(3)
-		l3 := l2 + 1 + rand.Intn(3)
-		if rand.Intn(2) == 0 {
-			l1 = -l1
-		}
-		mat3, _, ok := mathutil.IntegerEigenvalues3x3(rng, l1, l2, l3, 2)
-		if ok {
-			mode := rand.Intn(4)
-			switch mode {
-			case 0:
-				// Trace of diagonal matrix D
-				tr := l1 + l2 + l3
-				return generator.Problem{
-					Question: fmt.Sprintf("The 3x3 matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the trace of \\(D\\)?", mat3.LaTeX()),
-					Answer:   fmt.Sprintf("%d", tr),
-					Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of trace: \\(\\operatorname{tr}(D) = \\operatorname{tr}(A) = \\lambda_1 + \\lambda_2 + \\lambda_3\\).\n"+
-						"Subgoal 2: Compute the trace of \\(A\\) by summing its diagonal entries: %d + %d + %d.\n"+
-						"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(D) = %d\\).", mat3.Entry[0][0], mat3.Entry[1][1], mat3.Entry[2][2], tr),
-				}
-			case 1:
-				// Determinant of diagonal matrix D
-				det := l1 * l2 * l3
-				return generator.Problem{
-					Question: fmt.Sprintf("The 3x3 matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the determinant of \\(D\\)?", mat3.LaTeX()),
-					Answer:   fmt.Sprintf("%d", det),
-					Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of determinant: \\(\\det(D) = \\det(A) = \\lambda_1 \\lambda_2 \\lambda_3\\).\n"+
-						"Subgoal 2: Compute \\(\\det(A) = %d\\).\n"+
-						"Subgoal 3: Conclude that \\(\\det(D) = %d\\).", det, det),
-				}
-			case 2:
-				// Power trace tr(A^2)
-				ans := l1*l1 + l2*l2 + l3*l3
-				return generator.Problem{
-					Question: fmt.Sprintf("Let \\(A = PDP^{-1}\\) be a 3x3 diagonalizable matrix with diagonal matrix \\(D = \\operatorname{diag}(%d, %d, %d)\\). Compute \\(\\operatorname{tr}(A^2)\\).", l1, l2, l3),
-					Answer:   fmt.Sprintf("%d", ans),
-					Explanation: fmt.Sprintf("Subgoal 1: State the power trace formula: \\(\\operatorname{tr}(A^2) = \\operatorname{tr}(D^2) = \\lambda_1^2 + \\lambda_2^2 + \\lambda_3^2\\).\n"+
-						"Subgoal 2: Substitute the eigenvalues: \\((%d)^2 + (%d)^2 + (%d)^2\\).\n"+
-						"Subgoal 3: Evaluate squares and sum: %d + %d + %d = %d.", l1, l2, l3, l1*l1, l2*l2, l3*l3, ans),
-				}
-			default:
-				// Largest eigenvalue
-				larger := l1
-				if l2 > larger {
-					larger = l2
-				}
-				if l3 > larger {
-					larger = l3
-				}
-				return generator.Problem{
-					Question: fmt.Sprintf("The 3x3 matrix \\(A = %s\\) has distinct integer eigenvalues. Find its largest eigenvalue.", mat3.LaTeX()),
-					Answer:   fmt.Sprintf("%d", larger),
-					Explanation: fmt.Sprintf("Subgoal 1: Compute the characteristic polynomial \\(\\det(A - \\lambda I) = 0\\) to find eigenvalues \\(\\lambda_1 = %d, \\lambda_2 = %d\\) and \\(\\lambda_3 = %d\\).\n"+
-						"Subgoal 2: Compare the eigenvalues to identify the maximum.\n"+
-						"Subgoal 3: Select the largest eigenvalue: %d.", l1, l2, l3, larger),
+	for attempt := 0; attempt < 50; attempt++ {
+		if ctx.Difficulty >= 0.4 {
+			l1 := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+			l2 := l1 + 1 + rand.Intn(3)
+			l3 := l2 + 1 + rand.Intn(3)
+			if rand.Intn(2) == 0 {
+				l1 = -l1
+			}
+			mat3, _, ok := mathutil.IntegerEigenvalues3x3(rng, l1, l2, l3, 2)
+			if ok {
+				mode := rand.Intn(4)
+				switch mode {
+				case 0:
+					// Trace of diagonal matrix D
+					tr := l1 + l2 + l3
+					ansStr := fmt.Sprintf("%d", tr)
+					q := fmt.Sprintf("The 3x3 matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the trace of \\(D\\)?", mat3.LaTeX())
+					if strings.Contains(q, ansStr) {
+						continue
+					}
+					return generator.Problem{
+						Question: q,
+						Answer:   ansStr,
+						Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of trace: \\(\\operatorname{tr}(D) = \\operatorname{tr}(A) = \\lambda_1 + \\lambda_2 + \\lambda_3\\).\n"+
+							"Subgoal 2: Compute the trace of \\(A\\) by summing its diagonal entries: %d + %d + %d.\n"+
+							"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(D) = %d\\).", mat3.Entry[0][0], mat3.Entry[1][1], mat3.Entry[2][2], tr),
+					}
+				case 1:
+					// Determinant of diagonal matrix D
+					det := l1 * l2 * l3
+					ansStr := fmt.Sprintf("%d", det)
+					q := fmt.Sprintf("The 3x3 matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the determinant of \\(D\\)?", mat3.LaTeX())
+					if strings.Contains(q, ansStr) {
+						continue
+					}
+					return generator.Problem{
+						Question: q,
+						Answer:   ansStr,
+						Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of determinant: \\(\\det(D) = \\det(A) = \\lambda_1 \\lambda_2 \\lambda_3\\).\n"+
+							"Subgoal 2: Compute \\(\\det(A) = %d\\).\n"+
+							"Subgoal 3: Conclude that \\(\\det(D) = %d\\).", det, det),
+					}
+				case 2:
+					// Power trace tr(A^2)
+					ans := l1*l1 + l2*l2 + l3*l3
+					ansStr := fmt.Sprintf("%d", ans)
+					q := fmt.Sprintf("Let \\(A = PDP^{-1}\\) be a 3x3 diagonalizable matrix with diagonal matrix \\(D = \\operatorname{diag}(%d, %d, %d)\\). Compute \\(\\operatorname{tr}(A^2)\\).", l1, l2, l3)
+					if strings.Contains(q, ansStr) {
+						continue
+					}
+					return generator.Problem{
+						Question: q,
+						Answer:   ansStr,
+						Explanation: fmt.Sprintf("Subgoal 1: State the power trace formula: \\(\\operatorname{tr}(A^2) = \\operatorname{tr}(D^2) = \\lambda_1^2 + \\lambda_2^2 + \\lambda_3^2\\).\n"+
+							"Subgoal 2: Substitute the eigenvalues: \\((%d)^2 + (%d)^2 + (%d)^2\\).\n"+
+							"Subgoal 3: Evaluate squares and sum: %d + %d + %d = %d.", l1, l2, l3, l1*l1, l2*l2, l3*l3, ans),
+					}
+				default:
+					// Largest eigenvalue
+					larger := l1
+					if l2 > larger {
+						larger = l2
+					}
+					if l3 > larger {
+						larger = l3
+					}
+					ansStr := fmt.Sprintf("%d", larger)
+					q := fmt.Sprintf("The 3x3 matrix \\(A = %s\\) has distinct integer eigenvalues. Find its largest eigenvalue.", mat3.LaTeX())
+					if strings.Contains(q, ansStr) {
+						continue
+					}
+					return generator.Problem{
+						Question: q,
+						Answer:   ansStr,
+						Explanation: fmt.Sprintf("Subgoal 1: Compute the characteristic polynomial \\(\\det(A - \\lambda I) = 0\\) to find eigenvalues \\(\\lambda_1 = %d, \\lambda_2 = %d\\) and \\(\\lambda_3 = %d\\).\n"+
+							"Subgoal 2: Compare the eigenvalues to identify the maximum.\n"+
+							"Subgoal 3: Select the largest eigenvalue: %d.", l1, l2, l3, larger),
+					}
 				}
 			}
 		}
 	}
 
-	l1 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
-	l2 := l1 + mathutil.ScaleInt(ctx.Difficulty, 1, 4)
-	if rand.Intn(2) == 0 {
-		l1 = -l1
-	}
-	mat := mathutil.IntegerEigenvalues2x2(rng, l1, l2, 1+int(ctx.Difficulty*2))
+	for attempt2 := 0; attempt2 < 50; attempt2++ {
+		l1 := mathutil.ScaleInt(ctx.Difficulty, 1, 5)
+		l2 := l1 + mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+		if rand.Intn(2) == 0 {
+			l1 = -l1
+		}
+		mat := mathutil.IntegerEigenvalues2x2(rng, l1, l2, 1+int(ctx.Difficulty*2))
 
-	mode := rand.Intn(5)
-	switch mode {
-	case 0:
-		// Trace of diagonal matrix D
-		tr := l1 + l2
-		return generator.Problem{
-			Question: fmt.Sprintf("The matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the trace of \\(D\\)?", mat.LaTeX()),
-			Answer:   fmt.Sprintf("%d", tr),
-			Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of trace: \\(\\operatorname{tr}(D) = \\operatorname{tr}(A) = \\lambda_1 + \\lambda_2\\).\n"+
-				"Subgoal 2: Compute the trace of \\(A\\) by summing its diagonal entries: \\((%d) + (%d)\\).\n"+
-				"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(D) = %d\\).", mat.A, mat.D, tr),
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			// Trace of diagonal matrix D
+			tr := l1 + l2
+			ansStr := fmt.Sprintf("%d", tr)
+			q := fmt.Sprintf("The matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the trace of \\(D\\)?", mat.LaTeX())
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of trace: \\(\\operatorname{tr}(D) = \\operatorname{tr}(A) = \\lambda_1 + \\lambda_2\\).\n"+
+					"Subgoal 2: Compute the trace of \\(A\\) by summing its diagonal entries: \\((%d) + (%d)\\).\n"+
+					"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(D) = %d\\).", mat.A, mat.D, tr),
+			}
+		case 1:
+			// Determinant of diagonal matrix D
+			det := l1 * l2
+			ansStr := fmt.Sprintf("%d", det)
+			q := fmt.Sprintf("The matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the determinant of \\(D\\)?", mat.LaTeX())
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of determinant: \\(\\det(D) = \\det(A) = \\lambda_1 \\lambda_2\\).\n"+
+					"Subgoal 2: Compute the determinant of \\(A\\): \\((%d)(%d) - (%d)(%d)\\).\n"+
+					"Subgoal 3: Evaluate products to find \\(\\det(D) = %d\\).", mat.A, mat.D, mat.B, mat.C, det),
+			}
+		case 2:
+			// Power trace tr(A^2)
+			ans := l1*l1 + l2*l2
+			ansStr := fmt.Sprintf("%d", ans)
+			q := fmt.Sprintf("Let \\(A = PDP^{-1}\\) be diagonalizable with diagonal matrix \\(D = \\begin{pmatrix} %d & 0 \\\\ 0 & %d \\end{pmatrix}\\). Compute \\(\\operatorname{tr}(A^2)\\).", l1, l2)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf("Subgoal 1: State the power trace formula: \\(\\operatorname{tr}(A^2) = \\operatorname{tr}(D^2) = \\lambda_1^2 + \\lambda_2^2\\).\n"+
+					"Subgoal 2: Substitute the eigenvalues \\(\\lambda_1 = %d\\) and \\(\\lambda_2 = %d\\): \\((%d)^2 + (%d)^2\\).\n"+
+					"Subgoal 3: Evaluate squares and sum: %d + %d = %d.", l1, l2, l1, l2, l1*l1, l2*l2, ans),
+			}
+		case 3:
+			// Larger eigenvalue of diagonalizable matrix
+			larger := l1
+			if l2 > larger {
+				larger = l2
+			}
+			ansStr := fmt.Sprintf("%d", larger)
+			q := fmt.Sprintf("The matrix \\(A = %s\\) has distinct integer eigenvalues. Find its largest eigenvalue.", mat.LaTeX())
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf("Subgoal 1: State the characteristic equation \\(\\det(A - \\lambda I) = \\lambda^2 - \\operatorname{tr}(A)\\lambda + \\det(A) = 0\\).\n"+
+					"Subgoal 2: Substitute \\(\\operatorname{tr}(A) = %d\\) and \\(\\det(A) = %d\\) to solve for roots \\(\\lambda_1 = %d\\) and \\(\\lambda_2 = %d\\).\n"+
+					"Subgoal 3: Select the maximum root: %d.", mat.Trace(), mat.Det(), l1, l2, larger),
+			}
+		default:
+			// Shifted determinant det(A - c I)
+			c := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
+			ans := (l1 - c) * (l2 - c)
+			ansStr := fmt.Sprintf("%d", ans)
+			q := fmt.Sprintf("A diagonalizable matrix \\(A\\) has eigenvalues \\(\\lambda_1 = %d\\) and \\(\\lambda_2 = %d\\). Compute \\(\\det(A - %d I)\\).", l1, l2, c)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf("Subgoal 1: State the spectral shift property: eigenvalues of \\(A - cI\\) are \\(\\lambda_1 - c\\) and \\(\\lambda_2 - c\\), so \\(\\det(A - cI) = (\\lambda_1 - c)(\\lambda_2 - c)\\).\n"+
+					"Subgoal 2: Substitute eigenvalues and shift scalar: \\((%d - %d)(%d - %d)\\).\n"+
+					"Subgoal 3: Multiply the shifted factors to obtain %d.", l1, c, l2, c, ans),
+			}
 		}
-	case 1:
-		// Determinant of diagonal matrix D
-		det := l1 * l2
-		return generator.Problem{
-			Question: fmt.Sprintf("The matrix \\(A = %s\\) is diagonalizable as \\(A = PDP^{-1}\\) with \\(D\\) diagonal. What is the determinant of \\(D\\)?", mat.LaTeX()),
-			Answer:   fmt.Sprintf("%d", det),
-			Explanation: fmt.Sprintf("Subgoal 1: State the similarity invariance of determinant: \\(\\det(D) = \\det(A) = \\lambda_1 \\lambda_2\\).\n"+
-				"Subgoal 2: Compute the determinant of \\(A\\): \\((%d)(%d) - (%d)(%d)\\).\n"+
-				"Subgoal 3: Evaluate products to find \\(\\det(D) = %d\\).", mat.A, mat.D, mat.B, mat.C, det),
-		}
-	case 2:
-		// Power trace tr(A^2)
-		ans := l1*l1 + l2*l2
-		return generator.Problem{
-			Question: fmt.Sprintf("Let \\(A = PDP^{-1}\\) be diagonalizable with diagonal matrix \\(D = \\begin{pmatrix} %d & 0 \\\\ 0 & %d \\end{pmatrix}\\). Compute \\(\\operatorname{tr}(A^2)\\).", l1, l2),
-			Answer:   fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("Subgoal 1: State the power trace formula: \\(\\operatorname{tr}(A^2) = \\operatorname{tr}(D^2) = \\lambda_1^2 + \\lambda_2^2\\).\n"+
-				"Subgoal 2: Substitute the eigenvalues \\(\\lambda_1 = %d\\) and \\(\\lambda_2 = %d\\): \\((%d)^2 + (%d)^2\\).\n"+
-				"Subgoal 3: Evaluate squares and sum: %d + %d = %d.", l1, l2, l1, l2, l1*l1, l2*l2, ans),
-		}
-	case 3:
-		// Larger eigenvalue of diagonalizable matrix
-		larger := l1
-		if l2 > larger {
-			larger = l2
-		}
-		return generator.Problem{
-			Question: fmt.Sprintf("The matrix \\(A = %s\\) has distinct integer eigenvalues. Find its largest eigenvalue.", mat.LaTeX()),
-			Answer:   fmt.Sprintf("%d", larger),
-			Explanation: fmt.Sprintf("Subgoal 1: State the characteristic equation \\(\\det(A - \\lambda I) = \\lambda^2 - \\operatorname{tr}(A)\\lambda + \\det(A) = 0\\).\n"+
-				"Subgoal 2: Substitute \\(\\operatorname{tr}(A) = %d\\) and \\(\\det(A) = %d\\) to solve for roots \\(\\lambda_1 = %d\\) and \\(\\lambda_2 = %d\\).\n"+
-				"Subgoal 3: Select the maximum root: %d.", mat.Trace(), mat.Det(), l1, l2, larger),
-		}
-	default:
-		// Shifted determinant det(A - c I)
-		c := mathutil.ScaleInt(ctx.Difficulty, 1, 4)
-		ans := (l1 - c) * (l2 - c)
-		return generator.Problem{
-			Question: fmt.Sprintf("A diagonalizable matrix \\(A\\) has eigenvalues \\(\\lambda_1 = %d\\) and \\(\\lambda_2 = %d\\). Compute \\(\\det(A - %d I)\\).", l1, l2, c),
-			Answer:   fmt.Sprintf("%d", ans),
-			Explanation: fmt.Sprintf("Subgoal 1: State the spectral shift property: eigenvalues of \\(A - cI\\) are \\(\\lambda_1 - c\\) and \\(\\lambda_2 - c\\), so \\(\\det(A - cI) = (\\lambda_1 - c)(\\lambda_2 - c)\\).\n"+
-				"Subgoal 2: Substitute eigenvalues and shift scalar: \\((%d - %d)(%d - %d)\\).\n"+
-				"Subgoal 3: Multiply the shifted factors to obtain %d.", l1, c, l2, c, ans),
-		}
+	}
+
+	return generator.Problem{
+		Question:    "Let \\(A = PDP^{-1}\\) be diagonalizable with diagonal matrix \\(D = \\begin{pmatrix} 2 & 0 \\\\ 0 & 5 \\end{pmatrix}\\). Compute \\(\\operatorname{tr}(A)\\).",
+		Answer:      "7",
+		Explanation: "The trace of D is 2 + 5 = 7.",
 	}
 }
 
@@ -1828,7 +1905,7 @@ func (g *qrGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 		case 0:
 			ansStr := strconv.Itoa(r)
 			q := fmt.Sprintf("The first column of real matrix \\(A\\) is \\(a_1 = \\begin{pmatrix} %d \\\\ %d \\end{pmatrix}\\). In the QR decomposition \\(A = QR\\), find the diagonal entry \\(r_{11} = \\|a_1\\|\\).", a, b)
-			if r == a || r == b || containsWord(q, ansStr) {
+			if r == a || r == -a || r == b || r == -b || strings.Contains(q, ansStr) {
 				continue
 			}
 			ex := fmt.Sprintf("Subgoal 1: State the first column norm property in QR factorization: \\(r_{11} = \\|a_1\\| = \\sqrt{a_{11}^2 + a_{21}^2}\\).\n"+
@@ -1849,7 +1926,7 @@ func (g *qrGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 			r12 := u * r
 			ansStr := strconv.Itoa(r12)
 			q := fmt.Sprintf("Consider matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\) with columns \\(a_1\\) and \\(a_2\\). In the QR factorization \\(A = QR\\), compute the upper entry \\(r_{12} = q_1^T a_2\\).", a, c, b, d)
-			if r12 == a || r12 == b || r12 == c || r12 == d || containsWord(q, ansStr) {
+			if r12 == a || r12 == -a || r12 == b || r12 == -b || r12 == c || r12 == -c || r12 == d || r12 == -d || strings.Contains(q, ansStr) {
 				continue
 			}
 			ex := fmt.Sprintf("Subgoal 1: State the Gram-Schmidt projection formula for \\(r_{12}\\): \\(r_{12} = q_1 \\cdot a_2 = \\frac{1}{r_{11}} (a_1 \\cdot a_2)\\).\n"+
@@ -1872,7 +1949,7 @@ func (g *qrGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 			r22 := v * r
 			ansStr := strconv.Itoa(r22)
 			q := fmt.Sprintf("Consider matrix \\(A = \\begin{pmatrix} %d & %d \\\\ %d & %d \\end{pmatrix}\\). In the QR decomposition \\(A = QR\\) with positive diagonal entries, find \\(r_{22}\\).", a, c, b, d)
-			if r22 == a || r22 == b || r22 == c || r22 == d || containsWord(q, ansStr) {
+			if r22 == a || r22 == -a || r22 == b || r22 == -b || r22 == c || r22 == -c || r22 == d || r22 == -d || strings.Contains(q, ansStr) {
 				continue
 			}
 			ex := fmt.Sprintf("Subgoal 1: State the second diagonal entry definition: \\(r_{22} = \\|a_2 - r_{12} q_1\\|\\).\n"+

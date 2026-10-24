@@ -28,13 +28,13 @@ type mseConvertedGen struct{}
 
 func (g *mseConvertedGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	for attempt := 0; attempt < 100; attempt++ {
-		t0 := rand.Intn(7) + 1
-		t1 := rand.Intn(7) + 1
-		t2 := rand.Intn(7) + 1
+		t0 := rand.Intn(10) + 2
+		t1 := rand.Intn(10) + 2
+		t2 := rand.Intn(10) + 2
 
-		d0 := rand.Intn(7) - 3
-		d1 := rand.Intn(7) - 3
-		d2 := rand.Intn(7) - 3
+		d0 := rand.Intn(13) - 6
+		d1 := rand.Intn(13) - 6
+		d2 := rand.Intn(13) - 6
 		sumSq := d0*d0 + d1*d1 + d2*d2
 		if sumSq == 0 || sumSq%3 != 0 {
 			continue

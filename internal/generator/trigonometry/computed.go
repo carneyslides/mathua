@@ -295,32 +295,39 @@ var computedTriples = [][3]int{{3, 4, 5}, {5, 12, 13}, {8, 15, 17}, {7, 24, 25},
 type sumDiffGen struct{}
 
 func (g *sumDiffGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	t1 := computedTriples[rand.Intn(len(computedTriples))]
-	t2 := computedTriples[rand.Intn(len(computedTriples))]
-	sinA, cosA := t1[0], t1[1]
-	sinB, cosB := t2[0], t2[1]
-	fn, expr := "\\sin", "\\alpha+\\beta"
-	term1, term2 := sinA*cosB, cosA*sinB
-	if rand.Intn(2) == 0 {
-		fn, expr = "\\cos", "\\alpha-\\beta"
-		term1, term2 = cosA*cosB, sinA*sinB
-	}
-	sum, rawDen := term1+term2, t1[2]*t2[2]
-	d := gcd(sum, rawDen)
-	num, den := sum/d, rawDen/d
-	return generator.Problem{
-		Question: fmt.Sprintf("If \\(\\sin\\alpha = %d/%d\\) and \\(\\cos\\beta = %d/%d\\), with both angles acute, what is \\(%s(%s)\\), as a fraction?", sinA, t1[2], cosB, t2[2], fn, expr),
-		Answer:   fmt.Sprintf("%d/%d", num, den),
-		Explanation: fmt.Sprintf("The formulas for a sum and a difference expand a combined angle into products of the individual ratios. The first triple gives \\(\\sin\\alpha = %d/%d\\) and \\(\\cos\\alpha = %d/%d\\); the second gives \\(\\cos\\beta = %d/%d\\) and \\(\\sin\\beta = %d/%d\\). Then \\(%s(%s) = %d/%d + %d/%d = %d/%d\\), which is \\(%d/%d\\) in lowest terms. Both angles being acute is what keeps every term positive and the signs untroubled.",
-			sinA, t1[2], cosA, t1[2], cosB, t2[2], sinB, t2[2], fn, expr, term1, rawDen, term2, rawDen, sum, rawDen, num, den),
-		Facts: map[string]string{
-			"num": strconv.Itoa(num), "den": strconv.Itoa(den),
-			"sum": strconv.Itoa(sum), "raw_den": strconv.Itoa(rawDen),
-			"term1": strconv.Itoa(term1), "term2": strconv.Itoa(term2),
-			"fn": fn, "expr": expr,
-			"sin_a_num": strconv.Itoa(sinA), "sin_a_den": strconv.Itoa(t1[2]),
-			"cos_b_num": strconv.Itoa(cosB), "cos_b_den": strconv.Itoa(t2[2]),
-		},
+	for {
+		t1 := computedTriples[rand.Intn(len(computedTriples))]
+		t2 := computedTriples[rand.Intn(len(computedTriples))]
+		sinA, cosA := t1[0], t1[1]
+		sinB, cosB := t2[0], t2[1]
+		fn, expr := "\\sin", "\\alpha+\\beta"
+		term1, term2 := sinA*cosB, cosA*sinB
+		if rand.Intn(2) == 0 {
+			fn, expr = "\\cos", "\\alpha-\\beta"
+			term1, term2 = cosA*cosB, sinA*sinB
+		}
+		sum, rawDen := term1+term2, t1[2]*t2[2]
+		d := gcd(sum, rawDen)
+		num, den := sum/d, rawDen/d
+		ans := fmt.Sprintf("%d/%d", num, den)
+		q := fmt.Sprintf("If \\(\\sin\\alpha = %d/%d\\) and \\(\\cos\\beta = %d/%d\\), with both angles acute, what is \\(%s(%s)\\), as a fraction?", sinA, t1[2], cosB, t2[2], fn, expr)
+		if strings.Contains(q, ans) {
+			continue
+		}
+		return generator.Problem{
+			Question: q,
+			Answer:   ans,
+			Explanation: fmt.Sprintf("The formulas for a sum and a difference expand a combined angle into products of the individual ratios. The first triple gives \\(\\sin\\alpha = %d/%d\\) and \\(\\cos\\alpha = %d/%d\\); the second gives \\(\\cos\\beta = %d/%d\\) and \\(\\sin\\beta = %d/%d\\). Then \\(%s(%s) = %d/%d + %d/%d = %d/%d\\), which is \\(%d/%d\\) in lowest terms. Both angles being acute is what keeps every term positive and the signs untroubled.",
+				sinA, t1[2], cosA, t1[2], cosB, t2[2], sinB, t2[2], fn, expr, term1, rawDen, term2, rawDen, sum, rawDen, num, den),
+			Facts: map[string]string{
+				"num": strconv.Itoa(num), "den": strconv.Itoa(den),
+				"sum": strconv.Itoa(sum), "raw_den": strconv.Itoa(rawDen),
+				"term1": strconv.Itoa(term1), "term2": strconv.Itoa(term2),
+				"fn": fn, "expr": expr,
+				"sin_a_num": strconv.Itoa(sinA), "sin_a_den": strconv.Itoa(t1[2]),
+				"cos_b_num": strconv.Itoa(cosB), "cos_b_den": strconv.Itoa(t2[2]),
+			},
+		}
 	}
 }
 

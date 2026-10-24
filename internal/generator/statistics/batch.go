@@ -23,6 +23,8 @@ package statistics
 // count) instead of comparing a string with itself.
 
 import (
+	"fmt"
+	"math"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -102,57 +104,70 @@ func (g *hypothesisGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type zTestGen struct{}
 
 func (g *zTestGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		xbar     float64
-		mu       float64
-		sigma    float64
-		n        int
-		reason   string
+	nVals := []int{4, 9, 16, 25, 36, 64, 100}
+	seVals := []int{1, 2, 4, 5}
+	zSteps := []int{-7, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7}
+
+	var question, answer, reason string
+	var xbar, mu, sigma float64
+	var n int
+
+	for {
+		n = nVals[rand.Intn(len(nVals))]
+		sqrtN := int(math.Round(math.Sqrt(float64(n))))
+
+		se := seVals[rand.Intn(len(seVals))]
+		sigma = float64(se * sqrtN)
+
+		step := zSteps[rand.Intn(len(zSteps))]
+		zVal := float64(step) * 0.5
+
+		mu = float64((rand.Intn(15) + 5) * 10)
+		xbar = mu + zVal*float64(se)
+
+		answer = strconv.FormatFloat(zVal, 'f', -1, 64)
+		qType := "a number"
+		if strings.Contains(answer, ".") {
+			qType = "a decimal"
+		}
+		question = fmt.Sprintf("A sample mean is %s, the null mean is %s, the population standard deviation is %s and the sample size is %d. What is the z statistic (xbar - mu)/(sigma/sqrt(n))? (enter %s)",
+			strconv.FormatFloat(xbar, 'f', -1, 64),
+			strconv.FormatFloat(mu, 'f', -1, 64),
+			strconv.FormatFloat(sigma, 'f', -1, 64),
+			n,
+			qType,
+		)
+
+		xbarStr := strconv.FormatFloat(xbar, 'f', -1, 64)
+		muStr := strconv.FormatFloat(mu, 'f', -1, 64)
+		sigmaStr := strconv.FormatFloat(sigma, 'f', -1, 64)
+		nStr := strconv.Itoa(n)
+
+		if answer != xbarStr && answer != muStr && answer != sigmaStr && answer != nStr &&
+			answer != "-"+xbarStr && answer != "-"+muStr && !strings.Contains(question, answer) {
+			reason = fmt.Sprintf("The standard error is %s/sqrt(%d) = %d, so z = (%s - %s)/%d = %s.",
+				sigmaStr,
+				n,
+				se,
+				xbarStr,
+				muStr,
+				se,
+				answer,
+			)
+			break
+		}
 	}
-	claims := []claim{
-		{
-			question: "A sample mean is 52, the null mean is 50, the population standard deviation is 4 and the sample size is 4. What is the z statistic (xbar - mu)/(sigma/sqrt(n))? (enter a number)",
-			answer:   "1", xbar: 52, mu: 50, sigma: 4, n: 4,
-			reason: "The standard error is 4/sqrt(4) = 2, so z = (52 - 50)/2 = 1.",
-		},
-		{
-			question: "A sample mean is 53, the null mean is 50, the population standard deviation is 6 and the sample size is 9. What is the z statistic (xbar - mu)/(sigma/sqrt(n))? (enter a decimal)",
-			answer:   "1.5", xbar: 53, mu: 50, sigma: 6, n: 9,
-			reason: "The standard error is 6/3 = 2, so z = 3/2 = 1.5.",
-		},
-		{
-			question: "A sample mean is 48, the null mean is 50, the population standard deviation is 4 and the sample size is 16. What is the z statistic (xbar - mu)/(sigma/sqrt(n))? (enter a number)",
-			answer:   "-2", xbar: 48, mu: 50, sigma: 4, n: 16,
-			reason: "The standard error is 4/4 = 1, so z = (48 - 50)/1 = -2.",
-		},
-		{
-			question: "A sample mean is 105, the null mean is 100, the population standard deviation is 10 and the sample size is 25. What is the z statistic (xbar - mu)/(sigma/sqrt(n))? (enter a decimal)",
-			answer:   "2.5", xbar: 105, mu: 100, sigma: 10, n: 25,
-			reason: "The standard error is 10/5 = 2, so z = 5/2 = 2.5.",
-		},
-		{
-			question: "A sample mean is 9, the null mean is 10, the population standard deviation is 2 and the sample size is 4. What is the z statistic (xbar - mu)/(sigma/sqrt(n))? (enter a number)",
-			answer:   "-1", xbar: 9, mu: 10, sigma: 2, n: 4,
-			reason: "The standard error is 2/2 = 1, so z = -1.",
-		},
-		{
-			question: "A sample mean is 14, the null mean is 12, the population standard deviation is 4 and the sample size is 16. What is the z statistic (xbar - mu)/(sigma/sqrt(n))? (enter a number)",
-			answer:   "2", xbar: 14, mu: 12, sigma: 4, n: 16,
-			reason: "The standard error is 4/4 = 1, so z = 2.",
-		},
-	}
-	c := claims[rand.Intn(len(claims))]
+
 	return generator.Problem{
-		Question:    c.question,
-		Answer:      c.answer,
-		Explanation: c.reason,
+		Question:    question,
+		Answer:      answer,
+		Explanation: reason,
 		Facts: map[string]string{
-			"xbar":  strconv.FormatFloat(c.xbar, 'g', -1, 64),
-			"mu":    strconv.FormatFloat(c.mu, 'g', -1, 64),
-			"sigma": strconv.FormatFloat(c.sigma, 'g', -1, 64),
-			"n":     strconv.Itoa(c.n), "answer": c.answer,
+			"xbar":  strconv.FormatFloat(xbar, 'g', -1, 64),
+			"mu":    strconv.FormatFloat(mu, 'g', -1, 64),
+			"sigma": strconv.FormatFloat(sigma, 'g', -1, 64),
+			"n":     strconv.Itoa(n),
+			"answer": answer,
 		},
 	}
 }
