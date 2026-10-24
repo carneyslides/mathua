@@ -656,6 +656,18 @@ func (g *lagrangeTwoGen) Generate(ctx generator.GeneratorContext) generator.Prob
 			distractors: []string{"f is constant along the constraint set", "grad f = 0", "the constraints are linearly dependent"},
 			reason:      "If the gradient had a component outside that span, a small admissible step along the constraint intersection would change f, contradicting the extremum.",
 		},
+		{
+			q:           "For two constraints \\(g(x,y,z) = 0\\) and \\(h(x,y,z) = 0\\), the regularity condition required by the Lagrange multiplier method is that...",
+			correct:     "grad g and grad h are linearly independent (grad g × grad h ≠ 0)",
+			distractors: []string{"grad g and grad h are orthogonal", "grad g and grad h are parallel", "grad g = 0 and grad h = 0"},
+			reason:      "Linear independence of the constraint gradients ensures that the tangent spaces intersect transversally and define a smooth 1D curve.",
+		},
+		{
+			q:           "Geometrically, when optimizing \\(f(x,y,z)\\) subject to \\(g(x,y,z) = 0\\) and \\(h(x,y,z) = 0\\), the gradient \\(\\nabla f\\) at an extremum must be...",
+			correct:     "orthogonal to the tangent line of the intersection curve of both constraint surfaces",
+			distractors: []string{"parallel to the tangent line of the intersection curve", "orthogonal to both surfaces simultaneously", "equal to the zero vector"},
+			reason:      "Any directional derivative along the intersection curve must vanish, so grad f is normal to the curve's tangent direction.",
+		},
 	})
 }
 

@@ -51,6 +51,9 @@ func TestMutationAntiReadOffTopology(t *testing.T) {
 	t.Run("fiberBundleGen", func(t *testing.T) {
 		assertNoReadOffAndDiverse(t, "fiberBundleGen", &fiberBundleGen{})
 	})
+	t.Run("metricGen", func(t *testing.T) {
+		assertNoReadOffAndDiverse(t, "metricGen", &metricGen{})
+	})
 	t.Run("cellularHomologyGen", func(t *testing.T) {
 		assertNoReadOffAndDiverse(t, "cellularHomologyGen", &cellularHomologyGen{})
 	})

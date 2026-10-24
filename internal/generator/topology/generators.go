@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/mathutil"
 )
 
 func Register(reg *generator.Registry) {
@@ -47,32 +49,86 @@ func Register(reg *generator.Registry) {
 type metricGen struct{}
 
 func (g *metricGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
+	for attempt := 0; attempt < 100; attempt++ {
+		mode := rand.Intn(3)
+		switch mode {
+		case 0:
+			// Taxicab L1 distance in R^2
+			x1 := rand.Intn(7) + 1
+			y1 := rand.Intn(7) + 1
+			dx := rand.Intn(6) + 2
+			dy := rand.Intn(6) + 2
+			x2 := x1 + dx
+			y2 := y1 + dy
+			dist := dx + dy
+			ansStr := strconv.Itoa(dist)
+			q := fmt.Sprintf("Under the taxicab metric \\(d_1(P, Q) = |x_1 - x_2| + |y_1 - y_2|\\) on \\(\\mathbb{R}^2\\), compute the distance between the points \\((%d, %d)\\) and \\((%d, %d)\\).", x1, y1, x2, y2)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("The coordinate differences are \\(|%d - %d| = %d\\) and \\(|%d - %d| = %d\\). Summing them yields \\(d_1 = %d + %d = %d\\).",
+				x1, x2, dx, y1, y2, dy, dx, dy, dist)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"x1":     strconv.Itoa(x1),
+					"y1":     strconv.Itoa(y1),
+					"x2":     strconv.Itoa(x2),
+					"y2":     strconv.Itoa(y2),
+					"answer": ansStr,
+				},
+			}
+		case 1:
+			// Discrete metric ball cardinality for radius > 1
+			n := rand.Intn(15) + 6 // 6 to 20
+			ansStr := strconv.Itoa(n)
+			q := fmt.Sprintf("Let \\(X\\) be a finite set with %d distinct elements equipped with the discrete metric. How many points are contained in the open ball \\(B_2(x_0) = \\{y \\in X : d(x_0, y) < 2\\}\\)?", n)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("In the discrete metric, any two distinct elements have distance 1, and every element has distance 0 from itself. Because radius 2 exceeds 1, every point in \\(X\\) satisfies \\(d(x_0, y) < 2\\). Thus the ball equals the entire set \\(X\\), containing %d elements.", n)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"n":      strconv.Itoa(n),
+					"answer": ansStr,
+				},
+			}
+		default:
+			// Triangle inequality maximum bound
+			dXY := rand.Intn(10) + 4
+			dYZ := rand.Intn(8) + 3
+			for dXY == dYZ {
+				dYZ = rand.Intn(8) + 3
+			}
+			maxBound := dXY + dYZ
+			ansStr := strconv.Itoa(maxBound)
+			q := fmt.Sprintf("In a metric space \\((X, d)\\), three points satisfy \\(d(x, y) = %d\\) and \\(d(y, z) = %d\\). What is the maximum possible value of the distance \\(d(x, z)\\)?", dXY, dYZ)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("By the triangle inequality, \\(d(x, z) \\le d(x, y) + d(y, z)\\). Substituting gives \\(d(x, z) \\le %d + %d = %d\\).", dXY, dYZ, maxBound)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"d_xy":   strconv.Itoa(dXY),
+					"d_yz":   strconv.Itoa(dYZ),
+					"answer": ansStr,
+				},
+			}
+		}
 	}
-	easy := []entry{
-		{"What is d(x,x) in any metric space?", "0", "Identity of indiscernibles: d(x,y)=0 iff x=y, so d(x,x)=0."},
-		{"In a metric space, what does d(x,y) = 0 force about x and y? (type like x=y)", "x=y", "Identity of indiscernibles: distance zero holds exactly for equal points."},
-		{"Which axiom fails for d(x,y) = (x-y)^2 on R: triangle or symmetry? (type one word)", "triangle", "Squares break the triangle inequality: d(0,2)=4 exceeds d(0,1)+d(1,2)=2."},
-		{"Is the usual distance \\(d(x,y)=|x-y|\\) a metric on \\(\\mathbb{R}\\)? (yes/no)", "yes", "d(x,y)=|x-y| satisfies all metric axioms: non-negativity, identity of indiscernibles, symmetry, and triangle inequality."},
-		{"Is \\(d(x,y) = |x^{2}-y^{2}|\\) a metric on \\(\\mathbb{R}\\)? (yes/no)", "no", "It is not a metric because d(1,-1)=0 but 1≠-1, violating the identity of indiscernibles."},
-		{"Is the discrete metric \\((d(x,y)=1\\) if \\(x\\neq y\\), 0 if \\(x=y)\\) a metric? (yes/no)", "yes", "The discrete metric satisfies all metric axioms including the triangle inequality."},
+	return generator.Problem{
+		Question:    "Under the taxicab metric on \\(\\mathbb{R}^2\\), compute the distance between \\((1, 1)\\) and \\((4, 5)\\).",
+		Answer:      "7",
+		Explanation: "The sum of absolute differences is 3 + 4 = 7.",
 	}
-	hard := []entry{
-		{"In a metric space, is it true that \\(d(x,y)=0\\) if and only if \\(x=y\\)? (yes/no)", "yes", "This is the identity of indiscernibles axiom: d(x,y)=0 ⇔ x=y."},
-		{"In a metric space, is \\(d(x,z) \\leq d(x,y)+d(y,z)\\)? (yes/no)", "yes", "This is the triangle inequality, one of the defining properties of a metric."},
-		{"In a metric space, is \\(d(x,y)\\) always non-negative? (yes/no)", "yes", "Non-negativity is one of the metric axioms: d(x,y) ≥ 0 for all x,y."},
-		{"In a metric space, is \\(d(x,y) = d(y,x)\\)? (yes/no)", "yes", "Symmetry is one of the metric axioms: d(x,y) = d(y,x) for all x,y."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 // ----- 2. open_closed -----
@@ -1164,86 +1220,108 @@ func (g *fiberBundleGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type cellularHomologyGen struct{}
 
 func (g *cellularHomologyGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(4)
-	switch mode {
-	case 0:
-		// Number of edges in complete graph K_n
-		n := rand.Intn(4) + 4 // 4 to 7
-		edges := n * (n - 1) / 2
-		ansStr := strconv.Itoa(edges)
-		q := fmt.Sprintf("Consider the complete graph \\(K_{%d}\\) as a 1-dimensional CW complex with %d 0-cells (vertices) and one 1-cell (edge) between every distinct pair of vertices. How many 1-cells does it contain?", n, n)
-		ex := fmt.Sprintf("The number of 1-cells is the binomial coefficient \\(\\binom{%d}{2} = \\frac{%d \\times %d}{2} = %d\\).", n, n, n-1, edges)
-		return generator.Problem{
-			Question:    q,
-			Answer:      ansStr,
-			Explanation: ex,
-			Facts: map[string]string{
-				"n":      strconv.Itoa(n),
-				"answer": ansStr,
-			},
+	for attempt := 0; attempt < 100; attempt++ {
+		mode := rand.Intn(4)
+		switch mode {
+		case 0:
+			// Closed orientable surface of genus g: b_1 = 2g
+			gVal := rand.Intn(6) + 2 // 2 to 7
+			b1 := 2 * gVal
+			ansStr := strconv.Itoa(b1)
+			q := fmt.Sprintf("What is the first Betti number \\(b_1 = \\operatorname{rank} H_1(\\Sigma_{%d}; \\mathbb{Z})\\) of a closed orientable surface of genus %d?", gVal, gVal)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("A closed orientable surface of genus \\(g\\) has CW decomposition with 1 0-cell, \\(2g\\) 1-cells and 1 2-cell. The 2-cell boundary word is a product of commutators \\(\\prod [a_i, b_i]\\), which abelianizes to 0 in \\(H_1\\). Thus \\(H_1(\\Sigma_g) \\cong \\mathbb{Z}^{2g}\\), and \\(b_1 = 2 \\times %d = %d\\).", gVal, b1)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"genus":  strconv.Itoa(gVal),
+					"answer": ansStr,
+				},
+			}
+		case 1:
+			// Punctured surface Sigma_{g, p}: b_1 = 2g + p - 1
+			gVal := rand.Intn(4) + 1 // 1 to 4
+			pVal := rand.Intn(3) + 1 // 1 to 3
+			b1 := 2*gVal + pVal - 1
+			ansStr := strconv.Itoa(b1)
+			q := fmt.Sprintf("Consider an orientable surface of genus %d with %d puncture(s). What is its first Betti number \\(b_1 = \\operatorname{rank} H_1(S; \\mathbb{Z})\\)?", gVal, pVal)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("An orientable surface of genus \\(g\\) with \\(p \\ge 1\\) punctures deformation retracts onto a 1-dimensional CW complex (a wedge of circles). Its Euler characteristic is \\(\\chi = 2 - 2g - p\\). Since \\(H_2(S) = 0\\) and \\(H_0(S) \\cong \\mathbb{Z}\\), we have \\(1 - b_1 = 2 - 2g - p\\), giving \\(b_1 = 2g + p - 1 = 2(%d) + %d - 1 = %d\\).", gVal, pVal, b1)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"genus":     strconv.Itoa(gVal),
+					"punctures": strconv.Itoa(pVal),
+					"answer":    ansStr,
+				},
+			}
+		case 2:
+			// Connected sum of k real projective planes: b_1 = k - 1
+			kVal := rand.Intn(5) + 2 // 2 to 6
+			b1 := kVal - 1
+			ansStr := strconv.Itoa(b1)
+			q := fmt.Sprintf("What is the free rank (first Betti number \\(b_1\\)) of the integral homology group \\(H_1(N_{%d}; \\mathbb{Z})\\) for the connected sum of %d real projective planes?", kVal, kVal)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("The first homology of the non-orientable surface \\(N_k = k \\mathbb{RP}^2\\) is \\(H_1(N_k; \\mathbb{Z}) \\cong \\mathbb{Z}^{k-1} \\oplus \\mathbb{Z}_2\\). The torsion-free rank is the Betti number \\(b_1 = k - 1 = %d - 1 = %d\\).", kVal, b1)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"k":      strconv.Itoa(kVal),
+					"answer": ansStr,
+				},
+			}
+		default:
+			// Explicit cellular boundary matrix reduction via Smith Normal Form over Z
+			c0 := 2
+			c1 := 4
+			c2 := 2
+			d1 := mathutil.NewIntMatrix(c0, c1)
+			d2 := mathutil.NewIntMatrix(c1, c2)
+			// d1: C1 -> C0 has rank 1 (maps e1, e2, e3, e4 to v2 - v1)
+			d1.Data[0][0] = -1; d1.Data[1][0] = 1
+			d1.Data[0][1] = -1; d1.Data[1][1] = 1
+			// d2: C2 -> C1 maps 2-cells into ker(d1)
+			d2.Data[0][0] = 1; d2.Data[1][0] = -1
+			d2.Data[2][1] = 1; d2.Data[3][1] = -1
+			_, b1, _ := mathutil.CellularBettiNumbers(c0, c1, c2, d1, d2)
+			ansStr := strconv.Itoa(b1)
+			q := fmt.Sprintf("A CW complex has %d 0-cells, %d 1-cells and %d 2-cells. Smith normal form reduction on the boundary matrices yields \\(\\operatorname{rank}(d_1) = 1\\) and \\(\\operatorname{rank}(d_2) = 2\\). What is the first Betti number \\(b_1 = \\operatorname{rank} H_1(X; \\mathbb{Z})\\)?", c0, c1, c2)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Smith normal form over \\(\\mathbb{Z}\\) computes \\(\\dim \\ker(d_1) = c_1 - \\operatorname{rank}(d_1) = %d - 1 = 3\\). Subtracting \\(\\operatorname{rank}(d_2) = 2\\) yields the first Betti number \\(b_1 = 3 - 2 = %d\\).",
+				c1, b1)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"c0":     strconv.Itoa(c0),
+					"c1":     strconv.Itoa(c1),
+					"c2":     strconv.Itoa(c2),
+					"rank1":  "1",
+					"rank2":  "2",
+					"answer": ansStr,
+				},
+			}
 		}
-	case 1:
-		// Euler characteristic from cell counts chi(X) = c0 - c1 + c2
-		type cellCase struct {
-			c0, c1, c2, chi int
-		}
-		cases := []cellCase{
-			{2, 5, 1, -2},
-			{3, 6, 2, -1},
-			{1, 4, 1, -2},
-			{4, 8, 3, -1},
-		}
-		c := cases[rand.Intn(len(cases))]
-		ansStr := strconv.Itoa(c.chi)
-		q := fmt.Sprintf("A 2-dimensional CW complex \\(X\\) has %d 0-cells, %d 1-cells and %d 2-cells. What is its Euler characteristic \\(\\chi(X)\\)?", c.c0, c.c1, c.c2)
-		ex := fmt.Sprintf("The Euler characteristic of a CW complex equals the alternating sum of its cell counts: \\(\\chi(X) = c_0 - c_1 + c_2 = %d - %d + %d = %d\\).", c.c0, c.c1, c.c2, c.chi)
-		return generator.Problem{
-			Question:    q,
-			Answer:      ansStr,
-			Explanation: ex,
-			Facts: map[string]string{
-				"c0":     strconv.Itoa(c.c0),
-				"c1":     strconv.Itoa(c.c1),
-				"c2":     strconv.Itoa(c.c2),
-				"answer": ansStr,
-			},
-		}
-	case 2:
-		// Betti number b_3 of S^3 x S^3 is 2
-		correct := "2"
-		q := "Using cellular homology, what is the middle Betti number \\(b_3 = \\operatorname{rank} H_3(S^3 \\times S^3; \\mathbb{Z})\\) of the product of two 3-spheres?"
-		ex := "The standard CW structure on \\(S^3\\) has one 0-cell and one 3-cell. The product complex on \\(S^3 \\times S^3\\) has one 0-cell, two 3-cells (namely \\(e^3 \\times e^0\\) and \\(e^0 \\times e^3\\)), and one 6-cell. All boundaries are zero, so \\(H_3(S^3 \\times S^3) \\cong \\mathbb{Z}^2\\) with rank 2."
-		return generator.Problem{
-			Question:    q,
-			Answer:      correct,
-			Explanation: ex,
-			Facts: map[string]string{
-				"answer": correct,
-			},
-		}
-	default:
-		// Number of 2-faces (triangles) in n-simplex Delta^n has binom(n+1, 3)
-		type simplexCase struct {
-			n, faces int
-		}
-		cases := []simplexCase{
-			{4, 10},
-			{5, 20},
-			{6, 35},
-		}
-		c := cases[rand.Intn(len(cases))]
-		ansStr := strconv.Itoa(c.faces)
-		q := fmt.Sprintf("How many 2-dimensional triangular faces does the %d-dimensional simplex \\(\\Delta^{%d}\\) contain?", c.n, c.n)
-		ex := fmt.Sprintf("An %d-simplex has %d vertices. Each 2-face corresponds to a choice of 3 distinct vertices, so the number of 2-faces is \\(\\binom{%d}{3} = %d\\).", c.n, c.n+1, c.n+1, c.faces)
-		return generator.Problem{
-			Question:    q,
-			Answer:      ansStr,
-			Explanation: ex,
-			Facts: map[string]string{
-				"n":      strconv.Itoa(c.n),
-				"answer": ansStr,
-			},
-		}
+	}
+	return generator.Problem{
+		Question:    "What is the first Betti number \\(b_1\\) of a closed orientable surface of genus 3?",
+		Answer:      "6",
+		Explanation: "The first Betti number of a closed surface of genus g is 2g = 6.",
 	}
 }
 

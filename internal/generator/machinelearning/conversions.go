@@ -15,6 +15,7 @@ package machinelearning
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 
 	"github.com/chuma-beep/mathua/internal/generator"
 )
@@ -26,31 +27,54 @@ import (
 type mseConvertedGen struct{}
 
 func (g *mseConvertedGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct{ preds, targets [3]int }
-	claims := []claim{
-		{preds: [3]int{1, 6, 0}, targets: [3]int{3, 5, 2}}, // errors -2, 1, -2
-		{preds: [3]int{4, 0, 6}, targets: [3]int{1, 3, 3}}, // errors 3, -3, 3
-		{preds: [3]int{2, 4, 7}, targets: [3]int{1, 3, 3}}, // errors 1, 1, 4
-		{preds: [3]int{5, 5, 7}, targets: [3]int{3, 3, 3}}, // errors 2, 2, 4
-		{preds: [3]int{6, 2, 2}, targets: [3]int{1, 1, 1}}, // errors 5, 1, 1
+	for attempt := 0; attempt < 100; attempt++ {
+		t0 := rand.Intn(7) + 1
+		t1 := rand.Intn(7) + 1
+		t2 := rand.Intn(7) + 1
+
+		d0 := rand.Intn(7) - 3
+		d1 := rand.Intn(7) - 3
+		d2 := rand.Intn(7) - 3
+		sumSq := d0*d0 + d1*d1 + d2*d2
+		if sumSq == 0 || sumSq%3 != 0 {
+			continue
+		}
+
+		p0 := t0 + d0
+		p1 := t1 + d1
+		p2 := t2 + d2
+		if p0 < 0 || p1 < 0 || p2 < 0 {
+			continue
+		}
+
+		mse := sumSq / 3
+		if p0 == mse || p1 == mse || p2 == mse || t0 == mse || t1 == mse || t2 == mse {
+			continue
+		}
+
+		ansStr := strconv.Itoa(mse)
+		return generator.Problem{
+			Question: fmt.Sprintf("A model predicts %d, %d and %d for three targets that are %d, %d and %d. What is the mean squared error?",
+				p0, p1, p2, t0, t1, t2),
+			Answer: ansStr,
+			Explanation: fmt.Sprintf("The errors are %d, %d and %d. Their squares add to %d, and dividing by the three samples gives a mean squared error of %d.",
+				d0, d1, d2, sumSq, mse),
+			Facts: map[string]string{
+				"predictions": fmt.Sprintf("%d, %d, %d", p0, p1, p2),
+				"targets":     fmt.Sprintf("%d, %d, %d", t0, t1, t2),
+				"answer":      ansStr,
+			},
+		}
 	}
-	c := claims[rand.Intn(len(claims))]
-	sum := 0
-	for i := range c.preds {
-		d := c.preds[i] - c.targets[i]
-		sum += d * d
-	}
-	mse := sum / len(c.preds)
+
 	return generator.Problem{
-		Question: fmt.Sprintf("A model predicts %d, %d and %d for three targets that are %d, %d and %d. What is the mean squared error?",
-			c.preds[0], c.preds[1], c.preds[2], c.targets[0], c.targets[1], c.targets[2]),
-		Answer: fmt.Sprintf("%d", mse),
-		Explanation: fmt.Sprintf("The errors are %d, %d and %d. Their squares add to %d, and dividing by the three samples gives a mean squared error of %d.",
-			c.preds[0]-c.targets[0], c.preds[1]-c.targets[1], c.preds[2]-c.targets[2], sum, mse),
+		Question:    "A model predicts 1, 6 and 0 for three targets that are 3, 5 and 2. What is the mean squared error?",
+		Answer:      "3",
+		Explanation: "The errors are -2, 1 and -2. Their squares add to 9, and dividing by three gives a mean squared error of 3.",
 		Facts: map[string]string{
-			"predictions": fmt.Sprintf("%d, %d, %d", c.preds[0], c.preds[1], c.preds[2]),
-			"targets":     fmt.Sprintf("%d, %d, %d", c.targets[0], c.targets[1], c.targets[2]),
-			"answer":      fmt.Sprintf("%d", mse),
+			"predictions": "1, 6, 0",
+			"targets":     "3, 5, 2",
+			"answer":      "3",
 		},
 	}
 }

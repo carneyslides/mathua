@@ -34,7 +34,7 @@ func smallInt(lo, hi int) int {
 	return lo + rand.Intn(hi-lo+1)
 }
 
-// leastSquaresGen fits a line to three collinear points with unit steps.
+// leastSquaresGen fits a line to three non-collinear points using ordinary least squares.
 type leastSquaresGen struct{}
 
 func (g *leastSquaresGen) Generate(ctx generator.GeneratorContext) generator.Problem {
@@ -42,21 +42,27 @@ func (g *leastSquaresGen) Generate(ctx generator.GeneratorContext) generator.Pro
 	m := 1 + rand.Intn(maxM)
 	maxB := mathutil.ScaleInt(ctx.Difficulty, 5, 20)
 	b := rand.Intn(2*maxB+1) - maxB
-	// A slope that equals one of the printed coordinates can be read off the
-	// question instead of fitted. y0 = b, so b = m does it; y1 = m + b, so b = 0
-	// does it; y2 = 2m + b, so b = -m does it.
-	for b == 0 || b == m || b == -m {
+
+	deltas := []int{-2, -1, 1, 2}
+	delta := deltas[rand.Intn(len(deltas))]
+
+	y0 := b
+	y1 := m + b + delta
+	y2 := 2*m + b
+
+	// Ensure the slope is not read off from any coordinate: y0 != m, y1 != m, y2 != m, b != 0
+	for b == 0 || y0 == m || y1 == m || y2 == m || y0 == -m || y2 == -m {
 		b = rand.Intn(2*maxB+1) - maxB
+		delta = deltas[rand.Intn(len(deltas))]
+		y0 = b
+		y1 = m + b + delta
+		y2 = 2*m + b
 	}
 	ans := strconv.Itoa(m)
 
-	y0 := b
-	y1 := m + b
-	y2 := 2*m + b
-
 	q := fmt.Sprintf("Fit a line to the points \\((0,%d)\\), \\((1,%d)\\) and \\((2,%d)\\). What is the least-squares slope?", y0, y1, y2)
-	exp := fmt.Sprintf("Subgoal 1: State governing formula. The ordinary least squares slope for points (x_i, y_i) is m = Cov(x, y) / Var(x) = [Σ(x_i - x̄)(y_i - ȳ)] / [Σ(x_i - x̄)^2]. For collinear points with uniform step size Δx = 1, the slope equals the constant difference m = Δy = y_{i+1} - y_i.\n\nSubgoal 2: Substitute parameters. For coordinates (0, %d), (1, %d) and (2, %d), compute the first-step difference y_1 - y_0 = %d - (%d) and second-step difference y_2 - y_1 = %d - (%d).\n\nSubgoal 3: Evaluate and simplify. Both differences yield m = %d, confirming the exact least-squares slope is %d.",
-		y0, y1, y2, y1, y0, y2, y1, m, m)
+	exp := fmt.Sprintf("Subgoal 1: State governing formula. The ordinary least squares slope for points (x_i, y_i) is m = Cov(x, y) / Var(x) = [Σ(x_i - x̄)(y_i - ȳ)] / [Σ(x_i - x̄)^2]. For x-coordinates (0, 1, 2), the mean is x̄ = 1 and variance sum is Σ(x_i - 1)^2 = (-1)^2 + 0^2 + 1^2 = 2. The covariance reduces to (y_2 - y_0) / 2.\n\nSubgoal 2: Substitute parameters. For coordinates (0, %d), (1, %d) and (2, %d), substitute endpoints y_0 = %d and y_2 = %d into the least-squares formula: m = (%d - (%d)) / 2.\n\nSubgoal 3: Evaluate and simplify. Compute difference %d - (%d) = %d. Dividing by 2 yields least-squares slope m = %d / 2 = %d.",
+		y0, y1, y2, y0, y2, y2, y0, y2, y0, y2-y0, y2-y0, m)
 
 	return generator.Problem{
 		Question:    q,

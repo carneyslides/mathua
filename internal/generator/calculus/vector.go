@@ -319,36 +319,133 @@ func (g *saddleTestGen) Generate(ctx generator.GeneratorContext) generator.Probl
 	}
 }
 
-// lagrangeGen maximises a product under a fixed sum, which is (s/2)^2 with s even.
+// lagrangeGen generates constrained optimization problems with Lagrange multipliers.
 type lagrangeGen struct{}
 
 func (g *lagrangeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	tier := mathutil.DifficultyTier(ctx.Difficulty)
-	var s, halfS, maxVal int
-	var q, ex string
-	for {
-		maxBound := 8 + tier*5
-		k := small(3, maxBound)
-		s = 2 * k
-		halfS = s / 2
-		maxVal = halfS * halfS
-		ansStr := strconv.Itoa(maxVal)
-		q = fmt.Sprintf("Use Lagrange multipliers to find the largest value of \\(xy\\) subject to \\(x + y = %d\\) with \\(x, y > 0\\).", s)
-		if maxVal == s || containsWord(q, ansStr) {
-			continue
+	for attempt := 0; attempt < 100; attempt++ {
+		mode := rand.Intn(4)
+		switch mode {
+		case 0:
+			// Quadratic form f(x, y) = a x^2 + b y^2 on circle x^2 + y^2 = R^2 with a > b > 0
+			b := rand.Intn(4) + 2
+			a := b + rand.Intn(5) + 2
+			r := rand.Intn(3) + 2 + tier
+			r2 := r * r
+			maxVal := a * r2
+			ansStr := strconv.Itoa(maxVal)
+			q := fmt.Sprintf("Use Lagrange multipliers to find the maximum value of \\(f(x, y) = %d x^2 + %d y^2\\) on the circle \\(x^2 + y^2 = %d\\).", a, b, r2)
+			if containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("The Lagrange multiplier equations \\(\\nabla f = \\lambda \\nabla g\\) for constraint \\(g(x,y) = x^2 + y^2 = %d\\) are \\(2(%d)x = 2\\lambda x\\) and \\(2(%d)y = 2\\lambda y\\). Since \\(%d \\neq %d\\), either \\(y = 0\\) with \\(x = \\pm %d\\) giving \\(f = %d(%d) = %d\\), or \\(x = 0\\) with \\(y = \\pm %d\\) giving \\(f = %d(%d) = %d\\). The maximum value is %d.",
+				r2, a, b, a, b, r, a, r2, maxVal, r, b, r2, b*r2, maxVal)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a":       strconv.Itoa(a),
+					"b":       strconv.Itoa(b),
+					"r2":      strconv.Itoa(r2),
+					"maximum": ansStr,
+					"answer":  ansStr,
+				},
+			}
+		case 1:
+			// Linear function f(x, y) = a x + b y on circle x^2 + y^2 = R^2 using Pythagorean triples
+			type pyth struct{ a, b, c int }
+			triples := []pyth{
+				{3, 4, 5},
+				{4, 3, 5},
+				{5, 12, 13},
+				{12, 5, 13},
+				{8, 15, 17},
+			}
+			pt := triples[rand.Intn(len(triples))]
+			r := rand.Intn(4) + 2
+			r2 := r * r
+			maxVal := r * pt.c
+			ansStr := strconv.Itoa(maxVal)
+			q := fmt.Sprintf("Use Lagrange multipliers to find the maximum value of \\(f(x, y) = %d x + %d y\\) subject to \\(x^2 + y^2 = %d\\).", pt.a, pt.b, r2)
+			if containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("The Lagrange condition \\(\\nabla f = \\lambda \\nabla g\\) yields \\(%d = 2\\lambda x\\) and \\(%d = 2\\lambda y\\), so \\((x, y)\\) is parallel to \\((%d, %d)\\). Normalized to radius \\(R = %d\\), the optimal point is \\((x, y) = \\frac{%d}{%d}(%d, %d)\\). Evaluating \\(f\\) gives maximum value \\(R \\sqrt{%d^2 + %d^2} = %d \\times %d = %d\\).",
+				pt.a, pt.b, pt.a, pt.b, r, r, pt.c, pt.a, pt.b, pt.a, pt.b, r, pt.c, maxVal)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"a":       strconv.Itoa(pt.a),
+					"b":       strconv.Itoa(pt.b),
+					"r2":      strconv.Itoa(r2),
+					"maximum": ansStr,
+					"answer":  ansStr,
+				},
+			}
+		case 2:
+			// Scaled product f(x, y) = c xy subject to x + y = s
+			c := rand.Intn(4) + 2
+			maxBound := 6 + tier*4
+			k := small(3, maxBound)
+			s := 2 * k
+			halfS := s / 2
+			maxVal := c * halfS * halfS
+			ansStr := strconv.Itoa(maxVal)
+			q := fmt.Sprintf("Use Lagrange multipliers to find the largest value of \\(%d xy\\) subject to \\(x + y = %d\\) with \\(x, y > 0\\).", c, s)
+			if containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("The Lagrange system \\(\\nabla f = \\lambda \\nabla g\\) for \\(f(x,y) = %d xy\\) and \\(g(x,y) = x + y = %d\\) yields \\(%d y = \\lambda\\) and \\(%d x = \\lambda\\), giving \\(x = y\\). Substituting into the constraint gives \\(2x = %d\\), so \\(x = y = %d\\). The maximum value is \\(%d(%d)(%d) = %d\\).",
+				c, s, c, c, s, halfS, c, halfS, halfS, maxVal)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"c":       strconv.Itoa(c),
+					"s":       strconv.Itoa(s),
+					"maximum": ansStr,
+					"answer":  ansStr,
+				},
+			}
+		default:
+			// Product under fixed sum x + y = s
+			maxBound := 8 + tier*5
+			k := small(3, maxBound)
+			s := 2 * k
+			halfS := s / 2
+			maxVal := halfS * halfS
+			ansStr := strconv.Itoa(maxVal)
+			q := fmt.Sprintf("Use Lagrange multipliers to find the largest value of \\(xy\\) subject to \\(x + y = %d\\) with \\(x, y > 0\\).", s)
+			if maxVal == s || containsWord(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf("Formulate the Lagrange condition \\(\\nabla f = \\lambda \\nabla g\\) for objective \\(f(x,y) = xy\\) and constraint \\(g(x,y) = x + y = %d\\), giving system \\(y = \\lambda\\) and \\(x = \\lambda\\). Equating components yields \\(x = y\\); substitute into the constraint to get \\(2x = %d\\), so \\(x = y = %d\\). Evaluate the maximum product: \\(f(%d, %d) = %d \\times %d = %d\\).",
+				s, s, halfS, halfS, halfS, halfS, halfS, maxVal)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+				Facts: map[string]string{
+					"s":       strconv.Itoa(s),
+					"maximum": ansStr,
+					"answer":  ansStr,
+				},
+			}
 		}
-		ex = fmt.Sprintf("Formulate the Lagrange condition \\(\\nabla f = \\lambda \\nabla g\\) for objective \\(f(x,y) = xy\\) and constraint \\(g(x,y) = x + y = %d\\), giving system \\(y = \\lambda\\) and \\(x = \\lambda\\). Equating components yields \\(x = y\\); substitute into the constraint to get \\(2x = %d\\), so \\(x = y = %d\\). Evaluate the maximum product: \\(f(%d, %d) = %d \\times %d = %d\\).",
-			s, s, halfS, halfS, halfS, halfS, halfS, maxVal)
-		break
 	}
 	return generator.Problem{
-		Question:    q,
-		Answer:      strconv.Itoa(maxVal),
-		Explanation: ex,
+		Question:    "Use Lagrange multipliers to find the largest value of \\(xy\\) subject to \\(x + y = 10\\) with \\(x, y > 0\\).",
+		Answer:      "25",
+		Explanation: "Setting x = y = 5 gives xy = 25.",
 		Facts: map[string]string{
-			"s":       strconv.Itoa(s),
-			"maximum": strconv.Itoa(maxVal),
-			"answer":  strconv.Itoa(maxVal),
+			"s":       "10",
+			"maximum": "25",
+			"answer":  "25",
 		},
 	}
 }
