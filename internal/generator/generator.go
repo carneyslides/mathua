@@ -39,6 +39,8 @@ type Problem struct {
 	Difficulty *float64
 	// KPOrdinal records the 1-indexed knowledge point ordinal the problem was generated for.
 	KPOrdinal int
+	// ScaffoldSteps holds intermediate subgoals for active cognitive step-down when missed.
+	ScaffoldSteps []ScaffoldStep
 }
 
 type Generator interface {

@@ -3051,6 +3051,9 @@ func (s *Server) handleStudyAnswer(w http.ResponseWriter, r *http.Request) {
 		"xp":              res.XP,
 		"expected_answer": res.ExpectedAnswer,
 		"halted":          res.Halted,
+		"scaffold_active": res.ScaffoldActive,
+		"scaffold_step":   res.ScaffoldStep,
+		"scaffold_total":  res.ScaffoldTotal,
 	})
 }
 

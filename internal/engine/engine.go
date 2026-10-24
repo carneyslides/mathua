@@ -29,6 +29,14 @@ import (
 	xppolicy "github.com/chuma-beep/mathua/internal/xp"
 )
 
+type activeScaffoldSession struct {
+	ParentConceptID    string
+	ParentQuestionText string
+	ParentDifficulty   float64
+	Steps              []generator.ScaffoldStep
+	CurrentStepIndex   int
+}
+
 type activeSession struct {
 	// Owner of the in-flight question. Sessions are keyed by client-supplied
 	// sessionID, so without this a wipe cannot evict one learner's stale
@@ -75,6 +83,8 @@ type activeSession struct {
 	questionDifficulty float64
 	rushCount          int
 	kpOrdinal          int
+	activeScaffold     *activeScaffoldSession
+	pendingScaffold    []generator.ScaffoldStep
 }
 
 func (as *activeSession) currentKPOrdinal() int {
@@ -143,6 +153,9 @@ type Question struct {
 	GradingType    string                   `json:"grading_type,omitempty"`
 	KPOrdinal      int                      `json:"kp_ordinal,omitempty"`
 	KnowledgePoint *concepts.KnowledgePoint `json:"knowledge_point,omitempty"`
+	ScaffoldActive bool                     `json:"scaffold_active,omitempty"`
+	ScaffoldStep   int                      `json:"scaffold_step,omitempty"`
+	ScaffoldTotal  int                      `json:"scaffold_total,omitempty"`
 }
 
 type AnswerResult struct {
@@ -158,6 +171,9 @@ type AnswerResult struct {
 	Remedial       []string       `json:"remedial,omitempty"`
 	KPOrdinal      int            `json:"kp_ordinal,omitempty"`
 	KPAdvanced     bool           `json:"kp_advanced,omitempty"`
+	ScaffoldActive bool           `json:"scaffold_active,omitempty"`
+	ScaffoldStep   int            `json:"scaffold_step,omitempty"`
+	ScaffoldTotal  int            `json:"scaffold_total,omitempty"`
 	// Ungraded marks a grader infrastructure fault: the answer was NOT
 	// evaluated and nothing was recorded. Clients should retry, not penalize.
 	Ungraded bool `json:"ungraded,omitempty"`
@@ -654,6 +670,50 @@ func (e *Engine) NextQuestion(sessionID, studentID string) (*Question, error) {
 		e.sessions[sessionID] = as
 	}
 
+	// Active scaffold step-down mode: serve the current intermediate subgoal.
+	if as.activeScaffold != nil && as.activeScaffold.CurrentStepIndex < len(as.activeScaffold.Steps) {
+		step := as.activeScaffold.Steps[as.activeScaffold.CurrentStepIndex]
+		as.answered = false
+		as.attemptID = newAttemptID()
+		as.conceptID = as.activeScaffold.ParentConceptID
+		c := e.dag.Concept(as.conceptID)
+		cLabel := as.conceptID
+		if c != nil {
+			cLabel = c.Label
+		}
+		as.conceptName = cLabel
+		as.questionText = fmt.Sprintf("[Subgoal %d of %d] %s", step.Ordinal, len(as.activeScaffold.Steps), step.Prompt)
+		as.expectedAnswer = step.Answer
+		as.explanation = step.Explanation
+		as.isReview = false
+		as.questionDifficulty = as.activeScaffold.ParentDifficulty
+		as.studentID = studentID
+		as.writeGen = e.resetGen[studentID]
+		as.timeThreshold = 60.0
+		if c != nil {
+			as.timeThreshold = e.accommodatedThreshold(studentID, c.MasteryThreshold.AvgTimeSeconds)
+		}
+		e.sessions[sessionID] = as
+		e.persistActiveSession(sessionID, studentID, as, as.questionText)
+		var lesson *lessons.Lesson
+		if e.ll != nil {
+			lesson = e.ll.Lesson(as.conceptID)
+		}
+		return &Question{
+			ConceptID:      as.conceptID,
+			ConceptName:    cLabel,
+			Question:       as.questionText,
+			GradingType:    e.gradingTypeFor(as.conceptID),
+			IsReview:       false,
+			AttemptID:      as.attemptID,
+			Lesson:         lesson,
+			Diagram:        diagramForConcept(as.conceptID),
+			ScaffoldActive: true,
+			ScaffoldStep:   step.Ordinal,
+			ScaffoldTotal:  len(as.activeScaffold.Steps),
+		}, nil
+	}
+
 	// PR 1.5 halt: after 2 consecutive misses, serve the remedial queue first
 	// (KeyPrerequisites then the concept at an easier variant) before resuming.
 	if as.halted && len(as.remedialQueue) > 0 {
@@ -701,6 +761,7 @@ func (e *Engine) NextQuestion(sessionID, studentID string) (*Question, error) {
 		as.questionDifficulty = diff
 		as.studentID = studentID
 		as.writeGen = e.resetGen[studentID]
+		as.pendingScaffold = prob.ScaffoldSteps
 		e.sessions[sessionID] = as
 		e.persistActiveSession(sessionID, studentID, as, as.questionText)
 		var lesson *lessons.Lesson
@@ -782,6 +843,7 @@ func (e *Engine) NextQuestion(sessionID, studentID string) (*Question, error) {
 	as.attemptID = attemptID
 	as.questionText = prob.Question
 	as.questionDifficulty = difficulty
+	as.pendingScaffold = prob.ScaffoldSteps
 	as.recentConcepts = append(as.recentConcepts, next.Concept.ID)
 	if len(as.recentConcepts) > 3 {
 		as.recentConcepts = as.recentConcepts[len(as.recentConcepts)-3:]
@@ -1241,6 +1303,17 @@ func (e *Engine) SubmitAnswer(sessionID, studentID, attemptID, answer string, el
 	// reset landing during grading must refuse the write below instead of
 	// resurrecting wiped rows.
 	gen := as.writeGen
+	isScaffold := as.activeScaffold != nil
+	var scaffoldCurrentStep generator.ScaffoldStep
+	var scaffoldStepIdx, scaffoldTotalSteps int
+	if isScaffold {
+		scaffoldStepIdx = as.activeScaffold.CurrentStepIndex
+		scaffoldTotalSteps = len(as.activeScaffold.Steps)
+		if scaffoldStepIdx < scaffoldTotalSteps {
+			scaffoldCurrentStep = as.activeScaffold.Steps[scaffoldStepIdx]
+		}
+	}
+	pendingScaffold := as.pendingScaffold
 	sessionFields := struct {
 		conceptID          string
 		expectedAnswer     string
@@ -1460,6 +1533,73 @@ func (e *Engine) SubmitAnswer(sessionID, studentID, attemptID, answer string, el
 	as.conceptID = ""
 	as.questionText = ""
 	as.kpOrdinal = 0
+
+	var resScaffoldActive bool
+	var resScaffoldStep, resScaffoldTotal int
+	if isScaffold {
+		if gr.Correct {
+			as.activeScaffold.CurrentStepIndex++
+			scaffoldCompleted := as.activeScaffold.CurrentStepIndex >= len(as.activeScaffold.Steps)
+			if scaffoldCompleted {
+				as.activeScaffold = nil
+				as.pendingScaffold = nil
+			} else {
+				resScaffoldActive = true
+				resScaffoldStep = as.activeScaffold.CurrentStepIndex + 1
+				resScaffoldTotal = len(as.activeScaffold.Steps)
+			}
+		} else {
+			// Subgoal missed: Prerequisite Attribution Invariant
+			if scaffoldCurrentStep.PrereqConcept != "" {
+				prereqID := scaffoldCurrentStep.PrereqConcept
+				_, _ = e.repo.RecordAttempt(storage.AttemptEntry{
+					SessionID:      sessionID,
+					StudentID:      studentID,
+					ConceptID:      prereqID,
+					Answer:         answer,
+					Expected:       scaffoldCurrentStep.Answer,
+					Correct:        false,
+					ElapsedSeconds: elapsedSeconds,
+					Timestamp:      nowUTC(),
+					Question:       sessionFields.questionText,
+					Source:         "scaffold_prereq",
+					Explanation:    scaffoldCurrentStep.Explanation,
+				})
+				if prereqProg, err := e.repo.GetProgress(studentID, prereqID); err == nil && prereqProg != nil {
+					prereqProg.Streak = 0
+					if prereqProg.Status == string(mastery.StatusMastered) {
+						prereqProg.Status = string(mastery.StatusPracticing)
+					}
+					_ = e.repo.UpsertProgress(prereqProg)
+				}
+				_ = e.repo.EnqueueRemedial(studentID, prereqID)
+				as.remedialQueue = append(as.remedialQueue, prereqID)
+				as.halted = true
+				halted = true
+				remedial = append(remedial, prereqID)
+			}
+			resScaffoldActive = true
+			resScaffoldStep = scaffoldStepIdx + 1
+			resScaffoldTotal = scaffoldTotalSteps
+		}
+	} else {
+		if gr.Correct {
+			as.pendingScaffold = nil
+		} else if len(pendingScaffold) > 0 {
+			as.activeScaffold = &activeScaffoldSession{
+				ParentConceptID:    sessionFields.conceptID,
+				ParentQuestionText: sessionFields.questionText,
+				ParentDifficulty:   sessionFields.questionDifficulty,
+				Steps:              pendingScaffold,
+				CurrentStepIndex:   0,
+			}
+			as.pendingScaffold = nil
+			resScaffoldActive = true
+			resScaffoldStep = 1
+			resScaffoldTotal = len(as.activeScaffold.Steps)
+		}
+	}
+
 	e.persistActiveSession(sessionID, studentID, as, "")
 	e.mu.Unlock()
 
@@ -1488,6 +1628,9 @@ func (e *Engine) SubmitAnswer(sessionID, studentID, attemptID, answer string, el
 		Remedial:       remedial,
 		KPOrdinal:      resKPOrdinal,
 		KPAdvanced:     resKPAdvanced,
+		ScaffoldActive: resScaffoldActive,
+		ScaffoldStep:   resScaffoldStep,
+		ScaffoldTotal:  resScaffoldTotal,
 	}, nil
 }
 

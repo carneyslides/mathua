@@ -133,6 +133,11 @@ func (r *Registry) GenerateContext(conceptID string, ctx GeneratorContext) (Prob
 	p.Explanation = r.explain(conceptID, p)
 	p.Difficulty = difficultyOf(ctx.Difficulty)
 	p.KPOrdinal = ctx.KPOrdinal
+	if len(p.ScaffoldSteps) == 0 {
+		if sp, ok := gen.(ScaffoldProblem); ok {
+			p.ScaffoldSteps = sp.ScaffoldSteps(ctx)
+		}
+	}
 	for _, w := range latex.Validate(p.Question+"\n"+p.Explanation, latex.Generators) {
 		fmt.Printf("latex warning in generator %q: %s\n", conceptID, w)
 	}

@@ -124,6 +124,9 @@ export interface Question {
   }
   diagram?: string
   grading_type?: string
+  scaffold_active?: boolean
+  scaffold_step?: number
+  scaffold_total?: number
 }
 
 export interface AnswerRes {
@@ -146,6 +149,9 @@ export interface AnswerResult {
   xp: number
   expected_answer: string
   ungraded?: boolean
+  scaffold_active?: boolean
+  scaffold_step?: number
+  scaffold_total?: number
   /** One sentence naming the mistake, when it is certain. Empty otherwise. */
   diagnosis?: string
 }
@@ -1348,6 +1354,9 @@ export interface StudyAnswerRes {
 	xp: number
 	expected_answer?: string
 	ungraded?: boolean
+	scaffold_active?: boolean
+	scaffold_step?: number
+	scaffold_total?: number
 	/** One sentence naming the mistake, when it is certain. Empty otherwise. */
 	diagnosis?: string
 	/**
