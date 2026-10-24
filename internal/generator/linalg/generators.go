@@ -629,20 +629,54 @@ func (g *eigenConceptGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type eigenComputeGen struct{}
 
 func (g *eigenComputeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	transforms := [][4]int{
-		{1, 1, 1, 2},
-		{2, 1, 3, 2},
-		{1, 2, 1, 3},
-		{2, 3, 1, 2},
-		{1, -1, -1, 2},
-		{2, -1, -3, 2},
-		{3, 1, 2, 1},
-		{1, 3, 1, 4},
-		{3, 2, 4, 3},
-		{2, 5, 1, 3},
+	shears := [][4]int{
+		{1, 1, 0, 1},
+		{1, -1, 0, 1},
+		{1, 0, 1, 1},
+		{1, 0, -1, 1},
+		{1, 2, 0, 1},
+		{1, 0, 2, 1},
+		{1, 3, 0, 1},
+		{1, 0, 3, 1},
+		{1, 0, -2, 1},
+		{1, -2, 0, 1},
 	}
 
 	for attempt := 0; ; attempt++ {
+		if ctx.Difficulty >= 0.4 {
+			rng := rand.New(rand.NewSource(rand.Int63()))
+			l1 := rand.Intn(5) - 3 // -3 to 1
+			if l1 == 0 {
+				l1 = -2
+			}
+			l2 := l1 + 1 + rand.Intn(3)
+			if l2 == 0 {
+				l2 = 1
+			}
+			l3 := l2 + 1 + rand.Intn(3)
+			if l3 == 0 {
+				l3 = 2
+			}
+			mat3, _, ok := mathutil.IntegerEigenvalues3x3(rng, l1, l2, l3, 2)
+			if ok {
+				ansStr := fmt.Sprintf("%d,%d,%d", l1, l2, l3)
+				tr := mat3.Trace()
+				det := mat3.Det()
+				cof := mat3.CofactorMatrix()
+				c1 := cof.Entry[0][0] + cof.Entry[1][1] + cof.Entry[2][2]
+				return generator.Problem{
+					Question: fmt.Sprintf("Find the eigenvalues of the matrix \\(%s\\). (Enter separated by commas)", mat3.LaTeX()),
+					Answer:   ansStr,
+					Explanation: fmt.Sprintf(
+						"The characteristic polynomial is \\(p(\\lambda) = \\det(A - \\lambda I) = -\\lambda^3 + \\operatorname{tr}(A)\\lambda^2 - c_1\\lambda + \\det(A) = 0\\). "+
+							"Here \\(\\operatorname{tr}(A) = %d\\), the principal minor sum is \\(c_1 = %d\\) and \\(\\det(A) = %d\\). "+
+							"Factoring yields \\(-(\\lambda - %d)(\\lambda - %d)(\\lambda - %d) = 0\\), giving eigenvalues %d, %d and %d.",
+						tr, c1, det, l1, l2, l3, l1, l2, l3,
+					),
+				}
+			}
+		}
+
 		// Pick distinct integer eigenvalues
 		l1 := rand.Intn(7) - 3 // -3 to 3
 		if l1 == 0 {
@@ -659,10 +693,14 @@ func (g *eigenComputeGen) Generate(ctx generator.GeneratorContext) generator.Pro
 			l1, l2 = l2, l1
 		}
 
-		t := transforms[rand.Intn(len(transforms))]
-		p, q, r, s := t[0], t[1], t[2], t[3]
+		s1 := shears[rand.Intn(len(shears))]
+		s2 := shears[rand.Intn(len(shears))]
+		p := s1[0]*s2[0] + s1[1]*s2[2]
+		q := s1[0]*s2[1] + s1[1]*s2[3]
+		r := s1[2]*s2[0] + s1[3]*s2[2]
+		s := s1[2]*s2[1] + s1[3]*s2[3]
 
-		// A = P * D * P^{-1}
+		// A = P * D * P^{-1} with det(P) = 1
 		a11 := p*s*l1 - q*r*l2
 		a12 := p * q * (l2 - l1)
 		a21 := r * s * (l1 - l2)
@@ -675,6 +713,11 @@ func (g *eigenComputeGen) Generate(ctx generator.GeneratorContext) generator.Pro
 			}
 		}
 		if a11 == l1 || a11 == l2 || a22 == l1 || a22 == l2 || a12 == l1 || a12 == l2 || a21 == l1 || a21 == l2 {
+			if retryable(attempt) {
+				continue
+			}
+		}
+		if mathutil.Abs(a11) > 25 || mathutil.Abs(a22) > 25 || mathutil.Abs(a12) > 25 || mathutil.Abs(a21) > 25 {
 			if retryable(attempt) {
 				continue
 			}

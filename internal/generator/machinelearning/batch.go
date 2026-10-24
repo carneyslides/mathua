@@ -23,6 +23,7 @@ package machinelearning
 // has to reject.
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"strconv"
@@ -52,52 +53,69 @@ func registerBatch(reg *generator.Registry) {
 type sigmoidGen struct{}
 
 func (g *sigmoidGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		x        float64
-		kind     string
-		reason   string
+	if rand.Intn(5) == 0 {
+		return generator.Problem{
+			Question:    "The sigmoid is sigma(x) = 1/(1+e^-x). What is the limit of sigma(x) as x tends to infinity? (enter a number)",
+			Answer:      "1",
+			Explanation: "As x grows, e^-x tends to 0, so the fraction tends to 1.",
+			Facts: map[string]string{
+				"kind":   "limit",
+				"x":      "0",
+				"answer": "1",
+			},
+		}
 	}
-	claims := []claim{
-		{
-			question: "The sigmoid is sigma(x) = 1/(1+e^-x). What is sigma(0)? (enter a decimal)",
-			answer:   "0.5", x: 0, kind: "value",
-			reason: "e^0 = 1, so sigma(0) = 1/(1+1) = 0.5.",
-		},
-		{
-			question: "The sigmoid is sigma(x) = 1/(1+e^-x). What is sigma(ln 3)? (enter a decimal)",
-			answer:   "0.75", x: math.Log(3), kind: "value",
-			reason: "e^(-ln 3) = 1/3, so sigma(ln 3) = 1/(1+1/3) = 3/4 = 0.75.",
-		},
-		{
-			question: "The sigmoid is sigma(x) = 1/(1+e^-x). What is sigma(-ln 3)? (enter a decimal)",
-			answer:   "0.25", x: -math.Log(3), kind: "value",
-			reason: "e^(ln 3) = 3, so sigma(-ln 3) = 1/(1+3) = 1/4 = 0.25.",
-		},
-		{
-			question: "The sigmoid is sigma(x) = 1/(1+e^-x). What is sigma(ln 9)? (enter a decimal)",
-			answer:   "0.9", x: math.Log(9), kind: "value",
-			reason: "e^(-ln 9) = 1/9, so sigma(ln 9) = 1/(1+1/9) = 9/10 = 0.9.",
-		},
-		{
-			question: "The sigmoid is sigma(x) = 1/(1+e^-x). What is sigma(-ln 9)? (enter a decimal)",
-			answer:   "0.1", x: -math.Log(9), kind: "value",
-			reason: "e^(ln 9) = 9, so sigma(-ln 9) = 1/(1+9) = 1/10 = 0.1.",
-		},
-		{
-			question: "The sigmoid is sigma(x) = 1/(1+e^-x). What is the limit of sigma(x) as x tends to infinity? (enter a number)",
-			answer:   "1", x: 0, kind: "limit",
-			reason: "As x grows, e^-x tends to 0, so the fraction tends to 1.",
-		},
+
+	cleanK := []int{1, 3, 4, 7, 9, 15, 19, 24, 39, 49, 99}
+	k := cleanK[rand.Intn(len(cleanK))]
+
+	if k == 1 {
+		return generator.Problem{
+			Question:    "The sigmoid is sigma(x) = 1/(1+e^-x). What is sigma(0)? (enter a decimal)",
+			Answer:      "0.5",
+			Explanation: "e^0 = 1, so sigma(0) = 1/(1+1) = 0.5.",
+			Facts: map[string]string{
+				"kind":   "value",
+				"x":      "0",
+				"answer": "0.5",
+			},
+		}
 	}
-	c := claims[rand.Intn(len(claims))]
+
+	isPositive := rand.Intn(2) == 1
+	var xVal, val float64
+	var q, ex string
+	if isPositive {
+		xVal = math.Log(float64(k))
+		val = float64(k) / float64(k+1)
+		ansStr := strconv.FormatFloat(val, 'g', -1, 64)
+		q = fmt.Sprintf("The sigmoid is sigma(x) = 1/(1+e^-x). What is sigma(ln %d)? (enter a decimal)", k)
+		ex = fmt.Sprintf("e^(-ln %d) = 1/%d, so sigma(ln %d) = 1/(1+1/%d) = %d/%d = %s.", k, k, k, k, k, k+1, ansStr)
+		return generator.Problem{
+			Question:    q,
+			Answer:      ansStr,
+			Explanation: ex,
+			Facts: map[string]string{
+				"kind":   "value",
+				"x":      strconv.FormatFloat(xVal, 'g', -1, 64),
+				"answer": ansStr,
+			},
+		}
+	}
+
+	xVal = -math.Log(float64(k))
+	val = 1.0 / float64(1+k)
+	ansStr := strconv.FormatFloat(val, 'g', -1, 64)
+	q = fmt.Sprintf("The sigmoid is sigma(x) = 1/(1+e^-x). What is sigma(-ln %d)? (enter a decimal)", k)
+	ex = fmt.Sprintf("e^(ln %d) = %d, so sigma(-ln %d) = 1/(1+%d) = 1/%d = %s.", k, k, k, k, k+1, ansStr)
 	return generator.Problem{
-		Question:    c.question,
-		Answer:      c.answer,
-		Explanation: c.reason,
+		Question:    q,
+		Answer:      ansStr,
+		Explanation: ex,
 		Facts: map[string]string{
-			"kind": c.kind, "x": strconv.FormatFloat(c.x, 'g', -1, 64), "answer": c.answer,
+			"kind":   "value",
+			"x":      strconv.FormatFloat(xVal, 'g', -1, 64),
+			"answer": ansStr,
 		},
 	}
 }

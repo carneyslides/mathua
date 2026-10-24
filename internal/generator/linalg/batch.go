@@ -20,6 +20,7 @@ package linalg
 // recompute the cross product.
 
 import (
+	"fmt"
 	"math/rand"
 	"strconv"
 
@@ -153,56 +154,59 @@ func (g *invertibleMapGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type basisChangeGen struct{}
 
 func (g *basisChangeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		b1, b2   [2]int
-		v        [2]int
-		ask      int
-		reason   string
+	// Pairs of 2D unimodular basis vectors (det = 1)
+	unimodularPairs := [][2][2]int{
+		{{1, 0}, {0, 1}},
+		{{1, 1}, {1, 2}},
+		{{1, -1}, {1, 0}},
+		{{2, 1}, {1, 1}},
+		{{1, 2}, {0, 1}},
+		{{1, 0}, {1, 1}},
+		{{2, 3}, {1, 2}},
+		{{3, 2}, {1, 1}},
+		{{1, 1}, {2, 3}},
+		{{1, 2}, {1, 3}},
+		{{2, 1}, {3, 2}},
 	}
-	claims := []claim{
-		{
-			question: "In R^2, the vector (3, 5) is written as a(1, 1) + b(1, -1). What is a? (enter a number)",
-			answer:   "4", b1: [2]int{1, 1}, b2: [2]int{1, -1}, v: [2]int{3, 5}, ask: 0,
-			reason: "The equations are a + b = 3 and a - b = 5, whose solution is a = 4 and b = -1.",
-		},
-		{
-			question: "In R^2, the vector (4, 9) is written as a(2, 0) + b(0, 3). What is b? (enter a number)",
-			answer:   "3", b1: [2]int{2, 0}, b2: [2]int{0, 3}, v: [2]int{4, 9}, ask: 1,
-			reason: "The second coordinate gives 3b = 9, so b = 3.",
-		},
-		{
-			question: "In R^2, the vector (5, 2) is written as a(1, 0) + b(1, 1). What is a? (enter a number)",
-			answer:   "3", b1: [2]int{1, 0}, b2: [2]int{1, 1}, v: [2]int{5, 2}, ask: 0,
-			reason: "The second coordinate gives b = 2, and then the first gives a + 2 = 5, so a = 3.",
-		},
-		{
-			question: "In R^2, the vector (5, 3) is written as a(2, 1) + b(1, 1). What is a? (enter a number)",
-			answer:   "2", b1: [2]int{2, 1}, b2: [2]int{1, 1}, v: [2]int{5, 3}, ask: 0,
-			reason: "The equations are 2a + b = 5 and a + b = 3, whose solution is a = 2 and b = 1.",
-		},
-		{
-			question: "In R^2, the vector (3, 7) is written as a(1, 2) + b(0, 1). What is b? (enter a number)",
-			answer:   "1", b1: [2]int{1, 2}, b2: [2]int{0, 1}, v: [2]int{3, 7}, ask: 1,
-			reason: "The first coordinate gives a = 3; then 2a + b = 7 gives b = 1.",
-		},
-		{
-			question: "In R^2, the vector (5, 1) is written as a(1, 1) + b(1, -1). What is b? (enter a number)",
-			answer:   "2", b1: [2]int{1, 1}, b2: [2]int{1, -1}, v: [2]int{5, 1}, ask: 1,
-			reason: "The equations are a + b = 5 and a - b = 1, whose solution is a = 3 and b = 2.",
-		},
+	pair := unimodularPairs[rand.Intn(len(unimodularPairs))]
+	b1 := pair[0]
+	b2 := pair[1]
+
+	// Choose random integer coordinates a, b in [-6, 6]
+	a := rand.Intn(13) - 6
+	b := rand.Intn(13) - 6
+	if a == 0 && b == 0 {
+		a = 2
+		b = 3
 	}
-	c := claims[rand.Intn(len(claims))]
+
+	vx := a*b1[0] + b*b2[0]
+	vy := a*b1[1] + b*b2[1]
+
+	ask := rand.Intn(2)
+	ans := a
+	varName := "a"
+	if ask == 1 {
+		ans = b
+		varName = "b"
+	}
+
+	q := fmt.Sprintf("In R^2, the vector (%d, %d) is written as a(%d, %d) + b(%d, %d). What is %s? (enter a number)",
+		vx, vy, b1[0], b1[1], b2[0], b2[1], varName)
+	ex := fmt.Sprintf("The equations are %da + %db = %d and %da + %db = %d. "+
+		"Solving the system yields a = %d and b = %d.",
+		b1[0], b2[0], vx, b1[1], b2[1], vy, a, b)
+
 	return generator.Problem{
-		Question:    c.question,
-		Answer:      c.answer,
-		Explanation: c.reason,
+		Question:    q,
+		Answer:      strconv.Itoa(ans),
+		Explanation: ex,
 		Facts: map[string]string{
-			"b1":  strconv.Itoa(c.b1[0]) + "," + strconv.Itoa(c.b1[1]),
-			"b2":  strconv.Itoa(c.b2[0]) + "," + strconv.Itoa(c.b2[1]),
-			"v":   strconv.Itoa(c.v[0]) + "," + strconv.Itoa(c.v[1]),
-			"ask": strconv.Itoa(c.ask), "answer": c.answer,
+			"b1":     fmt.Sprintf("%d,%d", b1[0], b1[1]),
+			"b2":     fmt.Sprintf("%d,%d", b2[0], b2[1]),
+			"v":      fmt.Sprintf("%d,%d", vx, vy),
+			"ask":    strconv.Itoa(ask),
+			"answer": strconv.Itoa(ans),
 		},
 	}
 }
@@ -214,51 +218,32 @@ func (g *basisChangeGen) Generate(ctx generator.GeneratorContext) generator.Prob
 type complementGen struct{}
 
 func (g *complementGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		n, m     int
-		reason   string
+	n := 2 + rand.Intn(4)   // 2 to 5
+	m := 1 + rand.Intn(n-1) // 1 to n-1
+	want := n - m
+
+	var desc, reason string
+	if m == 1 {
+		desc = "the line spanned by a non-zero vector has dimension 1."
+		reason = fmt.Sprintf("The orthogonal complement of a line in R^%d has dimension %d - 1 = %d.", n, n, want)
+	} else if m == n-1 {
+		desc = fmt.Sprintf("a hyperplane has dimension %d.", m)
+		reason = fmt.Sprintf("The orthogonal complement of a hyperplane of dimension %d in R^%d is 1-dimensional: %d - %d = %d.", m, n, n, m, want)
+	} else {
+		desc = fmt.Sprintf("a subspace spanned by %d linearly independent vectors has dimension %d.", m, m)
+		reason = fmt.Sprintf("By the orthogonal complement theorem, dim(U-perp) = %d - %d = %d.", n, m, want)
 	}
-	claims := []claim{
-		{
-			question: "In R^3, the line spanned by (1, 0, 0) has dimension 1. What is the dimension of its orthogonal complement? (enter a number)",
-			answer:   "2", n: 3, m: 1,
-			reason: "The orthogonal complement of a line in R^3 is the plane through the origin perpendicular to it, of dimension 3 - 1 = 2.",
-		},
-		{
-			question: "In R^3, the plane x + y + z = 0 has dimension 2. What is the dimension of its orthogonal complement? (enter a number)",
-			answer:   "1", n: 3, m: 2,
-			reason: "The normal line is one-dimensional, and dim(U-perp) = 3 - 2 = 1.",
-		},
-		{
-			question: "In R^4, a subspace has dimension 3. What is the dimension of its orthogonal complement? (enter a number)",
-			answer:   "1", n: 4, m: 3,
-			reason: "dim(U-perp) = 4 - 3 = 1.",
-		},
-		{
-			question: "In R^2, a line through the origin has dimension 1. What is the dimension of its orthogonal complement? (enter a number)",
-			answer:   "1", n: 2, m: 1,
-			reason: "The perpendicular line is also one-dimensional: dim(U-perp) = 2 - 1 = 1.",
-		},
-		{
-			question: "In R^5, a subspace has dimension 2. What is the dimension of its orthogonal complement? (enter a number)",
-			answer:   "3", n: 5, m: 2,
-			reason: "dim(U-perp) = 5 - 2 = 3.",
-		},
-		{
-			question: "In R^3, the whole space has dimension 3. What is the dimension of its orthogonal complement? (enter a number)",
-			answer:   "0", n: 3, m: 3,
-			reason: "The only vector orthogonal to every vector is 0, so the orthogonal complement is the zero subspace of dimension 0.",
-		},
-	}
-	c := claims[rand.Intn(len(claims))]
+
+	q := fmt.Sprintf("In R^%d, %s What is the dimension of its orthogonal complement? (enter a number)", n, desc)
+	ansStr := strconv.Itoa(want)
 	return generator.Problem{
-		Question:    c.question,
-		Answer:      c.answer,
-		Explanation: c.reason,
+		Question:    q,
+		Answer:      ansStr,
+		Explanation: reason,
 		Facts: map[string]string{
-			"n": strconv.Itoa(c.n), "m": strconv.Itoa(c.m), "answer": c.answer,
+			"n":      strconv.Itoa(n),
+			"m":      strconv.Itoa(m),
+			"answer": ansStr,
 		},
 	}
 }
@@ -270,58 +255,54 @@ func (g *complementGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type projectionMatrixGen struct{}
 
 func (g *projectionMatrixGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		v, u     [2]int
-		axis     int
-		reason   string
+	dirs := [][2]int{
+		{1, 0}, {0, 1}, {1, 1}, {1, -1}, {2, 0}, {0, 2}, {1, 2}, {2, 1},
 	}
-	claims := []claim{
-		{
-			question: "The projection of (3, 4) onto the line spanned by (1, 0) has what x-coordinate? (enter a number)",
-			answer:   "3", v: [2]int{3, 4}, u: [2]int{1, 0}, axis: 0,
-			reason: "The projection is ((3*1 + 4*0)/(1*1 + 0*0))(1, 0) = (3, 0), so the x-coordinate is 3.",
-		},
-		{
-			question: "The projection of (3, 4) onto the line spanned by (1, 1) has what x-coordinate? (enter a decimal)",
-			answer:   "3.5", v: [2]int{3, 4}, u: [2]int{1, 1}, axis: 0,
-			reason: "The coefficient is (3 + 4)/2 = 3.5, so the projection is 3.5(1, 1) and its x-coordinate is 3.5.",
-		},
-		{
-			question: "The projection of (2, 6) onto the line spanned by (0, 1) has what y-coordinate? (enter a number)",
-			answer:   "6", v: [2]int{2, 6}, u: [2]int{0, 1}, axis: 1,
-			reason: "The projection is ((2*0 + 6*1)/(0*0 + 1*1))(0, 1) = (0, 6), so the y-coordinate is 6.",
-		},
-		{
-			question: "The projection of (4, 2) onto the line spanned by (2, 0) has what x-coordinate? (enter a number)",
-			answer:   "4", v: [2]int{4, 2}, u: [2]int{2, 0}, axis: 0,
-			reason: "The coefficient is (8 + 0)/4 = 2, so the projection is 2(2, 0) = (4, 0) and its x-coordinate is 4.",
-		},
-		{
-			question: "The projection of (1, 3) onto the line spanned by (1, 1) has what x-coordinate? (enter a number)",
-			answer:   "2", v: [2]int{1, 3}, u: [2]int{1, 1}, axis: 0,
-			reason: "The coefficient is (1 + 3)/2 = 2, so the projection is 2(1, 1) and its x-coordinate is 2.",
-		},
-		{
-			question: "The projection of (5, 5) onto the line spanned by (1, 2) has what x-coordinate? (enter a number)",
-			answer:   "3", v: [2]int{5, 5}, u: [2]int{1, 2}, axis: 0,
-			reason: "The coefficient is (5 + 10)/5 = 3, so the projection is 3(1, 2) and its x-coordinate is 3.",
-		},
+	u := dirs[rand.Intn(len(dirs))]
+	uNormSq := u[0]*u[0] + u[1]*u[1]
+
+	c := rand.Intn(4) + 1
+	if rand.Intn(2) == 1 {
+		c = -c
 	}
-	c := claims[rand.Intn(len(claims))]
-	axis := "x"
-	if c.axis == 1 {
-		axis = "y"
+	k := rand.Intn(5) - 2
+	uPerp := [2]int{-u[1], u[0]}
+
+	vx := c*u[0] + k*uPerp[0]
+	vy := c*u[1] + k*uPerp[1]
+
+	axis := rand.Intn(2)
+	if u[0] == 0 {
+		axis = 1
+	} else if u[1] == 0 {
+		axis = 0
 	}
+
+	coordName := "x-coordinate"
+	axisStr := "x"
+	ans := c * u[0]
+	if axis == 1 {
+		coordName = "y-coordinate"
+		axisStr = "y"
+		ans = c * u[1]
+	}
+
+	q := fmt.Sprintf("The projection of (%d, %d) onto the line spanned by (%d, %d) has what %s? (enter a number)",
+		vx, vy, u[0], u[1], coordName)
+	ex := fmt.Sprintf("The coefficient is ((%d)(%d) + (%d)(%d)) / ((%d)^2 + (%d)^2) = %d / %d = %d. "+
+		"So the projection is %d(%d, %d) = (%d, %d) and its %s is %d.",
+		vx, u[0], vy, u[1], u[0], u[1], c*uNormSq, uNormSq, c,
+		c, u[0], u[1], c*u[0], c*u[1], coordName, ans)
+
 	return generator.Problem{
-		Question:    c.question,
-		Answer:      c.answer,
-		Explanation: c.reason,
+		Question:    q,
+		Answer:      strconv.Itoa(ans),
+		Explanation: ex,
 		Facts: map[string]string{
-			"v":    strconv.Itoa(c.v[0]) + "," + strconv.Itoa(c.v[1]),
-			"u":    strconv.Itoa(c.u[0]) + "," + strconv.Itoa(c.u[1]),
-			"axis": axis, "answer": c.answer,
+			"v":      fmt.Sprintf("%d,%d", vx, vy),
+			"u":      fmt.Sprintf("%d,%d", u[0], u[1]),
+			"axis":   axisStr,
+			"answer": strconv.Itoa(ans),
 		},
 	}
 }
@@ -435,54 +416,38 @@ func (g *definiteGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type crossGen struct{}
 
 func (g *crossGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		u, v     [3]int
-		reason   string
-	}
-	claims := []claim{
-		{
-			question: "What is the cross product (1, 0, 0) x (0, 1, 0)? (enter a vector)",
-			answer:   "(0,0,1)", u: [3]int{1, 0, 0}, v: [3]int{0, 1, 0},
-			reason: "The standard basis vectors satisfy e1 x e2 = e3 = (0, 0, 1).",
-		},
-		{
-			question: "What is the cross product (0, 1, 0) x (1, 0, 0)? (enter a vector)",
-			answer:   "(0,0,-1)", u: [3]int{0, 1, 0}, v: [3]int{1, 0, 0},
-			reason: "Reversing the order changes the sign, so e2 x e1 = -e3 = (0, 0, -1).",
-		},
-		{
-			question: "What is the cross product (2, 0, 0) x (0, 3, 0)? (enter a vector)",
-			answer:   "(0,0,6)", u: [3]int{2, 0, 0}, v: [3]int{0, 3, 0},
-			reason: "The cross product is (2*3) e3 = (0, 0, 6).",
-		},
-		{
-			question: "What is the cross product (1, 2, 3) x (0, 1, 0)? (enter a vector)",
-			answer:   "(-3,0,1)", u: [3]int{1, 2, 3}, v: [3]int{0, 1, 0},
-			reason: "Compute (2*0 - 3*1, 3*0 - 1*0, 1*1 - 2*0) = (-3, 0, 1).",
-		},
-		{
-			question: "What is the cross product (1, 0, 1) x (0, 1, 1)? (enter a vector)",
-			answer:   "(-1,-1,1)", u: [3]int{1, 0, 1}, v: [3]int{0, 1, 1},
-			reason: "Compute (0*1 - 1*1, 1*0 - 1*1, 1*1 - 0*0) = (-1, -1, 1).",
-		},
-		{
-			question: "What is the cross product (2, 1, 0) x (1, 0, 1)? (enter a vector)",
-			answer:   "(1,-2,-1)", u: [3]int{2, 1, 0}, v: [3]int{1, 0, 1},
-			reason: "Compute (1*1 - 0*0, 0*1 - 2*1, 2*0 - 1*1) = (1, -2, -1).",
-		},
-	}
-	c := claims[rand.Intn(len(claims))]
-	return generator.Problem{
-		Question:    c.question,
-		Answer:      c.answer,
-		Explanation: c.reason,
-		Facts: map[string]string{
-			"u":      strconv.Itoa(c.u[0]) + "," + strconv.Itoa(c.u[1]) + "," + strconv.Itoa(c.u[2]),
-			"v":      strconv.Itoa(c.v[0]) + "," + strconv.Itoa(c.v[1]) + "," + strconv.Itoa(c.v[2]),
-			"answer": c.answer,
-		},
+	for {
+		u := [3]int{rand.Intn(7) - 3, rand.Intn(7) - 3, rand.Intn(7) - 3}
+		v := [3]int{rand.Intn(7) - 3, rand.Intn(7) - 3, rand.Intn(7) - 3}
+		if u[0] == 0 && u[1] == 0 && u[2] == 0 {
+			continue
+		}
+		if v[0] == 0 && v[1] == 0 && v[2] == 0 {
+			continue
+		}
+		x := u[1]*v[2] - u[2]*v[1]
+		y := u[2]*v[0] - u[0]*v[2]
+		z := u[0]*v[1] - u[1]*v[0]
+		if x == 0 && y == 0 && z == 0 {
+			continue
+		}
+
+		q := fmt.Sprintf("What is the cross product (%d, %d, %d) x (%d, %d, %d)? (enter a vector)",
+			u[0], u[1], u[2], v[0], v[1], v[2])
+		ans := fmt.Sprintf("(%d,%d,%d)", x, y, z)
+		ex := fmt.Sprintf("Compute ((%d)(%d) - (%d)(%d), (%d)(%d) - (%d)(%d), (%d)(%d) - (%d)(%d)) = (%d, %d, %d).",
+			u[1], v[2], u[2], v[1], u[2], v[0], u[0], v[2], u[0], v[1], u[1], v[0], x, y, z)
+
+		return generator.Problem{
+			Question:    q,
+			Answer:      ans,
+			Explanation: ex,
+			Facts: map[string]string{
+				"u":      fmt.Sprintf("%d,%d,%d", u[0], u[1], u[2]),
+				"v":      fmt.Sprintf("%d,%d,%d", v[0], v[1], v[2]),
+				"answer": ans,
+			},
+		}
 	}
 }
 
@@ -493,54 +458,33 @@ func (g *crossGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type conditionGen struct{}
 
 func (g *conditionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct {
-		question string
-		answer   string
-		largest  float64
-		smallest float64
-		reason   string
+	ratios := []int{1, 2, 3, 4, 5, 8, 10}
+	ratio := ratios[rand.Intn(len(ratios))]
+	smallests := []float64{0.5, 1, 2, 3, 4}
+	smallest := smallests[rand.Intn(len(smallests))]
+	largest := float64(ratio) * smallest
+
+	ansStr := strconv.FormatFloat(float64(ratio), 'g', -1, 64)
+	var q, ex string
+	if ratio == 1 {
+		q = fmt.Sprintf("A matrix has singular values %g and %g. What is its condition number, the largest divided by the smallest? (enter a number)",
+			largest, smallest)
+		ex = fmt.Sprintf("Equal singular values give condition number %g/%g = 1, the best possible conditioning.",
+			largest, smallest)
+	} else {
+		q = fmt.Sprintf("A matrix has singular values %g and %g. What is its condition number, the largest divided by the smallest? (enter a number)",
+			largest, smallest)
+		ex = fmt.Sprintf("The condition number is %g/%g = %s.", largest, smallest, ansStr)
 	}
-	claims := []claim{
-		{
-			question: "A matrix has singular values 10 and 2. What is its condition number, the largest divided by the smallest? (enter a number)",
-			answer:   "5", largest: 10, smallest: 2,
-			reason: "The condition number is 10/2 = 5.",
-		},
-		{
-			question: "A matrix has singular values 6 and 3. What is its condition number, the largest divided by the smallest? (enter a number)",
-			answer:   "2", largest: 6, smallest: 3,
-			reason: "The condition number is 6/3 = 2.",
-		},
-		{
-			question: "A matrix has singular values 8 and 1. What is its condition number, the largest divided by the smallest? (enter a number)",
-			answer:   "8", largest: 8, smallest: 1,
-			reason: "The condition number is 8/1 = 8.",
-		},
-		{
-			question: "A matrix has singular values 5 and 0.5. What is its condition number, the largest divided by the smallest? (enter a number)",
-			answer:   "10", largest: 5, smallest: 0.5,
-			reason: "The condition number is 5/0.5 = 10.",
-		},
-		{
-			question: "A matrix has singular values 12 and 4. What is its condition number, the largest divided by the smallest? (enter a number)",
-			answer:   "3", largest: 12, smallest: 4,
-			reason: "The condition number is 12/4 = 3.",
-		},
-		{
-			question: "A matrix has singular values 9 and 9. What is its condition number, the largest divided by the smallest? (enter a number)",
-			answer:   "1", largest: 9, smallest: 9,
-			reason: "Equal singular values give condition number 9/9 = 1, the best possible conditioning.",
-		},
-	}
-	c := claims[rand.Intn(len(claims))]
+
 	return generator.Problem{
-		Question:    c.question,
-		Answer:      c.answer,
-		Explanation: c.reason,
+		Question:    q,
+		Answer:      ansStr,
+		Explanation: ex,
 		Facts: map[string]string{
-			"largest":  strconv.FormatFloat(c.largest, 'g', -1, 64),
-			"smallest": strconv.FormatFloat(c.smallest, 'g', -1, 64),
-			"answer":   c.answer,
+			"largest":  strconv.FormatFloat(largest, 'g', -1, 64),
+			"smallest": strconv.FormatFloat(smallest, 'g', -1, 64),
+			"answer":   ansStr,
 		},
 	}
 }

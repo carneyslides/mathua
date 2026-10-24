@@ -846,54 +846,224 @@ func (g *derivRelatedRatesGen) Generate(ctx generator.GeneratorContext) generato
 	}
 }
 
+func calcSmallInt(minVal, maxVal int) int {
+	if maxVal <= minVal {
+		return minVal
+	}
+	return minVal + rand.Intn(maxVal-minVal+1)
+}
+
+func calcAbs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 type integralPartsGen struct{}
 
 func (g *integralPartsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q, a, e string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// int a * x * e^(k * x) dx
+		// u = a * x, dv = e^(k * x) dx -> du = a dx, v = e^(k * x) / k
+		// int = a * x * e^(k * x) / k - a * e^(k * x) / (k^2) + C
+		kVals := []int{1, 2, -1, 3}
+		k := kVals[rand.Intn(len(kVals))]
+		m := calcSmallInt(1, 3+tier)
+		a := m * calcAbs(k)
+		if k == 1 {
+			q := fmt.Sprintf("Find \\(\\int %s e^{x} \\, dx\\).", singleTerm(a, 1))
+			ans := fmt.Sprintf("%se^x-%se^x+C", singleTerm(a, 1), singleTerm(a, 0))
+			if a == 1 {
+				ans = "xe^x-e^x+C"
+			}
+			ex := fmt.Sprintf("Integration by parts: let \\(u = %s\\) and \\(dv = e^x \\, dx\\). Then \\(du = %d \\, dx\\) and \\(v = e^x\\). Using \\(\\int u \\, dv = uv - \\int v \\, du\\) yields \\(%s e^x - \\int %d e^x \\, dx = %s e^x - %d e^x + C\\).",
+				singleTerm(a, 1), a, singleTerm(a, 1), a, singleTerm(a, 1), a)
+			return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+		} else if k == -1 {
+			q := fmt.Sprintf("Find \\(\\int %s e^{-x} \\, dx\\).", singleTerm(a, 1))
+			ans := fmt.Sprintf("-%se^(-x)-%se^(-x)+C", singleTerm(a, 1), singleTerm(a, 0))
+			if a == 1 {
+				ans = "-xe^(-x)-e^(-x)+C"
+			}
+			ex := fmt.Sprintf("Integration by parts: let \\(u = %s\\) and \\(dv = e^{-x} \\, dx\\). Then \\(du = %d \\, dx\\) and \\(v = -e^{-x}\\). Applying the formula yields \\(-%s e^{-x} - \\int -%d e^{-x} \\, dx = -%s e^{-x} - %d e^{-x} + C\\).",
+				singleTerm(a, 1), a, singleTerm(a, 1), a, singleTerm(a, 1), a)
+			return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+		} else {
+			// k = 2 or 3
+			q := fmt.Sprintf("Find \\(\\int %s e^{%dx} \\, dx\\).", singleTerm(a, 1), k)
+			denom := k * k
+			ans := fmt.Sprintf("(%dx-1)e^(%dx)/%d+C", k, k, denom)
+			if a > 1 {
+				ans = fmt.Sprintf("(%dx-%d)e^(%dx)/%d+C", k*a, a, k, denom)
+			}
+			ex := fmt.Sprintf("Integration by parts: let \\(u = %s\\) and \\(dv = e^{%dx} \\, dx\\). Then \\(du = %d \\, dx\\) and \\(v = \\frac{1}{%d} e^{%dx}\\). Therefore \\(\\int %s e^{%dx} \\, dx = \\frac{%s}{%d} e^{%dx} - \\frac{%d}{%d} e^{%dx} + C\\).",
+				singleTerm(a, 1), k, a, k, k, singleTerm(a, 1), k, singleTerm(a, 1), k, k, a, denom, k)
+			return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+		}
+	case 1:
+		// int a * x * sin(x) dx = -a * x * cos(x) + a * sin(x) + C
+		a := calcSmallInt(1, 4+tier)
+		q := fmt.Sprintf("Find \\(\\int %s \\sin(x) \\, dx\\).", singleTerm(a, 1))
+		ans := fmt.Sprintf("-%s*cos(x)+%s*sin(x)+C", singleTerm(a, 1), singleTerm(a, 0))
+		if a == 1 {
+			ans = "-x*cos(x)+sin(x)+C"
+		}
+		ex := fmt.Sprintf("Integration by parts: let \\(u = %s\\) and \\(dv = \\sin(x) \\, dx\\). Then \\(du = %d \\, dx\\) and \\(v = -\\cos(x)\\). Thus \\(\\int %s \\sin(x) \\, dx = -%s \\cos(x) - \\int -%d \\cos(x) \\, dx = -%s \\cos(x) + %d \\sin(x) + C\\).",
+			singleTerm(a, 1), a, singleTerm(a, 1), singleTerm(a, 1), a, singleTerm(a, 1), a)
+		return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+	case 2:
+		// int a * x * cos(x) dx = a * x * sin(x) + a * cos(x) + C
+		a := calcSmallInt(1, 4+tier)
+		q := fmt.Sprintf("Find \\(\\int %s \\cos(x) \\, dx\\).", singleTerm(a, 1))
+		ans := fmt.Sprintf("%s*sin(x)+%s*cos(x)+C", singleTerm(a, 1), singleTerm(a, 0))
+		if a == 1 {
+			ans = "x*sin(x)+cos(x)+C"
+		}
+		ex := fmt.Sprintf("Integration by parts: let \\(u = %s\\) and \\(dv = \\cos(x) \\, dx\\). Then \\(du = %d \\, dx\\) and \\(v = \\sin(x)\\). Thus \\(\\int %s \\cos(x) \\, dx = %s \\sin(x) - \\int %d \\sin(x) \\, dx = %s \\sin(x) + %d \\cos(x) + C\\).",
+			singleTerm(a, 1), a, singleTerm(a, 1), singleTerm(a, 1), a, singleTerm(a, 1), a)
+		return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+	case 3:
+		// int x^n * ln(x) dx
+		n := calcSmallInt(1, 2)
+		if n == 1 {
+			q := "Find \\(\\int x \\ln(x) \\, dx\\)."
+			ans := "x^2ln(x)/2-x^2/4+C"
+			ex := "Integration by parts: let \\(u = \\ln(x)\\) and \\(dv = x \\, dx\\). Then \\(du = \\frac{1}{x} \\, dx\\) and \\(v = \\frac{x^2}{2}\\). Thus \\(\\int x \\ln(x) \\, dx = \\frac{x^2}{2} \\ln(x) - \\int \\frac{x}{2} \\, dx = \\frac{x^2}{2} \\ln(x) - \\frac{x^2}{4} + C\\)."
+			return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+		}
+		q := "Find \\(\\int x^2 \\ln(x) \\, dx\\)."
+		ans := "x^3ln(x)/3-x^3/9+C"
+		ex := "Integration by parts: let \\(u = \\ln(x)\\) and \\(dv = x^2 \\, dx\\). Then \\(du = \\frac{1}{x} \\, dx\\) and \\(v = \\frac{x^3}{3}\\). Thus \\(\\int x^2 \\ln(x) \\, dx = \\frac{x^3}{3} \\ln(x) - \\int \\frac{x^2}{3} \\, dx = \\frac{x^3}{3} \\ln(x) - \\frac{x^3}{9} + C\\)."
+		return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+	default:
+		// int (ax + b) e^x dx = (ax + b) e^x - a e^x + C = (ax + (b - a)) e^x + C
+		a := calcSmallInt(1, 3+tier)
+		b := calcSmallInt(1, 4+tier)
+		q := fmt.Sprintf("Find \\(\\int (%s + %d) e^{x} \\, dx\\).", singleTerm(a, 1), b)
+		cVal := b - a
+		var ans string
+		if cVal == 0 {
+			ans = fmt.Sprintf("%se^x+C", singleTerm(a, 1))
+		} else if cVal > 0 {
+			ans = fmt.Sprintf("(%s+%d)e^x+C", singleTerm(a, 1), cVal)
+		} else {
+			ans = fmt.Sprintf("(%s-%d)e^x+C", singleTerm(a, 1), -cVal)
+		}
+		ex := fmt.Sprintf("Integration by parts: let \\(u = %s + %d\\) and \\(dv = e^x \\, dx\\). Then \\(du = %d \\, dx\\) and \\(v = e^x\\). Thus \\(\\int (%s + %d) e^x \\, dx = (%s + %d) e^x - \\int %d e^x \\, dx = (%s + %d - %d) e^x + C = %s\\).",
+			singleTerm(a, 1), b, a, singleTerm(a, 1), b, singleTerm(a, 1), b, a, singleTerm(a, 1), b, a, ans)
+		return generator.Problem{Question: q, Answer: ans, Explanation: ex}
 	}
-	tableEasy := []entry{
-		{"Find \\(\\int x e^{x} \\, dx\\).", "xe^x-e^x+C", "Integration by parts: let u=x, dv=e^x dx → du=dx, v=e^x. ∫x·e^x dx = x·e^x - ∫e^x dx = x·e^x - e^x + C."},
-		{"Find \\(\\int 2x e^{x} \\, dx\\).", "2xe^x-2e^x+C", "Let u=2x, dv=e^x dx → du=2dx, v=e^x. ∫2x·e^x dx = 2x·e^x - ∫2e^x dx = 2x·e^x - 2e^x + C."},
-		{"For \\(\\int x e^{x} \\, dx\\) with \\(u=x\\) and \\(dv=e^{x}dx\\), what is \\(du\\)?", "dx", "Differentiate u=x to get du=dx; then v=e^x, and the parts formula gives x·e^x - e^x + C."},
-		{"Find \\(\\int x e^{2x} \\, dx\\).", "(2x-1)e^(2x)/4+C", "Let u=x, dv=e^(2x)dx → du=dx, v=e^(2x)/2. ∫x·e^(2x)dx = x·e^(2x)/2 - ∫e^(2x)/2 dx = (2x-1)e^(2x)/4 + C."},
-	}
-	tableHard := []entry{
-		{"Find \\(\\int x^{2} e^{x} \\, dx\\).", "x^2e^x-2xe^x+2e^x+C", "Apply parts twice: ∫x²e^x dx = x²e^x - ∫2xe^x dx = x²e^x - 2xe^x + 2e^x + C."},
-		{"Find \\(\\int x \\ln(x) \\, dx\\).", "x^2ln(x)/2-x^2/4+C", "Let u=ln(x), dv=x dx → du=dx/x, v=x²/2. ∫x·ln(x)dx = x²ln(x)/2 - ∫x/2 dx = x²ln(x)/2 - x²/4 + C."},
-	}
-	pool := tableEasy
-	if scale > 3 {
-		pool = append(tableEasy, tableHard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 type integralPartialFractionsGen struct{}
 
 func (g *integralPartialFractionsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		q, a, e string
+	tier := mathutil.DifficultyTier(ctx.Difficulty)
+	mode := rand.Intn(4)
+	switch mode {
+	case 0:
+		// Distinct linear roots r1 != r2, integer coefficients A, B:
+		// f(x) = A / (x - r1) + B / (x - r2) = [(A+B)x - (A*r2 + B*r1)] / [(x - r1)(x - r2)]
+		r1 := calcSmallInt(1, 4+tier)
+		r2 := -calcSmallInt(1, 4+tier)
+		A := calcSmallInt(1, 3+tier)
+		B := calcSmallInt(1, 3+tier)
+		if rand.Intn(2) == 1 {
+			B = -B
+		}
+		if A+B == 0 && A == 1 {
+			B = 2
+		}
+
+		pCoeff := A + B
+		qCoeff := -(A*r2 + B*r1)
+
+		// Denominator: x^2 - (r1+r2)x + r1*r2
+		bDenom := -(r1 + r2)
+		cDenom := r1 * r2
+
+		numPoly := formatPoly([]term{{coef: pCoeff, exp: 1}, {coef: qCoeff, exp: 0}})
+		denomPoly := formatPoly([]term{{coef: 1, exp: 2}, {coef: bDenom, exp: 1}, {coef: cDenom, exp: 0}})
+
+		q := fmt.Sprintf("Find \\(\\int \\frac{%s}{%s} \\, dx\\).", numPoly, denomPoly)
+
+		// Format answer A*ln|x - r1| + B*ln|x - r2| + C
+		var ansPartA, ansPartB string
+		if A == 1 {
+			ansPartA = fmt.Sprintf("ln|x-%d|", r1)
+		} else if A == -1 {
+			ansPartA = fmt.Sprintf("-ln|x-%d|", r1)
+		} else {
+			ansPartA = fmt.Sprintf("%dln|x-%d|", A, r1)
+		}
+
+		if B == 1 {
+			ansPartB = fmt.Sprintf("+ln|x+%d|", -r2)
+		} else if B == -1 {
+			ansPartB = fmt.Sprintf("-ln|x+%d|", -r2)
+		} else if B > 0 {
+			ansPartB = fmt.Sprintf("+%dln|x+%d|", B, -r2)
+		} else {
+			ansPartB = fmt.Sprintf("-%dln|x+%d|", -B, -r2)
+		}
+		ans := fmt.Sprintf("%s%s+C", ansPartA, ansPartB)
+
+		ex := fmt.Sprintf("Partial fraction decomposition: \\(\\frac{%s}{(x - %d)(x + %d)} = \\frac{%d}{x - %d} + \\frac{%d}{x + %d}\\). "+
+			"Integrating term by term yields \\(%s\\).",
+			numPoly, r1, -r2, A, r1, B, -r2, ans)
+		return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+
+	case 1:
+		// Difference of squares: 2c / (x^2 - c^2) = 1/(x-c) - 1/(x+c)
+		c := calcSmallInt(1, 4+tier)
+		q := fmt.Sprintf("Find \\(\\int \\frac{%d}{x^{2}-%d} \\, dx\\).", 2*c, c*c)
+		ans := fmt.Sprintf("ln|x-%d|-ln|x+%d|+C", c, c)
+		ex := fmt.Sprintf("Partial fractions: \\(\\frac{%d}{x^2 - %d} = \\frac{1}{x - %d} - \\frac{1}{x + %d}\\). "+
+			"Integrating yields \\(\\ln|x - %d| - \\ln|x + %d| + C\\).", 2*c, c*c, c, c, c, c)
+		return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+
+	case 2:
+		// x(x + k) where k in {1, -1, 2, -2}
+		k := calcSmallInt(1, 3)
+		sign := 1
+		if rand.Intn(2) == 1 {
+			sign = -1
+		}
+		kVal := sign * k
+		if kVal > 0 {
+			q := fmt.Sprintf("Find \\(\\int \\frac{1}{x(x+%d)} \\, dx\\).", kVal)
+			ans := fmt.Sprintf("(1/%d)ln|x|-(1/%d)ln|x+%d|+C", kVal, kVal, kVal)
+			if kVal == 1 {
+				ans = "ln|x|-ln|x+1|+C"
+			}
+			ex := fmt.Sprintf("Partial fractions: \\(\\frac{1}{x(x + %d)} = \\frac{1}{%d} \\left(\\frac{1}{x} - \\frac{1}{x + %d}\\right)\\). Integrating yields \\(%s\\).",
+				kVal, kVal, kVal, ans)
+			return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+		}
+		posK := -kVal
+		q := fmt.Sprintf("Find \\(\\int \\frac{1}{x(x-%d)} \\, dx\\).", posK)
+		ans := fmt.Sprintf("(1/%d)ln|x-%d|-(1/%d)ln|x|+C", posK, posK, posK)
+		if posK == 1 {
+			ans = "ln|x-1|-ln|x|+C"
+		}
+		ex := fmt.Sprintf("Partial fractions: \\(\\frac{1}{x(x - %d)} = \\frac{1}{%d} \\left(\\frac{1}{x - %d} - \\frac{1}{x}\\right)\\). Integrating yields \\(%s\\).",
+			posK, posK, posK, ans)
+		return generator.Problem{Question: q, Answer: ans, Explanation: ex}
+
+	default:
+		// Solve for partial fraction coefficient A:
+		// 1 / (x^2 - c^2) = A / (x - c) + B / (x + c) -> A = 1 / (2c)
+		c := calcSmallInt(1, 3+tier)
+		q := fmt.Sprintf("In the partial fraction decomposition \\(\\frac{1}{x^{2}-%d} = \\frac{A}{x-%d} + \\frac{B}{x+%d}\\), what is \\(A\\)?", c*c, c, c)
+		ans := fmt.Sprintf("1/%d", 2*c)
+		ex := fmt.Sprintf("Write \\(1 = A(x + %d) + B(x - %d)\\). Setting \\(x = %d\\) yields \\(1 = %dA\\), so \\(A = \\frac{1}{%d}\\).",
+			c, c, c, 2*c, 2*c)
+		return generator.Problem{Question: q, Answer: ans, Explanation: ex}
 	}
-	tableEasy := []entry{
-		{"Find \\(\\int \\frac{1}{x^{2}-1} \\, dx\\).", "(1/2)ln|x-1|-(1/2)ln|x+1|+C", "Partial fractions: 1/(x²-1) = 1/2·(1/(x-1) - 1/(x+1)). Integrate: (1/2)ln|x-1| - (1/2)ln|x+1| + C."},
-		{"Find \\(\\int \\frac{1}{x(x+1)} \\, dx\\).", "ln|x|-ln|x+1|+C", "Partial fractions: 1/(x(x+1)) = 1/x - 1/(x+1). Integrate: ln|x| - ln|x+1| + C."},
-		{"Find \\(\\int \\frac{1}{x(x-1)} \\, dx\\).", "ln|x-1|-ln|x|+C", "Partial fractions: 1/(x(x-1)) = 1/(x-1) - 1/x. Integrate: ln|x-1| - ln|x| + C."},
-		{"In \\(\\frac{1}{x^{2}-1} = \\frac{A}{x-1}+\\frac{B}{x+1}\\), what is \\(A\\)?", "1/2", "Write 1 = A(x+1)+B(x-1). Setting x=1 gives 1 = 2A, so A = 1/2."},
-	}
-	tableHard := []entry{
-		{"Find \\(\\int \\frac{2}{x^{2}-4} \\, dx\\).", "(1/2)ln|x-2|-(1/2)ln|x+2|+C", "Partial fractions: 2/(x²-4) = 1/2·(1/(x-2) - 1/(x+2)). Integrate: (1/2)ln|x-2| - (1/2)ln|x+2| + C."},
-		{"In \\(\\frac{2}{x^{2}-4} = \\frac{A}{x-2}+\\frac{B}{x+2}\\), what is \\(B\\)?", "-1/2", "Write 2 = A(x+2)+B(x-2). Setting x=-2 gives 2 = -4B, so B = -1/2."},
-	}
-	pool := tableEasy
-	if scale > 3 {
-		pool = append(tableEasy, tableHard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.q, Answer: e.a, Explanation: e.e}
 }
 
 func singleTerm(coef, exp int) string {

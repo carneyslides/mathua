@@ -476,23 +476,29 @@ func (g *homogeneousGen) Generate(ctx generator.GeneratorContext) generator.Prob
 		mode := rand.Intn(5)
 		switch mode {
 		case 0:
-			// Characteristic discriminant Delta = b^2 - 4ac for y'' + b y' + c y = 0
-			b := smallInt(2, 7)
-			c := smallInt(1, 9)
-			disc := b*b - 4*c
-			ansStr := fmt.Sprintf("%d", disc)
-			q := fmt.Sprintf("What is the discriminant \\(\\Delta = b^2 - 4ac\\) of the characteristic equation for the differential equation \\(y'' + %d y' + %d y = 0\\)?", b, c)
+			// Characteristic equation roots for y'' - (r1+r2) y' + r1*r2 y = 0
+			r1 := smallInt(1, 5)
+			r2 := r1 + smallInt(1, 5)
+			sumR := r1 + r2
+			prodR := r1 * r2
+			ansStr := fmt.Sprintf("%d", r2)
+			q := fmt.Sprintf("What is the larger characteristic root \\(r\\) of the differential equation \\(y'' - %d y' + %d y = 0\\)?", sumR, prodR)
 			if strings.Contains(q, ansStr) {
 				continue
 			}
 			ex := fmt.Sprintf(
-				"The characteristic equation is \\(r^2 + %d r + %d = 0\\). The discriminant is \\(\\Delta = b^2 - 4ac = (%d)^2 - 4(1)(%d) = %d - %d = %d\\).",
-				b, c, b, c, b*b, 4*c, disc,
+				"The characteristic equation is \\(r^2 - %d r + %d = (r - %d)(r - %d) = 0\\). The roots are \\(r = %d\\) and \\(r = %d\\), so the larger root is %d.",
+				sumR, prodR, r1, r2, r1, r2, r2,
 			)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
 				Explanation: ex,
+				Facts: map[string]string{
+					"r1":     strconv.Itoa(r1),
+					"r2":     strconv.Itoa(r2),
+					"answer": ansStr,
+				},
 			}
 
 		case 1:
@@ -592,6 +598,19 @@ func (g *homogeneousGen) Generate(ctx generator.GeneratorContext) generator.Prob
 				{6, 8, 10},
 				{8, 6, 10},
 				{5, 12, 13},
+				{12, 5, 13},
+				{7, 24, 25},
+				{24, 7, 25},
+				{8, 15, 17},
+				{15, 8, 17},
+				{9, 12, 15},
+				{12, 9, 15},
+				{10, 24, 26},
+				{24, 10, 26},
+				{15, 20, 25},
+				{20, 15, 25},
+				{20, 21, 29},
+				{21, 20, 29},
 			}
 			p := pairs[rand.Intn(len(pairs))]
 			omega := smallInt(2, 4)
