@@ -974,27 +974,160 @@ func formatMatrix3(m [][]int) string {
 }
 
 func parseMatrix(s string) ([][]int, bool) {
-	matches := matrixRe.FindStringSubmatch(s)
-	if len(matches) != 3 {
-		return nil, false
-	}
-	rows := make([][]int, 2)
-	for i, part := range matches[1:] {
-		parts := strings.Split(part, ",")
-		if len(parts) != 2 {
-			return nil, false
-		}
-		row := make([]int, 2)
-		for j, p := range parts {
-			val, err := strconv.Atoi(strings.TrimSpace(p))
-			if err != nil {
-				return nil, false
+	s = strings.TrimSpace(s)
+	// Strip outer math delimiters
+	s = strings.TrimPrefix(s, `\(`)
+	s = strings.TrimSuffix(s, `\)`)
+	s = strings.TrimPrefix(s, "$")
+	s = strings.TrimSuffix(s, "$")
+	s = strings.TrimSpace(s)
+
+	// Replace unicode minus and LaTeX minus commands
+	s = strings.ReplaceAll(s, "−", "-")
+	s = strings.ReplaceAll(s, `\minus`, "-")
+
+	// 1. Check for LaTeX environments: \begin{pmatrix} ... \end{pmatrix}, etc.
+	var content string
+	for _, env := range []string{"pmatrix", "bmatrix", "matrix", "vmatrix", "Vmatrix"} {
+		begin := `\begin{` + env + `}`
+		end := `\end{` + env + `}`
+		if idx := strings.Index(s, begin); idx != -1 {
+			if endIdx := strings.Index(s, end); endIdx > idx {
+				content = s[idx+len(begin) : endIdx]
+				break
 			}
-			row[j] = val
 		}
-		rows[i] = row
 	}
-	return rows, true
+
+	// Also check \left[ ... \right] or \left( ... \right)
+	if content == "" {
+		if strings.HasPrefix(s, `\left[`) && strings.HasSuffix(s, `\right]`) {
+			content = s[len(`\left[`) : len(s)-len(`\right]`)]
+		} else if strings.HasPrefix(s, `\left(`) && strings.HasSuffix(s, `\right)`) {
+			content = s[len(`\left(`) : len(s)-len(`\right)`)]
+		}
+	}
+
+	if content != "" {
+		content = strings.ReplaceAll(content, `\cr`, `\\`)
+		rawRows := strings.Split(content, `\\`)
+		var rows [][]int
+		for _, rStr := range rawRows {
+			rStr = strings.TrimSpace(rStr)
+			if rStr == "" {
+				continue
+			}
+			var rawEntries []string
+			if strings.Contains(rStr, "&") {
+				rawEntries = strings.Split(rStr, "&")
+			} else {
+				rawEntries = strings.Split(rStr, ",")
+			}
+			var row []int
+			for _, entry := range rawEntries {
+				entry = strings.TrimSpace(entry)
+				if entry == "" {
+					continue
+				}
+				val, err := strconv.Atoi(entry)
+				if err != nil {
+					return nil, false
+				}
+				row = append(row, val)
+			}
+			if len(row) > 0 {
+				rows = append(rows, row)
+			}
+		}
+		if len(rows) > 0 {
+			cols := len(rows[0])
+			for _, r := range rows[1:] {
+				if len(r) != cols {
+					return nil, false
+				}
+			}
+			return rows, true
+		}
+	}
+
+	// 2. Check for bracketed format: [[1, 2], [3, 4]] or [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+	if strings.Contains(s, "[") && strings.Contains(s, "]") {
+		rowRegex := regexp.MustCompile(`\[([^\[\]]+)\]`)
+		matches := rowRegex.FindAllStringSubmatch(s, -1)
+		if len(matches) > 0 {
+			var rows [][]int
+			for _, m := range matches {
+				part := m[1]
+				parts := strings.Split(part, ",")
+				if len(parts) == 1 && strings.Contains(part, " ") {
+					parts = strings.Fields(part)
+				}
+				var row []int
+				for _, p := range parts {
+					p = strings.TrimSpace(p)
+					if p == "" {
+						continue
+					}
+					val, err := strconv.Atoi(p)
+					if err != nil {
+						return nil, false
+					}
+					row = append(row, val)
+				}
+				if len(row) > 0 {
+					rows = append(rows, row)
+				}
+			}
+			if len(rows) > 0 {
+				cols := len(rows[0])
+				for _, r := range rows[1:] {
+					if len(r) != cols {
+						return nil, false
+					}
+				}
+				return rows, true
+			}
+		}
+	}
+
+	// 3. Raw LaTeX rows with & and \\ without begin/end: e.g. "1 & 2 \\ 3 & 4"
+	if strings.Contains(s, `\\`) || strings.Contains(s, "&") {
+		rawRows := strings.Split(s, `\\`)
+		var rows [][]int
+		for _, rStr := range rawRows {
+			rStr = strings.TrimSpace(rStr)
+			if rStr == "" {
+				continue
+			}
+			rawEntries := strings.Split(rStr, "&")
+			var row []int
+			for _, entry := range rawEntries {
+				entry = strings.TrimSpace(entry)
+				if entry == "" {
+					continue
+				}
+				val, err := strconv.Atoi(entry)
+				if err != nil {
+					return nil, false
+				}
+				row = append(row, val)
+			}
+			if len(row) > 0 {
+				rows = append(rows, row)
+			}
+		}
+		if len(rows) > 0 {
+			cols := len(rows[0])
+			for _, r := range rows[1:] {
+				if len(r) != cols {
+					return nil, false
+				}
+			}
+			return rows, true
+		}
+	}
+
+	return nil, false
 }
 
 func gradeMatrix(expected, userAnswer string) grader.Result {

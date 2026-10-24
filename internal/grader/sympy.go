@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -19,20 +20,6 @@ import (
 
 var sympyServicePath string
 var findOnce sync.Once
-
-// Pool for persistent sympy service to avoid per-request fork + DoS.
-var (
-	// sympyGate serialises the single stdin/stdout pipe. It is a one-slot
-	// channel rather than a mutex because waiting for it has to be abandonable:
-	// on 2026-10-23 a slow CAS call held the mutex while requests stacked up
-	// behind it with no deadline, which is how a single hard expression became
-	// a stall for every symbolic answer on the machine.
-	sympyGate   = make(chan struct{}, 1)
-	sympyCmd    *exec.Cmd
-	sympyStdin  io.WriteCloser
-	sympyStdout *bufio.Scanner
-	sympySem    = make(chan struct{}, 4) // limit concurrent grading to 4
-)
 
 func findSymPyService() string {
 	findOnce.Do(func() {
@@ -80,41 +67,180 @@ type sympyResponse struct {
 	Feedback string `json:"feedback"`
 }
 
-func ensureSympyLocked() error {
-	if sympyCmd != nil && sympyCmd.Process != nil {
-		// Check if process is still alive (naive: ProcessState == nil means running)
-		if sympyCmd.ProcessState == nil {
-			return nil
-		}
-		// Previous process died — clean up
-		sympyCmd = nil
-		sympyStdin = nil
-		sympyStdout = nil
-	}
-	path := findSymPyService()
-	if path == "" {
-		return fmt.Errorf("grading service not found")
-	}
+// sympyWorker encapsulates a persistent Python subprocess communicating via stdin and stdout json-lines.
+type sympyWorker struct {
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout *bufio.Scanner
+}
+
+func newSympyWorker(path string) (*sympyWorker, error) {
 	cmd := exec.Command("python3", path)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("pipe error: %w", err)
+		return nil, fmt.Errorf("pipe error: %w", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("pipe error: %w", err)
+		stdin.Close()
+		return nil, fmt.Errorf("pipe error: %w", err)
 	}
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start error: %w", err)
+		stdin.Close()
+		return nil, fmt.Errorf("start error: %w", err)
 	}
 	scanner := bufio.NewScanner(stdout)
-	// Bump buffer for 500-char input + JSON overhead; service var limit is 1MB
 	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
-	sympyCmd = cmd
-	sympyStdin = stdin
-	sympyStdout = scanner
-	return nil
+	return &sympyWorker{
+		cmd:    cmd,
+		stdin:  stdin,
+		stdout: scanner,
+	}, nil
+}
+
+func (w *sympyWorker) close() {
+	if w.stdin != nil {
+		w.stdin.Close()
+	}
+	if w.cmd != nil && w.cmd.Process != nil {
+		w.cmd.Process.Kill()
+		w.cmd.Wait()
+	}
+}
+
+// sympyPool maintains a pool of N long-lived worker processes.
+type sympyPool struct {
+	mu          sync.Mutex
+	path        string
+	size        int
+	idleWorkers chan *sympyWorker
+}
+
+func getWorkerCount() int {
+	n := runtime.NumCPU()
+	if n < 1 {
+		return 1
+	}
+	if n > 4 {
+		return 4
+	}
+	return n
+}
+
+var (
+	poolOnce     sync.Once
+	poolInstance *sympyPool
+)
+
+func getSympyPool() *sympyPool {
+	poolOnce.Do(func() {
+		path := findSymPyService()
+		size := getWorkerCount()
+		p := &sympyPool{
+			path:        path,
+			size:        size,
+			idleWorkers: make(chan *sympyWorker, size),
+		}
+		if path != "" {
+			for i := 0; i < size; i++ {
+				w, err := newSympyWorker(path)
+				if err == nil {
+					p.idleWorkers <- w
+				}
+			}
+		}
+		poolInstance = p
+	})
+	return poolInstance
+}
+
+func (p *sympyPool) spawnReplacement() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.path == "" {
+		return
+	}
+	w, err := newSympyWorker(p.path)
+	if err == nil {
+		select {
+		case p.idleWorkers <- w:
+		default:
+			w.close()
+		}
+	}
+}
+
+func (p *sympyPool) Grade(ctx context.Context, expected, answer string) Result {
+	select {
+	case w := <-p.idleWorkers:
+		res, ok := p.execOnWorker(w, expected, answer)
+		if ok {
+			p.idleWorkers <- w
+			return res
+		}
+		// Worker crashed or timed out: terminate it and replace with fresh worker
+		w.close()
+		go p.spawnReplacement()
+		return res
+	case <-ctx.Done():
+		return Result{Correct: false, Score: 0, Feedback: "Grading service busy", Unavailable: true}
+	}
+}
+
+func (p *sympyPool) execOnWorker(w *sympyWorker, expected, answer string) (Result, bool) {
+	req := sympyRequest{
+		ID:       "1",
+		Expected: expected,
+		Answer:   answer,
+	}
+	data, err := json.Marshal(req)
+	if err != nil {
+		return Result{Correct: false, Score: 0, Feedback: "Internal error"}, true
+	}
+
+	type execResult struct {
+		line string
+		err  error
+	}
+	ch := make(chan execResult, 1)
+
+	go func() {
+		if _, err := w.stdin.Write(append(data, '\n')); err != nil {
+			ch <- execResult{err: err}
+			return
+		}
+		if w.stdout.Scan() {
+			ch <- execResult{line: w.stdout.Text()}
+		} else {
+			if err := w.stdout.Err(); err != nil {
+				ch <- execResult{err: err}
+			} else {
+				ch <- execResult{err: io.EOF}
+			}
+		}
+	}()
+
+	select {
+	case res := <-ch:
+		if res.err != nil {
+			return Result{Correct: false, Score: 0, Feedback: "Grading service error", Unavailable: true}, false
+		}
+		var resp sympyResponse
+		if err := json.Unmarshal([]byte(res.line), &resp); err != nil {
+			return Result{Correct: false, Score: 0, Feedback: "Grading service response error", Unavailable: true}, false
+		}
+		if resp.Correct {
+			return Result{Correct: true, Score: 1}, true
+		}
+		feedback := resp.Feedback
+		if feedback == "" {
+			feedback = "Incorrect"
+		}
+		return Result{Correct: false, Score: 0, Feedback: feedback}, true
+	case <-time.After(2500 * time.Millisecond):
+		return Result{Correct: false, Score: 0, Feedback: "Grading service timed out", Unavailable: true}, false
+	}
 }
 
 // constEvalNumeric evaluates an expression containing only numbers and
@@ -156,117 +282,13 @@ func gradeSymPy(expected, answer string) Result {
 		}
 	}
 
-	// Semaphore to bound concurrent grading (avoid fork bomb if pool restarts)
-	select {
-	case sympySem <- struct{}{}:
-		defer func() { <-sympySem }()
-	default:
-		// If semaphore full, try to acquire with timeout
-		ctxSem, cancelSem := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancelSem()
-		select {
-		case sympySem <- struct{}{}:
-			defer func() { <-sympySem }()
-		case <-ctxSem.Done():
-			return Result{Correct: false, Score: 0, Feedback: "Grading service busy", Unavailable: true}
-		}
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	// Ensure pooled process is alive, guarded by the pipe gate (held across I/O —
-	// the pool is a single stdin/stdout pair). The wait is bounded: a call that
-	// holds the pipe past five seconds is not worth stalling every other
-	// symbolic answer for, so the caller is told to retry instead.
-	gateCtx, gateCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer gateCancel()
-	select {
-	case sympyGate <- struct{}{}:
-		defer func() { <-sympyGate }()
-	case <-gateCtx.Done():
-		return Result{Correct: false, Score: 0, Feedback: "Grading service busy", Unavailable: true}
-	}
-
-	if err := ensureSympyLocked(); err != nil {
+	pool := getSympyPool()
+	if pool == nil || pool.path == "" {
 		return Result{Correct: false, Score: 0, Feedback: "Grading service not found", Unavailable: true}
 	}
 
-	req := sympyRequest{
-		ID:       "1",
-		Expected: expected,
-		Answer:   answer,
-	}
-	data, err := json.Marshal(req)
-	if err != nil {
-		return Result{Correct: false, Score: 0, Feedback: "Internal error"}
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
+	defer cancel()
 
-	// Write with context awareness
-	writeDone := make(chan error, 1)
-	go func() {
-		_, err := sympyStdin.Write(append(data, '\n'))
-		writeDone <- err
-	}()
-	select {
-	case err := <-writeDone:
-		if err != nil {
-			// Process likely died — kill and reset for next call
-			if sympyCmd != nil && sympyCmd.Process != nil {
-				sympyCmd.Process.Kill()
-				sympyCmd.Wait()
-			}
-			sympyCmd = nil
-			return Result{Correct: false, Score: 0, Feedback: "Grading service write error", Unavailable: true}
-		}
-	case <-ctx.Done():
-		return Result{Correct: false, Score: 0, Feedback: "Grading service timed out", Unavailable: true}
-	}
-
-	// Read response with timeout
-	scanDone := make(chan bool, 1)
-	var line string
-	var scanErr bool
-	go func() {
-		if sympyStdout.Scan() {
-			line = sympyStdout.Text()
-			scanDone <- true
-		} else {
-			scanErr = true
-			scanDone <- false
-		}
-	}()
-	select {
-	case ok := <-scanDone:
-		if !ok {
-			// Scanner failed — process died
-			if sympyCmd != nil && sympyCmd.Process != nil {
-				sympyCmd.Process.Kill()
-				sympyCmd.Wait()
-			}
-			sympyCmd = nil
-			if scanErr && ctx.Err() == nil {
-				return Result{Correct: false, Score: 0, Feedback: "Grading service response error", Unavailable: true}
-			}
-			if ctx.Err() != nil {
-				return Result{Correct: false, Score: 0, Feedback: "Grading service timed out", Unavailable: true}
-			}
-			return Result{Correct: false, Score: 0, Feedback: "Grading service error", Unavailable: true}
-		}
-	case <-ctx.Done():
-		return Result{Correct: false, Score: 0, Feedback: "Grading service timed out", Unavailable: true}
-	}
-
-	var resp sympyResponse
-	if err := json.Unmarshal([]byte(line), &resp); err != nil {
-		return Result{Correct: false, Score: 0, Feedback: "Grading service response error", Unavailable: true}
-	}
-	if resp.Correct {
-		return Result{Correct: true, Score: 1}
-	}
-	feedback := resp.Feedback
-	if feedback == "" {
-		feedback = "Incorrect"
-	}
-	return Result{Correct: false, Score: 0, Feedback: feedback}
+	return pool.Grade(ctx, expected, answer)
 }
