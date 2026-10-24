@@ -132,6 +132,7 @@ func (r *Registry) GenerateContext(conceptID string, ctx GeneratorContext) (Prob
 	p.Question = latex.Canonicalize(p.Question, latex.Generators)
 	p.Explanation = r.explain(conceptID, p)
 	p.Difficulty = difficultyOf(ctx.Difficulty)
+	p.KPOrdinal = ctx.KPOrdinal
 	for _, w := range latex.Validate(p.Question+"\n"+p.Explanation, latex.Generators) {
 		fmt.Printf("latex warning in generator %q: %s\n", conceptID, w)
 	}
@@ -185,6 +186,7 @@ func (r *Registry) BatchGenerateContext(conceptID string, count int, ctx Generat
 		p.Question = latex.Canonicalize(p.Question, latex.Generators)
 		p.Explanation = r.explain(conceptID, p)
 		p.Difficulty = difficultyOf(ctx.Difficulty)
+		p.KPOrdinal = ctx.KPOrdinal
 		for _, w := range latex.Validate(p.Question+"\n"+p.Explanation, latex.Generators) {
 			fmt.Printf("latex warning in generator %q (batch): %s\n", conceptID, w)
 		}

@@ -1934,6 +1934,12 @@ func (s *Server) handleLessonConcept(w http.ResponseWriter, r *http.Request) {
 			diff = v
 		}
 	}
+	kpOrdinal := 0
+	if kp := r.URL.Query().Get("kp_ordinal"); kp != "" {
+		if v, err := strconv.Atoi(kp); err == nil && v >= 1 && v <= 3 {
+			kpOrdinal = v
+		}
+	}
 	excluded := make(map[string]bool)
 	for _, ex := range r.URL.Query()["exclude"] {
 		for _, part := range strings.Split(ex, "\n") {
@@ -1950,6 +1956,7 @@ func (s *Server) handleLessonConcept(w http.ResponseWriter, r *http.Request) {
 		Source          string `json:"source,omitempty"`
 		AnswerHint      string `json:"answer_hint,omitempty"`
 		AnswerInputMode string `json:"answer_input_mode,omitempty"`
+		KPOrdinal       int    `json:"kp_ordinal,omitempty"`
 	}
 	// Every question in this response carries the format its answer needs, not
 	// only the concept's grading type. LearnStepper used the concept record,
@@ -2002,7 +2009,7 @@ func (s *Server) handleLessonConcept(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]interface{}{"questions": []interface{}{}})
 		return
 	}
-	problems, err := reg.BatchGenerateContext(conceptID, count+len(excluded)+5, generator.GeneratorContext{Difficulty: diff, Seed: seed})
+	problems, err := reg.BatchGenerateContext(conceptID, count+len(excluded)+5, generator.GeneratorContext{Difficulty: diff, Seed: seed, KPOrdinal: kpOrdinal})
 	if err != nil {
 		writeError(w, err.Error(), 404)
 		return
@@ -2053,7 +2060,11 @@ func (s *Server) handleLessonConcept(w http.ResponseWriter, r *http.Request) {
 	}
 	questions := make([]qInfo, len(problems))
 	for i, p := range problems {
-		questions[i] = qInfo{Question: p.Question, Answer: p.Answer, Explanation: p.Explanation, Source: "generator", AnswerHint: qFormat.Hint, AnswerInputMode: qFormat.InputMode}
+		qOrdinal := kpOrdinal
+		if p.KPOrdinal > 0 {
+			qOrdinal = p.KPOrdinal
+		}
+		questions[i] = qInfo{Question: p.Question, Answer: p.Answer, Explanation: p.Explanation, Source: "generator", AnswerHint: qFormat.Hint, AnswerInputMode: qFormat.InputMode, KPOrdinal: qOrdinal}
 	}
 	writeJSON(w, map[string]interface{}{"questions": questions, "concept_id": conceptID})
 }

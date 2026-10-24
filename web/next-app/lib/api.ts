@@ -1184,10 +1184,11 @@ export interface LessonKpsRes {
 	diagram?: string
 }
 
-export async function getLessonPractice(conceptId: string, count = 5, opts?: { seed?: number; exclude?: string[]; difficulty?: number }): Promise<LessonPracticeRes> {
+export async function getLessonPractice(conceptId: string, count = 5, opts?: { seed?: number; exclude?: string[]; difficulty?: number; kp_ordinal?: number }): Promise<LessonPracticeRes> {
 	const params = new URLSearchParams({ count: String(count) })
 	if (opts?.seed) params.set('seed', String(opts.seed))
 	if (opts?.difficulty !== undefined) params.set('difficulty', String(opts.difficulty))
+	if (opts?.kp_ordinal) params.set('kp_ordinal', String(opts.kp_ordinal))
 	for (const ex of opts?.exclude ?? []) params.append('exclude', ex)
 	const res = await authedFetch(`${API_BASE}/api/lessons/${encodeURIComponent(conceptId)}/practice?${params.toString()}`)
 	if (!res.ok) throw new Error(`Lesson practice fetch failed: ${res.status}`)

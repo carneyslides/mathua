@@ -14,9 +14,11 @@ type Variant struct {
 type KnowledgePoint struct {
 	Ordinal          int      `json:"ordinal"`
 	Title            string   `json:"title"`
-	WorkedExample    string   `json:"worked_example"`
+	WorkedExample    string   `json:"worked_example,omitempty"`
 	KeyPrerequisites []string `json:"key_prerequisites,omitempty"`
 	VariantKey       string   `json:"variant_key,omitempty"`
+	Section          string   `json:"section,omitempty"`
+	Subgoals         []string `json:"subgoals,omitempty"`
 }
 
 type Concept struct {

@@ -52,6 +52,10 @@ func LoadDir(dir string) (*DAG, error) {
 	if err := mergeEnrichment(dir, raw); err != nil {
 		return nil, err
 	}
+	// Ingest knowledge points from data/lessons/kp/<concept_id>.json
+	if err := mergeKnowledgePoints(dir, raw); err != nil {
+		return nil, err
+	}
 	return Build(raw)
 }
 
@@ -138,6 +142,70 @@ func appendUnique(slice []string, items []string) []string {
 		}
 	}
 	return slice
+}
+
+type kpShardItem struct {
+	Label    string   `json:"label"`
+	Section  string   `json:"section"`
+	Subgoals []string `json:"subgoals"`
+}
+
+func findKPDir(dir string) string {
+	candidate := filepath.Join(filepath.Dir(dir), "lessons", "kp")
+	if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+		return candidate
+	}
+	for _, fallback := range []string{
+		"data/lessons/kp",
+		"../data/lessons/kp",
+		"../../data/lessons/kp",
+		"../../../data/lessons/kp",
+	} {
+		if info, err := os.Stat(fallback); err == nil && info.IsDir() {
+			return fallback
+		}
+	}
+	return ""
+}
+
+func mergeKnowledgePoints(dir string, raw []Concept) error {
+	kpDir := findKPDir(dir)
+	if kpDir == "" {
+		return nil
+	}
+	for i := range raw {
+		c := &raw[i]
+		if len(c.KnowledgePoints) > 0 {
+			continue
+		}
+		path := filepath.Join(kpDir, c.ID+".json")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("read kp shard %s: %w", path, err)
+		}
+		var items []kpShardItem
+		if err := json.Unmarshal(data, &items); err != nil {
+			return fmt.Errorf("parse kp shard %s: %w", path, err)
+		}
+		kps := make([]KnowledgePoint, 0, len(items))
+		for idx, item := range items {
+			title := item.Label
+			if title == "" {
+				title = item.Section
+			}
+			kps = append(kps, KnowledgePoint{
+				Ordinal:  idx + 1,
+				Title:    title,
+				Section:  item.Section,
+				Subgoals: item.Subgoals,
+			})
+		}
+		c.KnowledgePoints = kps
+	}
+	return nil
 }
 
 // Build validates a concept slice (no cycles, orphan prereqs, empty/duplicate IDs), topo-sorts, and returns a DAG.

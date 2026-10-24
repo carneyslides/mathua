@@ -152,7 +152,7 @@ export default function LearnStepper({ conceptId, returnStack = [] }: Props) {
   }, [])
 
   const refill = useCallback(async (diff: number, exclude: string[]): Promise<PracticeQuestion[]> => {
-    const pr = await getLessonPractice(conceptId, 3, { seed: Date.now() % 100000, exclude, difficulty: diff })
+    const pr = await getLessonPractice(conceptId, 3, { seed: Date.now() % 100000, exclude, difficulty: diff, kp_ordinal: kpIndex + 1 })
     const fresh = pr.questions.filter(q => !exclude.includes(q.question))
     const answerable = fresh.length > 0 ? fresh : pr.questions
     const first = answerable[0]
@@ -160,7 +160,7 @@ export default function LearnStepper({ conceptId, returnStack = [] }: Props) {
       setServedFormat({ hint: first.answer_hint, inputMode: first.answer_input_mode === 'numeric' ? 'numeric' : 'text' })
     }
     return answerable
-  }, [conceptId])
+  }, [conceptId, kpIndex])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -177,7 +177,7 @@ export default function LearnStepper({ conceptId, returnStack = [] }: Props) {
         setIneligible(readyRes)
         return
       }
-      const pr = await getLessonPractice(conceptId, 3, { seed: Date.now() % 100000, difficulty: 0.4 })
+      const pr = await getLessonPractice(conceptId, 3, { seed: Date.now() % 100000, difficulty: 0.4, kp_ordinal: 1 })
       seenRef.current = pr.questions.map(q => q.question)
       setBuffer(pr.questions)
       const first = pr.questions[0]

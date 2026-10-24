@@ -2139,3 +2139,61 @@ func TestQuestionPayloadCarriesTheDeclaredAnswerFormat(t *testing.T) {
 		t.Errorf("answer_input_mode = %v, want text rather than the numeric default", got)
 	}
 }
+
+type kpAwareTestGen struct{}
+
+func (g *kpAwareTestGen) Generate(ctx generator.GeneratorContext) generator.Problem {
+	return generator.Problem{
+		Question:    fmt.Sprintf("Question for KP %d", ctx.KPOrdinal),
+		Answer:      "42",
+		Explanation: "Explanation",
+		KPOrdinal:   ctx.KPOrdinal,
+	}
+}
+
+func TestServer_LessonsPractice_AcceptsKPOrdinal(t *testing.T) {
+	d, _ := concepts.Build([]concepts.Concept{
+		{
+			ID: "a", Label: "A", Domain: "d", GradingType: "numeric", Prerequisites: []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 60},
+			KnowledgePoints: []concepts.KnowledgePoint{
+				{Ordinal: 1, Title: "One"},
+				{Ordinal: 2, Title: "Two"},
+				{Ordinal: 3, Title: "Three"},
+			},
+		},
+	})
+	store, _ := storage.NewSQLiteStore(":memory:")
+	t.Cleanup(func() { store.Close() })
+	reg := generator.NewRegistry()
+	reg.Register("a", &kpAwareTestGen{})
+	s := New(engine.New(store, d, reg, nil, nil), store, nil)
+	mux := http.NewServeMux()
+	s.Register(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/lessons/a/practice?count=1&kp_ordinal=2", nil)
+	mux.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Questions []struct {
+			Question  string `json:"question"`
+			KPOrdinal int    `json:"kp_ordinal"`
+		} `json:"questions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Questions) == 0 {
+		t.Fatal("expected at least one question")
+	}
+	if resp.Questions[0].KPOrdinal != 2 {
+		t.Errorf("expected kp_ordinal 2, got %d", resp.Questions[0].KPOrdinal)
+	}
+	if resp.Questions[0].Question != "Question for KP 2" {
+		t.Errorf("expected Question for KP 2, got %q", resp.Questions[0].Question)
+	}
+}

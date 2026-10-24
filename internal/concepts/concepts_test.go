@@ -473,3 +473,28 @@ func TestCurriculumEnrichment_LoadedAndVerified(t *testing.T) {
 		t.Errorf("expected mean in-degree >= 2.20, got %.2f", meanInDegree)
 	}
 }
+
+func TestKnowledgePoints_LoadedFromShards(t *testing.T) {
+	dag, err := LoadDir("../../data/concepts")
+	if err != nil {
+		t.Fatalf("load curriculum: %v", err)
+	}
+	totalKPs := 0
+	for _, c := range dag.Order() {
+		if len(c.KnowledgePoints) != 3 {
+			t.Errorf("concept %s has %d knowledge points, want 3", c.ID, len(c.KnowledgePoints))
+		}
+		totalKPs += len(c.KnowledgePoints)
+		for i, kp := range c.KnowledgePoints {
+			if kp.Ordinal != i+1 {
+				t.Errorf("concept %s kp %d has ordinal %d, want %d", c.ID, i, kp.Ordinal, i+1)
+			}
+			if kp.Title == "" {
+				t.Errorf("concept %s kp %d has empty title", c.ID, kp.Ordinal)
+			}
+		}
+	}
+	if totalKPs != 3750 {
+		t.Errorf("expected 3750 total knowledge points across 1250 concepts, got %d", totalKPs)
+	}
+}

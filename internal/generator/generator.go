@@ -37,6 +37,8 @@ type Problem struct {
 	// and grading agree by construction — the registry fills this in, so no caller can
 	// generate a question and forget what it was generated at.
 	Difficulty *float64
+	// KPOrdinal records the 1-indexed knowledge point ordinal the problem was generated for.
+	KPOrdinal int
 }
 
 type Generator interface {
