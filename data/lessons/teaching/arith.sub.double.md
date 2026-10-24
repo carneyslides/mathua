@@ -14,13 +14,13 @@ By the end of this section, you will be able to:
 
 ### Use Subtraction Notation
 
-Suppose there are seven bananas in a bowl. Elana uses three of them to make a smoothie. How many bananas are left in the bowl? To answer the question, we subtract three from seven. When we subtract, we take one number away from another to find the difference. The notation we use to subtract 3 from 7 is
+When we subtract two-digit numbers, we align tens and ones places to take a smaller amount away from a larger amount. For example, if a store has 68 books and sells 25:
 
 $$
-7 - 3
+68 - 25
 $$
 
-We read $7 - 3$ as *seven minus three* and the result is *the difference of seven and three*.
+We read this as *sixty-eight minus twenty-five*. The starting amount (68) is called the minuend, the amount being subtracted (25) is the subtrahend and the result is the difference. In vertical form, place values align so that ones subtract from ones and tens subtract from tens. We can estimate the difference before computing: $70 - 30 = 40$.
 
 ### Subtraction Notation
 

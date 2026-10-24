@@ -14,13 +14,13 @@ By the end of this section, you will be able to:
 
 ### Use Subtraction Notation
 
-Suppose there are seven bananas in a bowl. Elana uses three of them to make a smoothie. How many bananas are left in the bowl? To answer the question, we subtract three from seven. When we subtract, we take one number away from another to find the difference. The notation we use to subtract 3 from 7 is
+When subtracting multi-digit numbers, a digit in the top number (minuend) can be smaller than the digit directly below it in the subtrahend. For example, in the problem:
 
 $$
-7 - 3
+52 - 27
 $$
 
-We read $7 - 3$ as *seven minus three* and the result is *the difference of seven and three*.
+Looking at the ones column, we cannot subtract 7 from 2 without getting a negative number. This tells us that borrowing (regrouping) is required. To prepare for subtraction, we take 1 ten from the 5 tens in the tens place and exchange it for 10 ones, turning 2 ones into 12 ones.
 
 ### Subtraction Notation
 

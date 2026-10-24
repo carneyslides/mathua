@@ -14,15 +14,13 @@ By the end of this section, you will be able to:
 
 ### Use Addition Notation
 
-A college student has a part-time job. Last week he worked 3 hours on Monday and 4 hours on Friday. To find the total number of hours he worked last week, he added 3 and 4.
-
-The operation of addition combines numbers to get a sum. The notation we use to find the sum of 3 and 4 is:
+When adding multi-digit numbers, the sum of the digits in a single column often equals 10 or greater. For example, when adding 47 and 35:
 
 $$
-3 + 4
+47 + 35
 $$
 
-We read this as *three plus four* and the result is the sum of three and four. The numbers 3 and 4 are called the addends. A math statement that includes numbers and operations is called an expression.
+In the ones column, $7 + 5 = 12$. Because a single place value column can only hold one digit, we cannot write 12 in the ones place. Instead, we regroup: 12 ones is 1 ten and 2 ones. We write the 2 in the ones column and carry the 1 ten into the tens column above the 4.
 
 ### Addition Notation
 

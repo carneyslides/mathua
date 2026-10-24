@@ -74,15 +74,21 @@ export default function DomainsPage() {
   // Element to return focus to when the dialog closes.
   const triggerRef = useRef<HTMLButtonElement | null>(null)
 
-  useEffect(() => {
-    if (!mounted) return
+  const loadDomains = useCallback(() => {
+    setError('')
+    setDomains(null)
     getCurriculumDomains()
       .then(setDomains)
       .catch(() => {
         setDomains([])
         setError("Couldn't load the curriculum.")
       })
-  }, [mounted])
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+    loadDomains()
+  }, [mounted, loadDomains])
 
   const ordered = useMemo(() => {
     if (!domains) return []
@@ -103,8 +109,11 @@ export default function DomainsPage() {
     setDialog(null)
     setDetail(null)
     setDetailLoading(true)
+    setError('')
     try {
       setDetail(await getCurriculumDomain(id))
+    } catch {
+      setError("Couldn't load domain details.")
     } finally {
       setDetailLoading(false)
     }
@@ -204,9 +213,18 @@ export default function DomainsPage() {
             </p>
 
             {error && (
-              <p role="alert" className="mb-4 font-mono text-[11px] text-mathua-secondary">
-                {error}
-              </p>
+              <div className="mb-6 p-4 border border-mathua-border bg-mathua-surface">
+                <p role="alert" className="font-mono text-xs text-mathua-secondary mb-3">
+                  {error}
+                </p>
+                <button
+                  type="button"
+                  onClick={loadDomains}
+                  className="font-mono text-xs text-mathua-primary border border-mathua-border px-3 py-1 hover:bg-mathua-blue-faint transition-colors"
+                >
+                  Retry loading curriculum
+                </button>
+              </div>
             )}
 
             <ul className="border border-mathua-border divide-y divide-mathua-border bg-mathua-surface">
@@ -234,7 +252,7 @@ export default function DomainsPage() {
           <>
             <button
               type="button"
-              onClick={() => { setSelected(null); setDetail(null); setDialog(null) }}
+              onClick={() => { setSelected(null); setDetail(null); setDialog(null); setError('') }}
               className="font-mono text-xs text-mathua-secondary hover:text-mathua-blue"
             >
               ← Domains
@@ -251,6 +269,21 @@ export default function DomainsPage() {
                 Your progress: {available(selectedRow)} / {selectedRow.conceptCount} concepts available
                 {selectedRow.masteredCount > 0 && ` · ${selectedRow.masteredCount} mastered`}
               </p>
+            )}
+
+            {error && !detailLoading && !detail && (
+              <div className="mb-6 p-4 border border-mathua-border bg-mathua-surface">
+                <p role="alert" className="font-mono text-xs text-mathua-secondary mb-3">
+                  {error}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void openDomain(selected)}
+                  className="font-mono text-xs text-mathua-primary border border-mathua-border px-3 py-1 hover:bg-mathua-blue-faint transition-colors"
+                >
+                  Retry loading domain
+                </button>
+              </div>
             )}
 
             {detailLoading && <p className="font-mono text-xs text-mathua-muted">Loading topics…</p>}
@@ -334,7 +367,7 @@ export default function DomainsPage() {
               onRetry={retryDialog}
             />
 
-            {error && (
+            {error && detail && (
               <p role="alert" className="mt-4 font-mono text-[11px] text-mathua-secondary">
                 {error}
               </p>

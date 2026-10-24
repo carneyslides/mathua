@@ -14,15 +14,20 @@ By the end of this section, you will be able to:
 
 ### Use Addition Notation
 
-A college student has a part-time job. Last week he worked 3 hours on Monday and 4 hours on Friday. To find the total number of hours he worked last week, he added 3 and 4.
-
-The operation of addition combines numbers to get a sum. The notation we use to find the sum of 3 and 4 is:
+Adding three-digit numbers extends column addition to the hundreds place. For example, to find the combined attendance of two school events with 324 and 458 students, we add:
 
 $$
-3 + 4
+324 + 458
 $$
 
-We read this as *three plus four* and the result is the sum of three and four. The numbers 3 and 4 are called the addends. A math statement that includes numbers and operations is called an expression.
+We read this as *three hundred twenty-four plus four hundred fifty-eight*. In vertical notation, we align the addends so that hundreds, tens and ones are in corresponding columns:
+
+$$
+\begin{array}{rl}
+324 & \quad \text{(3 hundreds, 2 tens and 4 ones)} \\
+\underline{+ 458} & \quad \text{(4 hundreds, 5 tens and 8 ones)}
+\end{array}
+$$
 
 ### Addition Notation
 

@@ -14,15 +14,13 @@ By the end of this section, you will be able to:
 
 ### Use Addition Notation
 
-A college student has a part-time job. Last week he worked 3 hours on Monday and 4 hours on Friday. To find the total number of hours he worked last week, he added 3 and 4.
-
-The operation of addition combines numbers to get a sum. The notation we use to find the sum of 3 and 4 is:
+When we add two-digit numbers, each number consists of tens and ones digits. For example, to find the total cost of two items priced at $\$23$ and $\$45$, we add 23 and 45:
 
 $$
-3 + 4
+23 + 45
 $$
 
-We read this as *three plus four* and the result is the sum of three and four. The numbers 3 and 4 are called the addends. A math statement that includes numbers and operations is called an expression.
+We read this as *twenty-three plus forty-five*. The numbers 23 and 45 are the addends and their combined total is the sum. Before adding column by column, we can estimate the sum by rounding to the nearest ten: $20 + 50 = 70$.
 
 ### Addition Notation
 

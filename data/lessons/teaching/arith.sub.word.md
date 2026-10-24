@@ -14,13 +14,13 @@ By the end of this section, you will be able to:
 
 ### Use Subtraction Notation
 
-Suppose there are seven bananas in a bowl. Elana uses three of them to make a smoothie. How many bananas are left in the bowl? To answer the question, we subtract three from seven. When we subtract, we take one number away from another to find the difference. The notation we use to subtract 3 from 7 is
+Applied problems express subtraction through situations involving taking away, comparing two quantities or finding how much remains. For example: "Elena had $\$85$ in her savings account and spent $\$32$ on groceries. How much money remains in her account?"
+
+Key phrases such as *difference*, *how many left*, *how much more*, *decrease* and *minus* signal subtraction. In math notation, the larger starting quantity comes first as the minuend, followed by the amount taken away:
 
 $$
-7 - 3
+85 - 32
 $$
-
-We read $7 - 3$ as *seven minus three* and the result is *the difference of seven and three*.
 
 ### Subtraction Notation
 

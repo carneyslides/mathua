@@ -14,15 +14,15 @@ By the end of this section, you will be able to:
 
 ### Use Addition Notation
 
-A college student has a part-time job. Last week he worked 3 hours on Monday and 4 hours on Friday. To find the total number of hours he worked last week, he added 3 and 4.
+Real-world problems describe addition using words instead of mathematical symbols. For example: "Marcus ran 14 miles on Saturday and 18 miles on Sunday. How many miles did he run in total?"
 
-The operation of addition combines numbers to get a sum. The notation we use to find the sum of 3 and 4 is:
+To translate this word problem into math notation, we identify the key action words. Words such as *sum*, *total*, *combined*, *in all* and *altogether* indicate addition. The quantities being combined are the addends, 14 and 18:
 
 $$
-3 + 4
+14 + 18
 $$
 
-We read this as *three plus four* and the result is the sum of three and four. The numbers 3 and 4 are called the addends. A math statement that includes numbers and operations is called an expression.
+Translating the story into an addition expression allows us to compute the total miles Marcus ran.
 
 ### Addition Notation
 

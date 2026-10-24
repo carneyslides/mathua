@@ -267,6 +267,37 @@ describe('/domains curriculum picker', () => {
     expect(push).not.toHaveBeenCalled()
     practiceSpy.mockRestore()
   })
+
+  it('renders retry button when curriculum fails to load, and retries on click', async () => {
+    vi.mocked(api.getCurriculumDomains)
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockResolvedValueOnce(domains)
+    render(<DomainsPage />)
+    const retryBtn = await screen.findByRole('button', { name: 'Retry loading curriculum' })
+    expect(screen.getByRole('alert').textContent).toContain("Couldn't load the curriculum.")
+    fireEvent.click(retryBtn)
+    await waitFor(() => expect(screen.getByText(domainLabel('arithmetic'))).toBeTruthy())
+    expect(api.getCurriculumDomains).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders retry button when domain topics fail to load, and retries on click', async () => {
+    vi.mocked(api.getCurriculumDomain)
+      .mockRejectedValueOnce(new Error('domain error'))
+      .mockResolvedValueOnce({
+        domain: { id: 'arithmetic' },
+        topics: [
+          { conceptId: 'arith.add', title: 'Single-digit addition', state: 'unlocked', depth: 0 },
+        ],
+      })
+    render(<DomainsPage />)
+    await waitFor(() => expect(screen.getByText(domainLabel('arithmetic'))).toBeTruthy())
+    fireEvent.click(screen.getByText(domainLabel('arithmetic')))
+    const retryBtn = await screen.findByRole('button', { name: 'Retry loading domain' })
+    expect(screen.getByRole('alert').textContent).toContain("Couldn't load domain details.")
+    fireEvent.click(retryBtn)
+    await screen.findByText('Single-digit addition')
+    expect(api.getCurriculumDomain).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('DomainTable', () => {
