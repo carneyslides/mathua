@@ -89,6 +89,9 @@ type lagrangeIndexGen struct{}
 func (g *lagrangeIndexGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	subgroup := 2 + rand.Intn(28)
 	index := 2 + rand.Intn(18)
+	for subgroup == index {
+		subgroup = 2 + rand.Intn(28)
+	}
 	group := subgroup * index
 	return generator.Problem{
 		Question: fmt.Sprintf("A group G has order %d and H is a subgroup of order %d. By Lagrange's theorem, what is the index of H in G, that is, the number of distinct left cosets of H?", group, subgroup),
@@ -185,6 +188,9 @@ type orbitSizeGen struct{}
 func (g *orbitSizeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	stabilizer := 2 + rand.Intn(28)
 	orbit := 2 + rand.Intn(18)
+	for stabilizer == orbit {
+		stabilizer = 2 + rand.Intn(28)
+	}
 	group := stabilizer * orbit
 	return generator.Problem{
 		Question: fmt.Sprintf("A group of order %d acts on a set, and the stabilizer of a point has order %d. By the orbit-stabilizer theorem, how many points lie in that point's orbit?", group, stabilizer),
@@ -207,6 +213,9 @@ type kernelSizeGen struct{}
 func (g *kernelSizeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 	image := 2 + rand.Intn(28)
 	kernel := 2 + rand.Intn(18)
+	for image == kernel {
+		image = 2 + rand.Intn(28)
+	}
 	group := image * kernel
 	return generator.Problem{
 		Question: fmt.Sprintf("A homomorphism is defined on a group of order %d and its image has order %d. What is the order of its kernel?", group, image),

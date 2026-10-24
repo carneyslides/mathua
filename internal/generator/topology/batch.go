@@ -54,55 +54,78 @@ func (g *ballGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 		triples := [][3]int{
 			{3, 4, 5}, {5, 12, 13}, {8, 15, 17}, {7, 24, 25}, {6, 8, 10},
 		}
-		tr := triples[rand.Intn(len(triples))]
-		dx, dy, dist := tr[0], tr[1], tr[2]
-		x1 := rand.Intn(15) - 7
-		y1 := rand.Intn(15) - 7
-		x2 := x1 + dx
-		y2 := y1 + dy
-		ans := strconv.Itoa(dist)
-		q := fmt.Sprintf("In the Euclidean plane, what is the distance d((%d,%d),(%d,%d))? (enter a number)", x1, y1, x2, y2)
-		reason := fmt.Sprintf("The differences are %d and %d, so the distance is sqrt(%d^2 + %d^2) = %d.", dx, dy, dx, dy, dist)
+		for attempt := 0; attempt < 50; attempt++ {
+			tr := triples[rand.Intn(len(triples))]
+			dx, dy, dist := tr[0], tr[1], tr[2]
+			x1 := rand.Intn(15) - 7
+			y1 := rand.Intn(15) - 7
+			x2 := x1 + dx
+			y2 := y1 + dy
+			if dist == x1 || dist == y1 || dist == x2 || dist == y2 ||
+				-dist == x1 || -dist == y1 || -dist == x2 || -dist == y2 {
+				continue
+			}
+			ans := strconv.Itoa(dist)
+			q := fmt.Sprintf("In the Euclidean plane, what is the distance d((%d,%d),(%d,%d))? (enter a number)", x1, y1, x2, y2)
+			reason := fmt.Sprintf("The differences are %d and %d, so the distance is sqrt(%d^2 + %d^2) = %d.", dx, dy, dx, dy, dist)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ans,
+				Explanation: reason,
+				Facts: map[string]string{
+					"kind":   "distance",
+					"x1":     strconv.Itoa(x1),
+					"y1":     strconv.Itoa(y1),
+					"x2":     strconv.Itoa(x2),
+					"y2":     strconv.Itoa(y2),
+					"answer": ans,
+				},
+			}
+		}
+	}
+	for attempt := 0; attempt < 50; attempt++ {
+		center := rand.Intn(30) - 15
+		radius := 1 + rand.Intn(15)
+		side := "lower"
+		var val int
+		var boundName string
+		if rand.Intn(2) == 1 {
+			side = "upper"
+			val = center + radius
+			boundName = "b"
+		} else {
+			val = center - radius
+			boundName = "a"
+		}
+		if val == center || val == radius || val == -center || val == -radius {
+			continue
+		}
+		ans := strconv.Itoa(val)
+		q := fmt.Sprintf("In R with the usual metric, the open ball of radius %d centred at %d is the interval (a, b). What is %s? (enter a number)", radius, center, boundName)
+		reason := fmt.Sprintf("The ball is (%d - %d, %d + %d) = (%d, %d), so the %s endpoint is %d.", center, radius, center, radius, center-radius, center+radius, side, val)
 		return generator.Problem{
 			Question:    q,
 			Answer:      ans,
 			Explanation: reason,
 			Facts: map[string]string{
-				"kind":   "distance",
-				"x1":     strconv.Itoa(x1),
-				"y1":     strconv.Itoa(y1),
-				"x2":     strconv.Itoa(x2),
-				"y2":     strconv.Itoa(y2),
+				"kind":   "endpoint",
+				"center": strconv.Itoa(center),
+				"radius": strconv.Itoa(radius),
+				"side":   side,
 				"answer": ans,
 			},
 		}
 	}
-	center := rand.Intn(30) - 15
-	radius := 1 + rand.Intn(15)
-	side := "lower"
-	var val int
-	var boundName string
-	if rand.Intn(2) == 1 {
-		side = "upper"
-		val = center + radius
-		boundName = "b"
-	} else {
-		val = center - radius
-		boundName = "a"
-	}
-	ans := strconv.Itoa(val)
-	q := fmt.Sprintf("In R with the usual metric, the open ball of radius %d centred at %d is the interval (a, b). What is %s? (enter a number)", radius, center, boundName)
-	reason := fmt.Sprintf("The ball is (%d - %d, %d + %d) = (%d, %d), so the %s endpoint is %d.", center, radius, center, radius, center-radius, center+radius, side, val)
 	return generator.Problem{
-		Question:    q,
-		Answer:      ans,
-		Explanation: reason,
+		Question:    "In R with the usual metric, the open ball of radius 3 centred at 5 is the interval (a, b). What is b? (enter a number)",
+		Answer:      "8",
+		Explanation: "5 + 3 = 8.",
 		Facts: map[string]string{
 			"kind":   "endpoint",
-			"center": strconv.Itoa(center),
-			"radius": strconv.Itoa(radius),
-			"side":   side,
-			"answer": ans,
+			"center": "5",
+			"radius": "3",
+			"side":   "upper",
+			"answer": "8",
 		},
 	}
 }
@@ -114,58 +137,124 @@ func (g *ballGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type interiorGen struct{}
 
 func (g *interiorGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
-	var q, ans, reason string
-	var pts []int
-	kind := "boundary"
-	a := rand.Intn(16) - 8
-	b := a + rand.Intn(6) + 1
-	switch mode {
-	case 0:
-		pts = []int{a, b}
-		ans = "2"
-		q = fmt.Sprintf("In R with the usual topology, how many boundary points does the set [%d, %d] have? (enter a number)", a, b)
-		reason = fmt.Sprintf("The boundary is {%d, %d}: every neighbourhood of either endpoint meets both the set and its complement.", a, b)
-	case 1:
-		c := b + rand.Intn(5) + 1
-		d := c + rand.Intn(5) + 1
-		pts = []int{a, b, c, d}
-		ans = "4"
-		q = fmt.Sprintf("In R with the usual topology, how many boundary points does the set [%d, %d] union [%d, %d] have? (enter a number)", a, b, c, d)
-		reason = fmt.Sprintf("The boundary is {%d, %d, %d, %d}: the four endpoints each have neighbourhoods meeting the set and its complement.", a, b, c, d)
-	case 2:
-		c := b + rand.Intn(6) + 1
-		pts = []int{a, b, c}
-		ans = "3"
-		q = fmt.Sprintf("In R with the usual topology, how many boundary points does the set (%d, %d) union (%d, %d) have? (enter a number)", a, b, b, c)
-		reason = fmt.Sprintf("The boundary is {%d, %d, %d}: the endpoints and the missing point %d all have neighbourhoods meeting both sides.", a, b, c, b)
-	case 3:
-		pts = []int{a}
-		ans = "1"
-		q = fmt.Sprintf("In R with the usual topology, how many boundary points does the ray (%d, infinity) have? (enter a number)", a)
-		reason = fmt.Sprintf("The only boundary point is %d; every other real is either inside the ray or has a ball outside it.", a)
-	default:
-		kind = "interior"
-		pts = []int{}
-		ans = "0"
-		n := 2 + rand.Intn(4)
-		elems := make([]string, n)
-		for i := 0; i < n; i++ {
-			elems[i] = strconv.Itoa(a + i*2)
+	for attempt := 0; attempt < 50; attempt++ {
+		mode := rand.Intn(5)
+		var q, ans, reason string
+		var pts []int
+		kind := "boundary"
+		base := rand.Intn(20) - 10
+
+		switch mode {
+		case 0:
+			// Disjoint closed intervals: 1 to 6 intervals => 2, 4, 6, 8, 10, 12 boundary points
+			numIntervals := 1 + rand.Intn(6)
+			ansVal := 2 * numIntervals
+			ans = strconv.Itoa(ansVal)
+			intervals := make([]string, numIntervals)
+			cur := base
+			pts = make([]int, 0, ansVal)
+			leak := false
+			for i := 0; i < numIntervals; i++ {
+				a := cur
+				b := a + rand.Intn(3) + 1
+				cur = b + rand.Intn(3) + 2
+				intervals[i] = fmt.Sprintf("[%d, %d]", a, b)
+				pts = append(pts, a, b)
+				if a == ansVal || b == ansVal || -a == ansVal || -b == ansVal {
+					leak = true
+				}
+			}
+			if leak {
+				continue
+			}
+			q = fmt.Sprintf("In R with the usual topology, how many boundary points does the set %s have? (enter a number)", strings.Join(intervals, " union "))
+			reason = fmt.Sprintf("The boundary consists of the %d endpoints of the pairwise disjoint closed intervals.", ansVal)
+		case 1:
+			// Adjacent intervals missing division points: 2, 3, 4 intervals touching => 3, 4, 5 boundary points
+			m := 2 + rand.Intn(4)
+			ansVal := m + 1
+			ans = strconv.Itoa(ansVal)
+			intervals := make([]string, m)
+			cur := base
+			pts = make([]int, 0, ansVal)
+			leak := false
+			for i := 0; i < m; i++ {
+				next := cur + rand.Intn(4) + 1
+				intervals[i] = fmt.Sprintf("(%d, %d)", cur, next)
+				if i == 0 {
+					pts = append(pts, cur)
+					if cur == ansVal || -cur == ansVal {
+						leak = true
+					}
+				}
+				pts = append(pts, next)
+				if next == ansVal || -next == ansVal {
+					leak = true
+				}
+				cur = next
+			}
+			if leak {
+				continue
+			}
+			q = fmt.Sprintf("In R with the usual topology, how many boundary points does the set %s have? (enter a number)", strings.Join(intervals, " union "))
+			reason = fmt.Sprintf("The boundary consists of the %d outer and division boundary points.", ansVal)
+		case 2:
+			// Ray (a, infinity) or (-infinity, a) has 1 boundary point
+			a := base
+			if a == 1 || a == -1 {
+				continue
+			}
+			pts = []int{a}
+			ans = "1"
+			if rand.Intn(2) == 0 {
+				q = fmt.Sprintf("In R with the usual topology, how many boundary points does the ray (%d, infinity) have? (enter a number)", a)
+			} else {
+				q = fmt.Sprintf("In R with the usual topology, how many boundary points does the ray (-infinity, %d) have? (enter a number)", a)
+			}
+			reason = fmt.Sprintf("The only boundary point is %d.", a)
+		case 3:
+			// Closed ray [a, infinity) has 1 boundary point
+			a := base
+			if a == 1 || a == -1 {
+				continue
+			}
+			pts = []int{a}
+			ans = "1"
+			q = fmt.Sprintf("In R with the usual topology, how many boundary points does the closed ray [%d, infinity) have? (enter a number)", a)
+			reason = fmt.Sprintf("The only boundary point is %d.", a)
+		default:
+			// Finite set of isolated points has 0 interior points
+			kind = "interior"
+			pts = []int{}
+			ans = "0"
+			n := 2 + rand.Intn(4)
+			elems := make([]string, n)
+			for i := 0; i < n; i++ {
+				elems[i] = strconv.Itoa(base + i*2)
+			}
+			q = fmt.Sprintf("In R with the usual topology, how many interior points does the set {%s} have? (enter a number)", strings.Join(elems, ", "))
+			reason = "A finite set of isolated points has empty interior: no ball around any point stays inside the set."
 		}
-		q = fmt.Sprintf("In R with the usual topology, how many interior points does the set {%s} have? (enter a number)", strings.Join(elems, ", "))
-		reason = "A finite set of isolated points has empty interior: no ball around any point stays inside the set."
-	}
-	parts := make([]string, len(pts))
-	for i, p := range pts {
-		parts[i] = strconv.Itoa(p)
+
+		parts := make([]string, len(pts))
+		for i, p := range pts {
+			parts[i] = strconv.Itoa(p)
+		}
+		return generator.Problem{
+			Question:    q,
+			Answer:      ans,
+			Explanation: reason,
+			Facts: map[string]string{
+				"points": strings.Join(parts, ","), "kind": kind, "answer": ans,
+			},
+		}
 	}
 	return generator.Problem{
-		Question:    q,
-		Answer:      ans,
-		Explanation: reason,
+		Question:    "In R with the usual topology, how many boundary points does the set [1, 2] union [4, 5] have? (enter a number)",
+		Answer:      "4",
+		Explanation: "The four endpoints are boundary points.",
 		Facts: map[string]string{
-			"points": strings.Join(parts, ","), "kind": kind, "answer": ans,
+			"points": "1,2,4,5", "kind": "boundary", "answer": "4",
 		},
 	}
 }
@@ -228,45 +317,55 @@ func (g *limitPointGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type convergenceGen struct{}
 
 func (g *convergenceGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	cPool := []int{1, 2, 4, 5, 8, 10}
-	c := cPool[rand.Intn(len(cPool))]
-	a := rand.Intn(16)
-	b := rand.Intn(15) + 1
-	if rand.Intn(2) == 1 {
-		b = -b
+	cPool := []int{2, 4, 5, 8, 10}
+	for attempt := 0; attempt < 50; attempt++ {
+		c := cPool[rand.Intn(len(cPool))]
+		a := rand.Intn(16) + 1
+		b := rand.Intn(15) + 1
+		if rand.Intn(2) == 1 {
+			b = -b
+		}
+		d := rand.Intn(10) + 1
+
+		var ans string
+		if a%c == 0 {
+			ans = strconv.Itoa(a / c)
+		} else {
+			ans = strconv.FormatFloat(float64(a)/float64(c), 'f', -1, 64)
+		}
+
+		if ans == strconv.Itoa(a) || ans == strconv.Itoa(c) ||
+			ans == strconv.Itoa(b) || ans == strconv.Itoa(-b) ||
+			ans == strconv.Itoa(d) {
+			continue
+		}
+
+		var numStr string
+		if b > 0 {
+			numStr = fmt.Sprintf("%dn + %d", a, b)
+		} else {
+			numStr = fmt.Sprintf("%dn - %d", a, -b)
+		}
+		denStr := fmt.Sprintf("%dn + %d", c, d)
+
+		q := fmt.Sprintf("The sequence a_n = (%s)/(%s) converges to what limit? (enter a number)", numStr, denStr)
+		reason := fmt.Sprintf("Divide numerator and denominator by n: the leading term dominates, leaving the limit %d/%d = %s.", a, c, ans)
+		return generator.Problem{
+			Question:    q,
+			Answer:      ans,
+			Explanation: reason,
+			Facts: map[string]string{
+				"a": strconv.Itoa(a), "b": strconv.Itoa(b),
+				"c": strconv.Itoa(c), "d": strconv.Itoa(d), "answer": ans,
+			},
+		}
 	}
-	d := rand.Intn(10)
-	var ans string
-	if a%c == 0 {
-		ans = strconv.Itoa(a / c)
-	} else {
-		ans = strconv.FormatFloat(float64(a)/float64(c), 'f', -1, 64)
-	}
-	var numStr string
-	if a == 0 {
-		numStr = strconv.Itoa(b)
-	} else if b > 0 {
-		numStr = fmt.Sprintf("%dn + %d", a, b)
-	} else if b < 0 {
-		numStr = fmt.Sprintf("%dn - %d", a, -b)
-	} else {
-		numStr = fmt.Sprintf("%dn", a)
-	}
-	var denStr string
-	if d > 0 {
-		denStr = fmt.Sprintf("%dn + %d", c, d)
-	} else {
-		denStr = fmt.Sprintf("%dn", c)
-	}
-	q := fmt.Sprintf("The sequence a_n = (%s)/(%s) converges to what limit? (enter a number)", numStr, denStr)
-	reason := fmt.Sprintf("Divide numerator and denominator by n: the leading term dominates, leaving the limit %d/%d = %s.", a, c, ans)
 	return generator.Problem{
-		Question:    q,
-		Answer:      ans,
-		Explanation: reason,
+		Question:    "The sequence a_n = (6n + 1)/(2n + 3) converges to what limit? (enter a number)",
+		Answer:      "3",
+		Explanation: "The leading coefficients give 6/2 = 3.",
 		Facts: map[string]string{
-			"a": strconv.Itoa(a), "b": strconv.Itoa(b),
-			"c": strconv.Itoa(c), "d": strconv.Itoa(d), "answer": ans,
+			"a": "6", "b": "1", "c": "2", "d": "3", "answer": "3",
 		},
 	}
 }
@@ -637,9 +736,9 @@ func (g *bettiGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 		b1 := 2 * genus
 		ans := strconv.Itoa(b1)
 		return generator.Problem{
-			Question:    fmt.Sprintf("A closed orientable surface of genus %d has first Betti number b1 = 2g. What is b1? (enter a number)", genus),
+			Question:    fmt.Sprintf("A closed orientable surface of genus %d has what first Betti number b1? (enter a number)", genus),
 			Answer:      ans,
-			Explanation: fmt.Sprintf("b1 = 2g = 2(%d) = %d for a surface of genus %d.", genus, b1, genus),
+			Explanation: fmt.Sprintf("A closed orientable surface of genus g has 2g independent 1-cycles, so b1 = 2(%d) = %d.", genus, b1),
 			Facts: map[string]string{
 				"kind":   "surface",
 				"param":  strconv.Itoa(genus),
@@ -647,12 +746,17 @@ func (g *bettiGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 			},
 		}
 	case 2:
+		numWords := []string{
+			"zero", "one", "two", "three", "four", "five",
+			"six", "seven", "eight", "nine", "ten", "eleven",
+			"twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+		}
 		k := 2 + rand.Intn(10)
 		ans := strconv.Itoa(k)
 		return generator.Problem{
-			Question:    fmt.Sprintf("A wedge of %d circles has first Betti number equal to the number of circles. What is b1? (enter a number)", k),
+			Question:    fmt.Sprintf("A wedge sum of %s circles has what first Betti number b1? (enter a number)", numWords[k]),
 			Answer:      ans,
-			Explanation: fmt.Sprintf("Each circle contributes one independent loop, so a wedge of %d circles has b1 = %d.", k, k),
+			Explanation: fmt.Sprintf("Each circle in a wedge sum contributes one independent generator to the first homology group, giving b1 = %d.", k),
 			Facts: map[string]string{
 				"kind":   "wedge",
 				"param":  strconv.Itoa(k),
@@ -660,12 +764,17 @@ func (g *bettiGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 			},
 		}
 	case 3:
+		numWords := []string{
+			"zero", "one", "two", "three", "four", "five",
+			"six", "seven", "eight", "nine", "ten", "eleven",
+			"twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+		}
 		k := 2 + rand.Intn(10)
 		ans := strconv.Itoa(k)
 		return generator.Problem{
-			Question:    fmt.Sprintf("A space has %d connected components. What is its zeroth Betti number b0? (enter a number)", k),
+			Question:    fmt.Sprintf("A topological space has %s connected components. What is its zeroth Betti number b0? (enter a number)", numWords[k]),
 			Answer:      ans,
-			Explanation: fmt.Sprintf("b0 counts connected components, so %d components give b0 = %d.", k, k),
+			Explanation: fmt.Sprintf("The zeroth Betti number b0 counts path components, so %d components give b0 = %d.", k, k),
 			Facts: map[string]string{
 				"kind":   "components",
 				"param":  strconv.Itoa(k),

@@ -141,41 +141,48 @@ func (g *openClosedGen) Generate(ctx generator.GeneratorContext) generator.Probl
 	b := a + rand.Intn(10) + 1
 	switch mode {
 	case 0:
-		q := fmt.Sprintf("Is the interval \\((%d, %d)\\) open, closed, both or neither in \\(\\mathbb{R}\\)? (type one word)", a, b)
-		ans := "open"
+		q := fmt.Sprintf("Classify the interval \\((%d, %d)\\) in the standard topology of \\(\\mathbb{R}\\):", a, b)
 		reason := fmt.Sprintf("Every point in (%d, %d) has an epsilon-neighborhood contained in the interval, but endpoints %d and %d are boundary limit points outside it, so open and not closed.", a, b, a, b)
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "open", "closed", "neither", "both")
+		p.Explanation = reason
+		return p
 	case 1:
-		q := fmt.Sprintf("Is the interval \\([%d, %d]\\) open, closed, both or neither in \\(\\mathbb{R}\\)? (type one word)", a, b)
-		ans := "closed"
+		q := fmt.Sprintf("Classify the interval \\([%d, %d]\\) in the standard topology of \\(\\mathbb{R}\\):", a, b)
 		reason := fmt.Sprintf("[%d, %d] contains all its limit points, so it is closed; endpoints %d and %d have no epsilon-neighborhood inside it, so it is not open.", a, b, a, b)
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "closed", "open", "neither", "both")
+		p.Explanation = reason
+		return p
 	case 2:
-		q := fmt.Sprintf("Is the half-open interval \\((%d, %d]\\) open, closed, both or neither in \\(\\mathbb{R}\\)? (type one word)", a, b)
-		ans := "neither"
+		q := fmt.Sprintf("Classify the half-open interval \\((%d, %d]\\) in the standard topology of \\(\\mathbb{R}\\):", a, b)
 		reason := fmt.Sprintf("(%d, %d] misses limit point %d so not closed, and %d has no epsilon-neighborhood inside so not open.", a, b, a, b)
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "neither", "open", "closed", "both")
+		p.Explanation = reason
+		return p
 	case 3:
 		if rand.Intn(2) == 0 {
-			q := fmt.Sprintf("Is the ray \\([%d, \\infty)\\) closed in \\(\\mathbb{R}\\)? (yes/no)", a)
-			ans := "yes"
+			q := fmt.Sprintf("Is the ray \\([%d, \\infty)\\) closed in \\(\\mathbb{R}\\)?", a)
 			reason := fmt.Sprintf("[%d, \\infty) contains all its limit points, so it is closed.", a)
-			return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+			p := generator.MultipleChoice(q, "yes", "no")
+			p.Explanation = reason
+			return p
 		}
-		q := fmt.Sprintf("Is the open ray \\((-\\infty, %d)\\) open in \\(\\mathbb{R}\\)? (yes/no)", b)
-		ans := "yes"
+		q := fmt.Sprintf("Is the open ray \\((-\\infty, %d)\\) open in \\(\\mathbb{R}\\)?", b)
 		reason := fmt.Sprintf("Every point in (-\\infty, %d) has an epsilon-neighborhood inside it, so it is open.", b)
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "yes", "no")
+		p.Explanation = reason
+		return p
 	case 4:
-		q := fmt.Sprintf("Is the finite set \\(\\{%d, %d\\}\\) closed in \\(\\mathbb{R}\\)? (yes/no)", a, b)
-		ans := "yes"
+		q := fmt.Sprintf("Is the finite set \\(\\{%d, %d\\}\\) closed in \\(\\mathbb{R}\\)?", a, b)
 		reason := "Any finite subset of R is closed because it contains all its limit points (it has none)."
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "yes", "no")
+		p.Explanation = reason
+		return p
 	default:
-		q := "Is \\(\\mathbb{R}\\) open, closed, both or neither? (type one word)"
-		ans := "both"
+		q := "Classify the entire real line \\(\\mathbb{R}\\) in the standard topology:"
 		reason := "R is open by definition of topology and closed because its complement (the empty set) is open."
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "both", "open only", "closed only", "neither")
+		p.Explanation = reason
+		return p
 	}
 }
 
@@ -197,33 +204,37 @@ func (g *continuousGen) Generate(ctx generator.GeneratorContext) generator.Probl
 			poleStr = fmt.Sprintf("1/(x + %d)", -a)
 		}
 		ans := fmt.Sprintf("x=%d", a)
-		q := fmt.Sprintf("At which point is \\(f(x) = %s\\) discontinuous? (type like x=0)", poleStr)
+		q := fmt.Sprintf("At which point is \\(f(x) = %s\\) discontinuous? (type like x=c where c is a number)", poleStr)
 		reason := fmt.Sprintf("The limit as x approaches %d does not exist (the denominator vanishes), so %s breaks at x=%d.", a, poleStr, a)
 		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
 	case 1:
 		c1 := rand.Intn(5) + 1
 		c2 := rand.Intn(7) - 3
-		q := fmt.Sprintf("Is the polynomial \\(f(x) = %d x^2 + %d x + %d\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", c1, c2, a)
-		ans := "yes"
+		q := fmt.Sprintf("Is the polynomial \\(f(x) = %d x^2 + %d x + %d\\) continuous on \\(\\mathbb{R}\\)?", c1, c2, a)
 		reason := "All polynomials are continuous everywhere on R."
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "yes", "no")
+		p.Explanation = reason
+		return p
 	case 2:
 		shift := rand.Intn(10) + 1
-		q := fmt.Sprintf("Is \\(f(x) = |x - %d|\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", shift)
-		ans := "yes"
+		q := fmt.Sprintf("Is \\(f(x) = |x - %d|\\) continuous on \\(\\mathbb{R}\\)?", shift)
 		reason := "The absolute value function is continuous everywhere on R."
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "yes", "no")
+		p.Explanation = reason
+		return p
 	case 3:
-		q := "Is the floor function \\(\\lfloor x \\rfloor\\) continuous on \\(\\mathbb{R}\\)? (yes/no)"
-		ans := "no"
+		q := "Is the floor function \\(\\lfloor x \\rfloor\\) continuous on \\(\\mathbb{R}\\)?"
 		reason := "The floor function is discontinuous at every integer because the left and right limits differ."
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "no", "yes")
+		p.Explanation = reason
+		return p
 	default:
 		k := rand.Intn(8) + 1
-		q := fmt.Sprintf("Is \\(f(x) = \\frac{1}{x^2 + %d}\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", k)
-		ans := "yes"
+		q := fmt.Sprintf("Is \\(f(x) = \\frac{1}{x^2 + %d}\\) continuous on \\(\\mathbb{R}\\)?", k)
 		reason := fmt.Sprintf("Since x^2 + %d is strictly positive for all real x, the denominator is never zero, so f(x) is continuous on R.", k)
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "yes", "no")
+		p.Explanation = reason
+		return p
 	}
 }
 
@@ -237,32 +248,37 @@ func (g *compactGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 	b := a + rand.Intn(8) + 1
 	switch mode {
 	case 0:
-		q := fmt.Sprintf("Which Heine-Borel condition fails for \\((%d, %d)\\): closed or bounded? (type one word)", a, b)
-		ans := "closed"
+		q := fmt.Sprintf("Which Heine-Borel condition fails for the interval \\((%d, %d)\\)?", a, b)
 		reason := fmt.Sprintf("(%d, %d) is bounded but misses limit points %d and %d, so it fails closedness.", a, b, a, b)
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "closed", "bounded")
+		p.Explanation = reason
+		return p
 	case 1:
-		q := fmt.Sprintf("Which Heine-Borel condition fails for the ray \\([%d, \\infty)\\): closed or bounded? (type one word)", a)
-		ans := "bounded"
+		q := fmt.Sprintf("Which Heine-Borel condition fails for the ray \\([%d, \\infty)\\)?", a)
 		reason := fmt.Sprintf("[%d, \\infty) is closed but unbounded, so it fails boundedness and is not compact.", a)
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "bounded", "closed")
+		p.Explanation = reason
+		return p
 	case 2:
-		q := fmt.Sprintf("Is the closed bounded interval \\([%d, %d]\\) compact in \\(\\mathbb{R}\\)? (yes/no)", a, b)
-		ans := "yes"
+		q := fmt.Sprintf("Is the closed bounded interval \\([%d, %d]\\) compact in \\(\\mathbb{R}\\)?", a, b)
 		reason := fmt.Sprintf("By the Heine-Borel theorem, [%d, %d] is closed and bounded in R, hence compact.", a, b)
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "yes", "no")
+		p.Explanation = reason
+		return p
 	case 3:
-		q := fmt.Sprintf("Is the open interval \\((%d, %d)\\) compact in \\(\\mathbb{R}\\)? (yes/no)", a, b)
-		ans := "no"
+		q := fmt.Sprintf("Is the open interval \\((%d, %d)\\) compact in \\(\\mathbb{R}\\)?", a, b)
 		reason := fmt.Sprintf("(%d, %d) is not closed in R because it misses boundary limit points %d and %d, so it is not compact.", a, b, a, b)
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "no", "yes")
+		p.Explanation = reason
+		return p
 	default:
 		c := b + rand.Intn(6) + 1
 		d := c + rand.Intn(6) + 1
-		q := fmt.Sprintf("Is the union \\([%d, %d] \\cup [%d, %d]\\) compact in \\(\\mathbb{R}\\)? (yes/no)", a, b, c, d)
-		ans := "yes"
+		q := fmt.Sprintf("Is the union \\([%d, %d] \\cup [%d, %d]\\) compact in \\(\\mathbb{R}\\)?", a, b, c, d)
 		reason := "A finite union of compact sets is compact in R."
-		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		p := generator.MultipleChoice(q, "yes", "no")
+		p.Explanation = reason
+		return p
 	}
 }
 

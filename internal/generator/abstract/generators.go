@@ -3,6 +3,7 @@ package abstract
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 
 	"github.com/chuma-beep/mathua/internal/generator"
 	"github.com/chuma-beep/mathua/internal/mathutil"
@@ -49,45 +50,66 @@ func Register(reg *generator.Registry) {
 type groupDefGen struct{}
 
 func (g *groupDefGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		set       string
-		operation string
-		isGroup   string
-		reason    string
-	}
-	table := []entry{
-		{"integers", "addition", "yes", "Integers under addition satisfy closure, associativity, identity (0), and inverses (-a)."},
-		{"natural numbers", "addition", "no", "Natural numbers have no additive inverses (e.g., there is no n such that 3+n=0 in N)."},
-		{"rational numbers", "addition", "yes", "Rationals under addition satisfy closure, associativity, identity (0), and inverses (-a)."},
-		{"even integers", "addition", "yes", "Even integers under addition are closed, associative, have identity 0, and each 2n has inverse -2n."},
-		{"odd integers", "addition", "no", "Odd integers are not closed under addition (odd+odd=even)."},
-		{"non-zero rationals", "multiplication", "yes", "Non-zero rationals under multiplication satisfy all group properties: identity 1, inverses 1/a."},
-		{"integers", "multiplication", "no", "Integers under multiplication have no inverses (e.g., 2 has no integer multiplicative inverse)."},
-		{"real numbers", "addition", "yes", "Real numbers under addition satisfy closure, associativity, identity (0), and inverses (-a)."},
-	}
-	e := table[rand.Intn(len(table))]
-	if rand.Intn(3) == 0 {
-		// production: name the failing axiom (type one word).
-		type failEntry struct {
+	mode := rand.Intn(4)
+	switch mode {
+	case 0:
+		// Dynamic multiples kZ under addition
+		k := 2 + rand.Intn(10)
+		q := fmt.Sprintf("Is the set of multiples %d\\mathbb{Z} under addition a group? (yes/no)", k)
+		ex := fmt.Sprintf("Multiples of %d under addition are closed, associative, have identity 0 = %d(0) and each %dn has inverse %d(-n), satisfying all group axioms.", k, k, k, k)
+		return groupYesNo(q, "yes", ex)
+	case 1:
+		// Integers modulo m without zero under multiplication
+		primes := []int{3, 5, 7, 11, 13, 17, 19}
+		composites := []int{4, 6, 8, 9, 10, 12, 14, 15, 16}
+		if rand.Intn(2) == 0 {
+			p := primes[rand.Intn(len(primes))]
+			q := fmt.Sprintf("Is the set \\(\\mathbb{Z}_{%d} \\setminus \\{0\\}\\) under multiplication modulo %d a group? (yes/no)", p, p)
+			ex := fmt.Sprintf("Because %d is prime, every non-zero residue is coprime to %d and possesses a modular inverse, forming a group under multiplication.", p, p)
+			return groupYesNo(q, "yes", ex)
+		}
+		m := composites[rand.Intn(len(composites))]
+		q := fmt.Sprintf("Is the set \\(\\mathbb{Z}_{%d} \\setminus \\{0\\}\\) under multiplication modulo %d a group? (yes/no)", m, m)
+		ex := fmt.Sprintf("Because %d is composite, it contains non-trivial factors whose product is 0 mod %d, violating closure and inverse axioms.", m, m)
+		return groupYesNo(q, "no", ex)
+	case 2:
+		// Failing axioms identification
+		type failItem struct {
 			set       string
 			operation string
 			axiom     string
 			reason    string
 		}
-		failTable := []failEntry{
-			{"natural numbers", "addition", "inverses", "No n gives 3+n=0 in N: inverses fail."},
-			{"odd integers", "addition", "closure", "odd+odd=even leaves the set: closure fails."},
-			{"integers", "multiplication", "inverses", "2 has no integer multiplicative inverse: inverses fail."},
+		fails := []failItem{
+			{"natural numbers \\(\\mathbb{N}\\)", "addition", "inverses", "Positive natural numbers have no additive inverses in N."},
+			{"odd integers", "addition", "closure", "Adding two odd integers produces an even integer, which leaves the set."},
+			{"integers \\(\\mathbb{Z}\\)", "multiplication", "inverses", "Integers other than 1 and -1 lack multiplicative inverses in Z."},
+			{"positive integers", "multiplication", "inverses", "Integers greater than 1 have no multiplicative inverse in the positive integers."},
+			{"positive rational numbers", "addition", "identity", "The additive identity 0 is not positive, so no identity exists in the set."},
+			{"even integers", "multiplication", "identity", "The multiplicative identity 1 is odd, so the set has no identity element."},
 		}
-		f := failTable[rand.Intn(len(failTable))]
-		return groupChoice(
-			fmt.Sprintf("The set of %s under %s is NOT a group. Which axiom fails?", f.set, f.operation),
-			f.axiom, f.reason, "closure", "identity", "inverses")
-	}
-	return generator.Problem{
-		Question:    fmt.Sprintf("Is the set of %s under %s a group? (yes/no)", e.set, e.operation),
-		Answer:      e.isGroup,
-		Explanation: e.reason,
+		item := fails[rand.Intn(len(fails))]
+		q := fmt.Sprintf("The set of %s under %s is NOT a group. Which axiom fails?", item.set, item.operation)
+		return groupChoice(q, item.axiom, item.reason, "closure", "identity", "inverses")
+	default:
+		// Standard structures
+		type stdItem struct {
+			set       string
+			operation string
+			isGroup   string
+			reason    string
+		}
+		stds := []stdItem{
+			{"rational numbers \\(\\mathbb{Q}\\)", "addition", "yes", "Rationals under addition satisfy closure, associativity, identity 0 and inverses -a."},
+			{"real numbers \\(\\mathbb{R}\\)", "addition", "yes", "Real numbers under addition satisfy closure, associativity, identity 0 and inverses -a."},
+			{"non-zero rational numbers \\(\\mathbb{Q} \\setminus \\{0\\}\\)", "multiplication", "yes", "Non-zero rationals under multiplication satisfy all group properties with identity 1 and inverses 1/a."},
+			{"non-zero real numbers \\(\\mathbb{R} \\setminus \\{0\\}\\)", "multiplication", "yes", "Non-zero reals under multiplication form a group with identity 1 and inverses 1/a."},
+			{"invertible 2x2 real matrices \\(\\operatorname{GL}_2(\\mathbb{R})\\)", "multiplication", "yes", "Invertible matrices under multiplication form the general linear group with identity I and matrix inverses."},
+			{"all 2x2 real matrices \\(M_2(\\mathbb{R})\\)", "multiplication", "no", "Singular matrices with zero determinant have no multiplicative inverse."},
+		}
+		item := stds[rand.Intn(len(stds))]
+		q := fmt.Sprintf("Is the set of %s under %s a group? (yes/no)", item.set, item.operation)
+		return groupYesNo(q, item.isGroup, item.reason)
 	}
 }
 
@@ -96,39 +118,56 @@ func (g *groupDefGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type groupExamplesGen struct{}
 
 func (g *groupExamplesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		set       string
-		operation string
-		isGroup   string
-		reason    string
-	}
-	table := []entry{
-		{"Z₄ (integers mod 4)", "addition mod 4", "yes", "Z₄ under addition mod 4 is a group: closed, associative, identity 0, every a has inverse 4−a."},
-		{"{0,1,2,3}", "multiplication mod 4", "no", "2 has no inverse mod 4 (2×1=2, 2×2=0, 2×3=2; never get 1)."},
-		{"GL(2,R) (invertible 2x2 matrices)", "multiplication", "yes", "Invertible matrices under multiplication form the general linear group: closed, associative, identity I, inverses exist by definition."},
-		{"Z₅ \\ {0}", "multiplication mod 5", "yes", "Non-zero elements of Z₅ under multiplication form a group since 5 is prime."},
-		{"Z₅ (integers mod 5)", "addition mod 5", "yes", "Z₅ under addition mod 5 is a group: closed, associative, identity 0, each a has inverse 5−a."},
-		{"{0,1,2,3,4,5}", "multiplication mod 6", "no", "2 has no inverse mod 6 (2×3=6≡0, never 1), and not all elements have inverses."},
-		{"SL(2,R) (2x2 matrices with det=1)", "multiplication", "yes", "Matrices with determinant 1 under multiplication form a group: closed (det(AB)=det(A)det(B)=1), associative, identity I, inverses have det=1."},
-		{"S₃ (permutations of 3 elements)", "composition", "yes", "S₃ under composition is the symmetric group: closed, associative, identity, and every permutation has an inverse."},
-	}
-	e := table[rand.Intn(len(table))]
-	if rand.Intn(3) == 0 {
-		// production: compute an inverse or an order in small modular groups.
-		type invEntry struct {
-			question string
-			answer   string
-			reason   string
+	mode := rand.Intn(5)
+	switch mode {
+	case 0:
+		// Order of Dihedral group D_{2n}
+		n := 3 + rand.Intn(10)
+		ans := strconv.Itoa(2 * n)
+		q := fmt.Sprintf("What is the order of the group of symmetries of a regular %d-gon? (enter a number)", n)
+		ex := fmt.Sprintf("A regular %d-gon has %d rotations and %d reflections, giving total order 2(%d) = %d.", n, n, n, n, 2*n)
+		return groupChoice(q, ans, ex, strconv.Itoa(n), strconv.Itoa(2*n-2), strconv.Itoa(2*n+2))
+	case 1:
+		// Order of unit groups U(p)
+		primes := []int{3, 5, 7, 11, 13, 17}
+		p := primes[rand.Intn(len(primes))]
+		ans := strconv.Itoa(p - 1)
+		q := fmt.Sprintf("What is the order of the group of units \\(U(%d) = \\mathbb{Z}_{%d}^\\times\\) under multiplication? (enter a number)", p, p)
+		ex := fmt.Sprintf("Because %d is prime, all residues from 1 to %d are coprime to %d, so the order is %d - 1 = %d.", p, p-1, p, p, p-1)
+		return groupChoice(q, ans, ex, strconv.Itoa(p), strconv.Itoa(p-2), strconv.Itoa(p+1))
+	case 2:
+		// Additive inverse in Z_n
+		n := 5 + rand.Intn(15)
+		a := 1 + rand.Intn(n-2)
+		for 2*a == n {
+			a = 1 + rand.Intn(n-2)
 		}
-		invTable := []invEntry{
-			{"What is the inverse of 2 in Z_5 \\ {0} under multiplication mod 5? (enter a number)", "3", "2×3=6≡1 mod 5, so 3 is the inverse."},
-			{"What is the inverse of 3 in Z_4 under addition? (enter a number)", "1", "3+1=4≡0 mod 4, so 1 is the inverse."},
-			{"What is the order of S_3? (enter a number)", "6", "S_3 has 3! = 6 permutations."},
+		inv := n - a
+		ans := strconv.Itoa(inv)
+		q := fmt.Sprintf("What is the additive inverse of %d in the group \\(\\mathbb{Z}_{%d}\\)? (enter a number)", a, n)
+		ex := fmt.Sprintf("In \\(\\mathbb{Z}_{%d}\\), %d + %d = %d \\equiv 0 \\pmod{%d}, so the inverse is %d.", n, a, inv, n, n, inv)
+		return groupChoice(q, ans, ex, strconv.Itoa(a), strconv.Itoa((inv+1)%n), strconv.Itoa((inv+n-1)%n))
+	case 3:
+		// Abelian property questions
+		if rand.Intn(2) == 0 {
+			n := 3 + rand.Intn(5)
+			q := fmt.Sprintf("Is the symmetric group \\(S_{%d}\\) abelian? (yes/no)", n)
+			ex := fmt.Sprintf("For n >= 3, disjoint transposition and 3-cycle products do not commute, so S_%d is non-abelian.", n)
+			return groupYesNo(q, "no", ex)
 		}
-		v := invTable[rand.Intn(len(invTable))]
-		return groupChoice(v.question, v.answer, v.reason, "0", "1", "2", "4", "5", "6")
+		n := 3 + rand.Intn(5)
+		q := fmt.Sprintf("Is the dihedral group \\(D_{%d}\\) of symmetries of a regular %d-gon abelian? (yes/no)", 2*n, n)
+		ex := fmt.Sprintf("For n >= 3, reflecting and then rotating does not equal rotating and then reflecting, so D_%d is non-abelian.", 2*n)
+		return groupYesNo(q, "no", ex)
+	default:
+		// Order of alternating group A_n
+		n := 3 + rand.Intn(4) // 3 to 6
+		order := abstractFactorial(n) / 2
+		ans := strconv.Itoa(order)
+		q := fmt.Sprintf("What is the order of the alternating group \\(A_{%d}\\)? (enter a number)", n)
+		ex := fmt.Sprintf("The alternating group contains exactly half the permutations of S_%d, giving order %d! / 2 = %d / 2 = %d.", n, n, abstractFactorial(n), order)
+		return groupChoice(q, ans, ex, strconv.Itoa(abstractFactorial(n)), strconv.Itoa(order-1), strconv.Itoa(order+2))
 	}
-	return groupYesNo(fmt.Sprintf("Is %s under %s a group? (yes/no)", e.set, e.operation), e.isGroup, e.reason)
 }
 
 // ----- 3. subgroup -----
@@ -208,57 +247,78 @@ func (g *subgroupGen) Generate(ctx generator.GeneratorContext) generator.Problem
 type ringGen struct{}
 
 func (g *ringGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type entry struct {
-		set     string
-		isRing  string
-		isField string
-		reason  string
-	}
-	table := []entry{
-		{"Z (integers)", "yes", "no", "Z is a ring under addition and multiplication. It is not a field because elements other than ±1 lack multiplicative inverses in Z."},
-		{"2Z (even integers)", "yes", "no", "2Z is a ring under addition and multiplication. It has no multiplicative identity, and is not a field."},
-		{"Q (rationals)", "yes", "yes", "Q is a ring and a field: every non-zero element has a multiplicative inverse (a/b → b/a)."},
-		{"R (real numbers)", "yes", "yes", "R is a ring and a field: every non-zero real has a multiplicative inverse."},
-		{"Z₆ (integers mod 6)", "yes", "no", "Z₆ is a ring but not a field: 2 and 3 have no multiplicative inverses mod 6."},
-		{"Z₅ (integers mod 5)", "yes", "yes", "Z₅ is a ring and a field since 5 is prime; every non-zero element has an inverse mod 5."},
-		{"Z[i] (Gaussian integers)", "yes", "no", "Gaussian integers a+bi form a ring but not a field (e.g., 2 has no inverse in Z[i])."},
-		{"n×n matrices over R", "yes", "no", "n×n matrices under addition and multiplication form a ring but not a field (matrix multiplication is not commutative)."},
-	}
-	e := table[rand.Intn(len(table))]
-	if rand.Intn(3) == 0 {
-		// production: name a witness element with no multiplicative inverse.
+	mode := rand.Intn(4)
+	switch mode {
+	case 0:
+		// Modular field checks
+		primes := []int{2, 3, 5, 7, 11, 13, 17, 19, 23}
+		composites := []int{4, 6, 8, 9, 10, 12, 14, 15, 16, 18, 20, 21, 25}
+		if rand.Intn(2) == 0 {
+			p := primes[rand.Intn(len(primes))]
+			q := fmt.Sprintf("Is \\(\\mathbb{Z}_{%d}\\) a field under addition and multiplication modulo %d? (yes/no)", p, p)
+			ex := fmt.Sprintf("Because %d is prime, every non-zero element has a multiplicative inverse, so \\(\\mathbb{Z}_{%d}\\) is a field.", p, p)
+			return groupYesNo(q, "yes", ex)
+		}
+		m := composites[rand.Intn(len(composites))]
+		q := fmt.Sprintf("Is \\(\\mathbb{Z}_{%d}\\) a field under addition and multiplication modulo %d? (yes/no)", m, m)
+		ex := fmt.Sprintf("Because %d is composite, its non-trivial divisors are zero divisors and lack multiplicative inverses, so it is not a field.", m)
+		return groupYesNo(q, "no", ex)
+	case 1:
+		// Witness non-unit element
 		type witEntry struct {
 			set    string
 			wit    string
+			d1, d2 string
 			reason string
 		}
 		witTable := []witEntry{
-			{"Z (integers)", "2", "2 has no integer multiplicative inverse: no integer times 2 is 1."},
-			{"Z_6 (integers mod 6)", "2", "2 has no inverse mod 6 (2×3=6≡0); it is a zero divisor."},
-			{"Z[i] (Gaussian integers)", "2", "2 has no inverse in Z[i]: (a+bi)(c+di)=1 forces norm 1, but N(2)=4."},
+			{"\\(\\mathbb{Z}\\) (integers)", "2", "0", "1", "2 has no integer multiplicative inverse: no integer times 2 is 1."},
+			{"\\(\\mathbb{Z}_4\\)", "2", "1", "3", "2 * 2 = 4 = 0 mod 4, so 2 is a zero divisor with no inverse."},
+			{"\\(\\mathbb{Z}_6\\)", "2", "1", "5", "2 * 3 = 6 = 0 mod 6, so 2 has no multiplicative inverse mod 6."},
+			{"\\(\\mathbb{Z}_8\\)", "2", "1", "3", "2 * 4 = 8 = 0 mod 8, so 2 has no inverse mod 8."},
+			{"\\(\\mathbb{Z}_9\\)", "3", "1", "2", "3 * 3 = 9 = 0 mod 9, so 3 has no multiplicative inverse mod 9."},
+			{"\\(\\mathbb{Z}_{10}\\)", "2", "1", "3", "2 * 5 = 10 = 0 mod 10, so 2 has no inverse mod 10."},
+			{"\\(\\mathbb{Z}_{12}\\)", "2", "1", "5", "2 * 6 = 12 = 0 mod 12, so 2 has no inverse mod 12."},
+			{"\\(\\mathbb{Z}_{14}\\)", "2", "1", "3", "2 * 7 = 14 = 0 mod 14, so 2 has no inverse mod 14."},
+			{"\\(\\mathbb{Z}_{15}\\)", "3", "1", "2", "3 * 5 = 15 = 0 mod 15, so 3 has no inverse mod 15."},
+			{"\\(\\mathbb{Z}_{21}\\)", "3", "1", "2", "3 * 7 = 21 = 0 mod 21, so 3 has no inverse mod 21."},
+			{"\\(\\mathbb{Z}_{25}\\)", "5", "1", "2", "5 * 5 = 25 = 0 mod 25, so 5 has no inverse mod 25."},
+			{"\\(\\mathbb{Z}[i]\\) (Gaussian integers)", "2", "0", "1", "2 has no inverse in Z[i] because (a+bi)(c+di)=1 requires norm 1 while N(2)=4."},
 		}
 		w := witTable[rand.Intn(len(witTable))]
-		return generator.Problem{
-			// "Name an element with no inverse" has as many right answers as
-			// the set has non-units, and the key held one of them, so a learner
-			// who wrote 3 for Z was marked wrong (report 122). The smallest
-			// positive one is unique and asks the same thing.
-			Question:    fmt.Sprintf("What is the smallest positive integer with no multiplicative inverse in %s? (enter a number)", w.set),
-			Answer:      w.wit,
-			Explanation: w.reason,
+		q := fmt.Sprintf("What is the smallest positive integer with no multiplicative inverse in %s? (enter a number)", w.set)
+		return groupChoice(q, w.wit, w.reason, w.d1, w.d2, "4")
+	case 2:
+		// Standard set ring and field queries
+		type setEntry struct {
+			set     string
+			isRing  string
+			isField string
+			rReason string
+			fReason string
 		}
-	}
-	if rand.Intn(2) == 0 {
-		return generator.Problem{
-			Question:    fmt.Sprintf("Is %s a ring under addition and multiplication? (yes/no)", e.set),
-			Answer:      e.isRing,
-			Explanation: e.reason,
+		sets := []setEntry{
+			{"\\(\\mathbb{Q}\\) (rational numbers)", "yes", "yes", "Q is a commutative ring with unity under addition and multiplication.", "Q is a field because every non-zero rational a/b has inverse b/a."},
+			{"\\(\\mathbb{R}\\) (real numbers)", "yes", "yes", "R is a commutative ring with unity under standard arithmetic.", "R is a field because every non-zero real number has a multiplicative inverse."},
+			{"\\(\\mathbb{Z}\\) (integers)", "yes", "no", "Z is a ring with unity under addition and multiplication.", "Z is not a field because elements other than 1 and -1 lack multiplicative inverses in Z."},
+			{"\\(2\\mathbb{Z}\\) (even integers)", "yes", "no", "2Z is a ring without unity (a rng) under addition and multiplication.", "2Z is not a field because it has no multiplicative identity."},
+			{"\\(\\mathbb{Z}[i]\\) (Gaussian integers)", "yes", "no", "Gaussian integers a+bi form an integral domain under addition and multiplication.", "Gaussian integers do not form a field because non-units like 2 have no inverse in Z[i]."},
+			{"\\(M_2(\\mathbb{R})\\) (2x2 real matrices)", "yes", "no", "Square matrices under matrix addition and multiplication form a non-commutative ring with identity.", "M_2(R) is not a field because matrix multiplication is non-commutative and singular matrices lack inverses."},
+			{"\\(\\mathbb{R}[x]\\) (polynomials with real coefficients)", "yes", "no", "Polynomials form a commutative ring with unity under polynomial addition and multiplication.", "R[x] is not a field because non-constant polynomials have no polynomial multiplicative inverse."},
 		}
-	}
-	return generator.Problem{
-		Question:    fmt.Sprintf("Is %s a field under addition and multiplication? (yes/no)", e.set),
-		Answer:      e.isField,
-		Explanation: e.reason,
+		s := sets[rand.Intn(len(sets))]
+		if rand.Intn(2) == 0 {
+			q := fmt.Sprintf("Is %s a ring under addition and multiplication? (yes/no)", s.set)
+			return groupYesNo(q, s.isRing, s.rReason)
+		}
+		q := fmt.Sprintf("Is %s a field under addition and multiplication? (yes/no)", s.set)
+		return groupYesNo(q, s.isField, s.fReason)
+	default:
+		// Modular ring verification
+		m := 2 + rand.Intn(20)
+		q := fmt.Sprintf("Is \\(\\mathbb{Z}_{%d}\\) a commutative ring with unity under addition and multiplication modulo %d? (yes/no)", m, m)
+		ex := fmt.Sprintf("For every integer n >= 2, the integers modulo n form a commutative ring with identity element 1.")
+		return groupYesNo(q, "yes", ex)
 	}
 }
 

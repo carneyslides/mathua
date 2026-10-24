@@ -441,26 +441,89 @@ func (g *cauchyProductGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type pSeriesGen struct{}
 
 func (g *pSeriesGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return calcPickMC([]calcMCClaim{
-		{
-			q:           "The p-series with terms \\(1/n^{p}\\) converges exactly when...",
-			correct:     "p > 1",
-			distractors: []string{"p ≥ 1", "p < 1", "p > 0"},
-			reason:      "The integral test compares it with the integral of \\(x^{-p}\\), which converges only for \\(p > 1\\).",
-		},
-		{
-			q:           "Which of these series diverges?",
-			correct:     "the harmonic series, the sum of 1/n",
-			distractors: []string{"the sum of 1/n²", "the sum of 1/n³", "the sum of 1/n^1.5"},
-			reason:      "The harmonic series is the p-series with p = 1, and the threshold is strict, so it diverges.",
-		},
-		{
-			q:           "The series \\(\\sum 1/\\sqrt{n}\\) ...",
-			correct:     "diverges, because its exponent is below one",
-			distractors: []string{"converges, because its terms tend to zero", "converges, because its terms decrease", "converges to 2"},
-			reason:      "Tending to zero is necessary but not sufficient; with p = 1/2 the p-series is below the threshold and diverges.",
-		},
-	})
+	mode := rand.Intn(4)
+	switch mode {
+	case 0:
+		// Convergence threshold question
+		return calcPickMC([]calcMCClaim{
+			{
+				q:           "The p-series with terms \\(1/n^{p}\\) converges exactly when...",
+				correct:     "p > 1",
+				distractors: []string{"p ≥ 1", "p < 1", "p > 0"},
+				reason:      "The integral test compares it with the integral of \\(x^{-p}\\), which converges only for \\(p > 1\\).",
+			},
+			{
+				q:           "Which condition on the exponent p guarantees that \\(\\sum_{n=1}^\\infty \\frac{1}{n^p}\\) diverges?",
+				correct:     "p ≤ 1",
+				distractors: []string{"p > 1", "p ≥ 2", "p > 0"},
+				reason:      "A p-series diverges whenever the exponent p is less than or equal to 1, including the harmonic series at p = 1.",
+			},
+		})
+	case 1:
+		// Specific radical series convergence/divergence
+		type radCase struct {
+			term, pStr, exp string
+			converges bool
+		}
+		cases := []radCase{
+			{"\\frac{1}{\\sqrt{n}}", "1/2", "below 1", false},
+			{"\\frac{1}{\\sqrt[3]{n}}", "1/3", "below 1", false},
+			{"\\frac{1}{\\sqrt[4]{n}}", "1/4", "below 1", false},
+			{"\\frac{1}{\\sqrt[3]{n^2}}", "2/3", "below 1", false},
+			{"\\frac{1}{\\sqrt[4]{n^3}}", "3/4", "below 1", false},
+			{"\\frac{1}{n\\sqrt{n}}", "3/2", "strictly greater than 1", true},
+			{"\\frac{1}{n^2\\sqrt{n}}", "5/2", "strictly greater than 1", true},
+			{"\\frac{1}{n\\sqrt[3]{n}}", "4/3", "strictly greater than 1", true},
+			{"\\frac{1}{\\sqrt[4]{n^5}}", "5/4", "strictly greater than 1", true},
+			{"\\frac{1}{n\\sqrt[4]{n^3}}", "7/4", "strictly greater than 1", true},
+		}
+		c := cases[rand.Intn(len(cases))]
+		q := fmt.Sprintf("The series \\(\\sum_{n=1}^\\infty %s\\) ...", c.term)
+		if c.converges {
+			pProb := generator.MultipleChoice(q,
+				fmt.Sprintf("converges, because its exponent p = %s is strictly greater than 1", c.pStr),
+				fmt.Sprintf("diverges, because its exponent p = %s is at most 1", c.pStr),
+				"diverges, because its terms tend to infinity",
+				"converges to 0")
+			pProb.Explanation = fmt.Sprintf("The exponent is %s > 1, so the p-series converges.", c.pStr)
+			return pProb
+		}
+		pProb := generator.MultipleChoice(q,
+			fmt.Sprintf("diverges, because its exponent p = %s is at most 1", c.pStr),
+			fmt.Sprintf("converges, because its exponent p = %s is strictly greater than 1", c.pStr),
+			"converges, because its terms tend to 0",
+			"converges to 1")
+		pProb.Explanation = fmt.Sprintf("The exponent is %s <= 1, so the p-series diverges.", c.pStr)
+		return pProb
+	case 2:
+		// Integer exponent p-series
+		p := 2 + rand.Intn(7) // 2 to 8
+		q := fmt.Sprintf("Does the p-series \\(\\sum_{n=1}^\\infty \\frac{1}{n^{%d}}\\) converge or diverge?", p)
+		ex := fmt.Sprintf("The exponent is p = %d > 1, so by the p-series test the series converges.", p)
+		pProb := generator.MultipleChoice(q,
+			"converges, because p > 1",
+			"diverges, because p ≤ 1",
+			"diverges, because the terms tend to zero too slowly",
+			"diverges, because it oscillates")
+		pProb.Explanation = ex
+		return pProb
+	default:
+		// Which of these series converges / diverges
+		divergentTerms := []string{"\\sum \\frac{1}{n}", "\\sum \\frac{1}{\\sqrt{n}}", "\\sum \\frac{1}{\\sqrt[3]{n}}", "\\sum \\frac{1}{n^{0.8}}"}
+		convergentTerms := []string{"\\sum \\frac{1}{n^2}", "\\sum \\frac{1}{n^3}", "\\sum \\frac{1}{n^{1.5}}", "\\sum \\frac{1}{n^{2.5}}"}
+		if rand.Intn(2) == 0 {
+			div := divergentTerms[rand.Intn(len(divergentTerms))]
+			q := "Which of these p-series diverges?"
+			pProb := generator.MultipleChoice(q, div, convergentTerms[0], convergentTerms[1], convergentTerms[2])
+			pProb.Explanation = fmt.Sprintf("The series %s has exponent p <= 1, so it diverges by the p-series test.", div)
+			return pProb
+		}
+		conv := convergentTerms[rand.Intn(len(convergentTerms))]
+		q := "Which of these p-series converges?"
+		pProb := generator.MultipleChoice(q, conv, divergentTerms[0], divergentTerms[1], divergentTerms[2])
+		pProb.Explanation = fmt.Sprintf("The series %s has exponent p > 1, so it converges by the p-series test.", conv)
+		return pProb
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -470,26 +533,46 @@ func (g *pSeriesGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 type dirichletTestGen struct{}
 
 func (g *dirichletTestGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return calcPickMC([]calcMCClaim{
-		{
-			q:           "Dirichlet's test says that \\(\\sum a_n b_n\\) converges when...",
-			correct:     "the partial sums of a(n) are bounded and b(n) decreases to zero",
-			distractors: []string{"a(n) decreases to zero and b(n) is bounded", "both sequences are absolutely summable", "the product a(n)b(n) decreases to zero"},
-			reason:      "Bounded partial sums supply the cancellation and a monotone sequence shrinking to zero supplies the size, which is enough for convergence.",
-		},
-		{
-			q:           "Applied to \\(\\sum \\sin(n)/n\\), Dirichlet's test shows that...",
-			correct:     "the series converges, because the partial sums of sin(n) are bounded and 1/n decreases to zero",
-			distractors: []string{"the series diverges, because sin(n) does not tend to zero", "the series converges absolutely", "the test does not apply"},
-			reason:      "The partial sums of the sine stay bounded even though the term \\(\\sin(n)\\) has no limit, and \\(1/n\\) is monotone to zero, which is exactly the hypothesis.",
-		},
-		{
-			q:           "Abel's test is the version of Dirichlet's test in which...",
-			correct:     "the monotone factor decreases to a positive limit rather than to zero",
-			distractors: []string{"the cancelling factor is absolutely summable", "the two factors are interchanged", "the series has positive terms"},
-			reason:      "Abel's test handles a factor converging to a nonzero limit by subtracting that limit and applying Dirichlet to the remainder.",
-		},
-	})
+	mode := rand.Intn(3)
+	switch mode {
+	case 0:
+		return calcPickMC([]calcMCClaim{
+			{
+				q:           "Dirichlet's test says that \\(\\sum a_n b_n\\) converges when...",
+				correct:     "the partial sums of a(n) are bounded and b(n) decreases to zero",
+				distractors: []string{"a(n) decreases to zero and b(n) is bounded", "both sequences are absolutely summable", "the product a(n)b(n) decreases to zero"},
+				reason:      "Bounded partial sums supply the cancellation and a monotone sequence shrinking to zero supplies the size, which is enough for convergence.",
+			},
+			{
+				q:           "Abel's test is the version of Dirichlet's test in which...",
+				correct:     "the monotone factor decreases to a positive limit rather than to zero",
+				distractors: []string{"the cancelling factor is absolutely summable", "the two factors are interchanged", "the series has positive terms"},
+				reason:      "Abel's test handles a factor converging to a nonzero limit by subtracting that limit and applying Dirichlet to the remainder.",
+			},
+		})
+	case 1:
+		k := 1 + rand.Intn(5)
+		q := fmt.Sprintf("Applied to \\(\\sum_{n=1}^\\infty \\frac{\\sin(%dn)}{n}\\), Dirichlet's test shows that...", k)
+		correct := fmt.Sprintf("the series converges, because the partial sums of sin(%dn) are bounded and 1/n decreases to zero", k)
+		d1 := fmt.Sprintf("the series diverges, because sin(%dn) does not tend to zero", k)
+		d2 := "the series converges absolutely"
+		d3 := "the test cannot be applied"
+		ex := fmt.Sprintf("The partial sums of sin(%dn) remain bounded by 1/sin(%d/2) and 1/n decreases monotonically to 0, satisfying Dirichlet's test.", k, k)
+		p := generator.MultipleChoice(q, correct, d1, d2, d3)
+		p.Explanation = ex
+		return p
+	default:
+		k := 1 + rand.Intn(5)
+		q := fmt.Sprintf("Applied to \\(\\sum_{n=1}^\\infty \\frac{\\cos(%dn)}{\\sqrt{n}}\\), Dirichlet's test shows that...", k)
+		correct := fmt.Sprintf("the series converges, because the partial sums of cos(%dn) are bounded and 1/sqrt(n) decreases to zero", k)
+		d1 := fmt.Sprintf("the series diverges, because cos(%dn) oscillates indefinitely", k)
+		d2 := "the series converges absolutely"
+		d3 := "the test is inconclusive"
+		ex := fmt.Sprintf("The partial sums of cos(%dn) are bounded and 1/sqrt(n) decreases monotonically to 0, so the series converges by Dirichlet's test.", k)
+		p := generator.MultipleChoice(q, correct, d1, d2, d3)
+		p.Explanation = ex
+		return p
+	}
 }
 
 // ---------------------------------------------------------------------------

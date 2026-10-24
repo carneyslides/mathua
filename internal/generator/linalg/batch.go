@@ -154,9 +154,8 @@ func (g *invertibleMapGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type basisChangeGen struct{}
 
 func (g *basisChangeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	// Pairs of 2D unimodular basis vectors (det = 1)
+	// Pairs of 2D unimodular basis vectors (det = 1), strictly excluding the standard basis
 	unimodularPairs := [][2][2]int{
-		{{1, 0}, {0, 1}},
 		{{1, 1}, {1, 2}},
 		{{1, -1}, {1, 0}},
 		{{2, 1}, {1, 1}},
@@ -172,23 +171,28 @@ func (g *basisChangeGen) Generate(ctx generator.GeneratorContext) generator.Prob
 	b1 := pair[0]
 	b2 := pair[1]
 
-	// Choose random integer coordinates a, b in [-6, 6]
-	a := rand.Intn(13) - 6
-	b := rand.Intn(13) - 6
-	if a == 0 && b == 0 {
-		a = 2
-		b = 3
-	}
-
-	vx := a*b1[0] + b*b2[0]
-	vy := a*b1[1] + b*b2[1]
-
-	ask := rand.Intn(2)
-	ans := a
-	varName := "a"
-	if ask == 1 {
-		ans = b
-		varName = "b"
+	var a, b, vx, vy, ans, ask int
+	var varName string
+	for attempt := 0; attempt < 50; attempt++ {
+		a = rand.Intn(11) - 5
+		b = rand.Intn(11) - 5
+		if a == 0 || b == 0 {
+			continue
+		}
+		vx = a*b1[0] + b*b2[0]
+		vy = a*b1[1] + b*b2[1]
+		ask = rand.Intn(2)
+		ans = a
+		varName = "a"
+		if ask == 1 {
+			ans = b
+			varName = "b"
+		}
+		if ans != vx && ans != vy && -ans != vx && -ans != vy &&
+			ans != b1[0] && ans != b1[1] && -ans != b1[0] && -ans != b1[1] &&
+			ans != b2[0] && ans != b2[1] && -ans != b2[0] && -ans != b2[1] {
+			break
+		}
 	}
 
 	q := fmt.Sprintf("In R^2, the vector (%d, %d) is written as a(%d, %d) + b(%d, %d). What is %s? (enter a number)",
@@ -255,36 +259,41 @@ func (g *complementGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type projectionMatrixGen struct{}
 
 func (g *projectionMatrixGen) Generate(ctx generator.GeneratorContext) generator.Problem {
+	// Strictly non-axis spanning lines to prevent prompt coordinate leaks
 	dirs := [][2]int{
-		{1, 0}, {0, 1}, {1, 1}, {1, -1}, {2, 0}, {0, 2}, {1, 2}, {2, 1},
+		{1, 1}, {1, -1}, {1, 2}, {2, 1}, {1, 3}, {3, 1}, {2, 3}, {3, 2},
 	}
 	u := dirs[rand.Intn(len(dirs))]
 	uNormSq := u[0]*u[0] + u[1]*u[1]
 
-	c := rand.Intn(4) + 1
-	if rand.Intn(2) == 1 {
-		c = -c
-	}
-	k := rand.Intn(5) - 2
-	uPerp := [2]int{-u[1], u[0]}
+	var c, k, vx, vy, ans int
+	var coordName, axisStr string
+	for attempt := 0; attempt < 50; attempt++ {
+		c = rand.Intn(4) + 1
+		if rand.Intn(2) == 1 {
+			c = -c
+		}
+		k = rand.Intn(3) + 1
+		if rand.Intn(2) == 1 {
+			k = -k
+		}
+		uPerp := [2]int{-u[1], u[0]}
+		vx = c*u[0] + k*uPerp[0]
+		vy = c*u[1] + k*uPerp[1]
 
-	vx := c*u[0] + k*uPerp[0]
-	vy := c*u[1] + k*uPerp[1]
-
-	axis := rand.Intn(2)
-	if u[0] == 0 {
-		axis = 1
-	} else if u[1] == 0 {
-		axis = 0
-	}
-
-	coordName := "x-coordinate"
-	axisStr := "x"
-	ans := c * u[0]
-	if axis == 1 {
-		coordName = "y-coordinate"
-		axisStr = "y"
-		ans = c * u[1]
+		axis := rand.Intn(2)
+		coordName = "x-coordinate"
+		axisStr = "x"
+		ans = c * u[0]
+		if axis == 1 {
+			coordName = "y-coordinate"
+			axisStr = "y"
+			ans = c * u[1]
+		}
+		if ans != vx && ans != vy && -ans != vx && -ans != vy &&
+			ans != u[0] && ans != u[1] && -ans != u[0] && -ans != u[1] {
+			break
+		}
 	}
 
 	q := fmt.Sprintf("The projection of (%d, %d) onto the line spanned by (%d, %d) has what %s? (enter a number)",
@@ -458,13 +467,26 @@ func (g *crossGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type conditionGen struct{}
 
 func (g *conditionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	ratios := []int{1, 2, 3, 4, 5, 8, 10}
-	ratio := ratios[rand.Intn(len(ratios))]
-	smallests := []float64{0.5, 1, 2, 3, 4}
-	smallest := smallests[rand.Intn(len(smallests))]
+	type pair struct {
+		ratio int
+		small float64
+	}
+	pairs := []pair{
+		{1, 2}, {1, 3}, {1, 4}, {1, 5},
+		{2, 3}, {2, 4}, {2, 5},
+		{3, 2}, {3, 4}, {3, 5},
+		{4, 2}, {4, 3}, {4, 5},
+		{5, 2}, {5, 3}, {5, 4},
+		{6, 2}, {6, 3}, {6, 4},
+		{8, 0.5}, {8, 2}, {8, 3},
+		{10, 0.5}, {10, 2}, {10, 3},
+	}
+	p := pairs[rand.Intn(len(pairs))]
+	ratio := p.ratio
+	smallest := p.small
 	largest := float64(ratio) * smallest
 
-	ansStr := strconv.FormatFloat(float64(ratio), 'g', -1, 64)
+	ansStr := strconv.Itoa(ratio)
 	var q, ex string
 	if ratio == 1 {
 		q = fmt.Sprintf("A matrix has singular values %g and %g. What is its condition number, the largest divided by the smallest? (enter a number)",
