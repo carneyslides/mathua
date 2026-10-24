@@ -463,7 +463,7 @@ func (g *pSeriesGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 		// Specific radical series convergence/divergence
 		type radCase struct {
 			term, pStr, exp string
-			converges bool
+			converges       bool
 		}
 		cases := []radCase{
 			{"\\frac{1}{\\sqrt{n}}", "1/2", "below 1", false},
