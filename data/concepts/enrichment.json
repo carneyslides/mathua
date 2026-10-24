@@ -124,6 +124,158 @@
     ]
   },
   {
+    "heuristic": "algebra factoring method siblings interfere",
+    "interference_group": "alg.factoring",
+    "members": [
+      "alg.factor.trinomial",
+      "alg.factor.grouping",
+      "alg.factor.diff_squares",
+      "alg.factor.cubes",
+      "alg.factor.ac_method"
+    ]
+  },
+  {
+    "heuristic": "quadratic solving method siblings interfere",
+    "interference_group": "alg.quad_methods",
+    "members": [
+      "alg.quad.solve_factor",
+      "alg.quad.complete_square",
+      "alg.quad.formula"
+    ]
+  },
+  {
+    "heuristic": "linear system solving method siblings interfere",
+    "interference_group": "alg.systems_methods",
+    "members": [
+      "alg.systems.substitution",
+      "alg.systems.elimination",
+      "alg.systems.matrices",
+      "alg.systems.gaussian"
+    ]
+  },
+  {
+    "heuristic": "exponential and logarithmic equation siblings interfere",
+    "interference_group": "alg.exp_log_eq",
+    "members": [
+      "alg.eq.exponential",
+      "alg.eq.logarithmic"
+    ]
+  },
+  {
+    "heuristic": "radical and rational exponent siblings interfere",
+    "interference_group": "alg.radicals",
+    "members": [
+      "alg.radical.rational_exponents",
+      "alg.radical.rationalize"
+    ]
+  },
+  {
+    "heuristic": "fraction arithmetic operations interfere",
+    "interference_group": "frac.ops",
+    "members": [
+      "frac.ops.mult",
+      "frac.ops.div",
+      "frac.add.same",
+      "frac.add.diff"
+    ]
+  },
+  {
+    "heuristic": "greatest common factor and least common multiple interfere",
+    "interference_group": "arith.gcf_lcm",
+    "members": [
+      "arith.factor.gcf",
+      "arith.factor.lcm"
+    ]
+  },
+  {
+    "heuristic": "permutations and combinations interfere",
+    "interference_group": "discrete.perm_comb",
+    "members": [
+      "discrete.combinatorics.permutations",
+      "discrete.combinatorics.combinations"
+    ]
+  },
+  {
+    "heuristic": "advanced trigonometric identities interfere",
+    "interference_group": "trig.identities_adv",
+    "members": [
+      "trig.ident.sum_diff",
+      "trig.ident.double_angle",
+      "trig.ident.half_angle"
+    ]
+  },
+  {
+    "heuristic": "law of sines and cosines interfere",
+    "interference_group": "trig.laws",
+    "members": [
+      "trig.adv.law_sines",
+      "trig.adv.law_cosines"
+    ]
+  },
+  {
+    "heuristic": "sine and cosine graph transformations interfere",
+    "interference_group": "trig.graphs_sin_cos",
+    "members": [
+      "trig.graph.sin",
+      "trig.graph.cos"
+    ]
+  },
+  {
+    "heuristic": "arcsine and arccosine inverse functions interfere",
+    "interference_group": "trig.inverse_sin_cos",
+    "members": [
+      "trig.func.arcsine",
+      "trig.func.arccosine"
+    ]
+  },
+  {
+    "heuristic": "differentiation rule siblings interfere",
+    "interference_group": "calc.deriv_rules",
+    "members": [
+      "calc.deriv.product_rule",
+      "calc.deriv.quotient_rule",
+      "calc.deriv.chain_rule"
+    ]
+  },
+  {
+    "heuristic": "infinite series convergence test siblings interfere",
+    "interference_group": "calc.series_tests",
+    "members": [
+      "calc.series.ratio_test",
+      "calc.series.root_test",
+      "calc.series.integral_test",
+      "calc.series.direct_compare",
+      "calc.series.limit_compare"
+    ]
+  },
+  {
+    "heuristic": "span basis and linear independence siblings interfere",
+    "interference_group": "linalg.span_basis",
+    "members": [
+      "linalg.vec.basis",
+      "linalg.vec.span",
+      "linalg.independence.count"
+    ]
+  },
+  {
+    "heuristic": "matrix decomposition siblings interfere",
+    "interference_group": "linalg.decompositions",
+    "members": [
+      "linalg.decomp.lu",
+      "linalg.decomp.qr",
+      "linalg.decomp.svd"
+    ]
+  },
+  {
+    "heuristic": "hypothesis testing method siblings interfere",
+    "interference_group": "stat.hypothesis_tests",
+    "members": [
+      "stat.test.anova",
+      "stat.test.chi_square",
+      "stat.infer.ztest"
+    ]
+  },
+  {
     "id": "abstract.group.def",
     "key_prerequisites": [
       "discrete.logic.quantifiers",
