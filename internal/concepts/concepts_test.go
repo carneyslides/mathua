@@ -440,7 +440,9 @@ func TestCurriculumEnrichment_LoadedAndVerified(t *testing.T) {
 
 	encompassedCount := 0
 	keyPrereqCount := 0
+	totalInDegree := 0
 	for _, c := range dag.Order() {
+		totalInDegree += len(c.Prerequisites) + len(c.Encompasses)
 		if len(c.Encompasses) > 0 {
 			encompassedCount++
 		}
@@ -460,10 +462,14 @@ func TestCurriculumEnrichment_LoadedAndVerified(t *testing.T) {
 			}
 		}
 	}
-	if encompassedCount < 50 {
-		t.Errorf("expected at least 50 concepts with encompasses populated, got %d", encompassedCount)
+	if encompassedCount < 625 {
+		t.Errorf("expected at least 625 concepts with encompasses populated (50%%), got %d", encompassedCount)
 	}
-	if keyPrereqCount < 50 {
-		t.Errorf("expected at least 50 concepts with key_prerequisites populated, got %d", keyPrereqCount)
+	if keyPrereqCount < 1000 {
+		t.Errorf("expected at least 1000 concepts with key_prerequisites populated (80%%), got %d", keyPrereqCount)
+	}
+	meanInDegree := float64(totalInDegree) / float64(dag.Count())
+	if meanInDegree < 2.20 {
+		t.Errorf("expected mean in-degree >= 2.20, got %.2f", meanInDegree)
 	}
 }

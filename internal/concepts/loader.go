@@ -400,5 +400,33 @@ func validate(raw []Concept) error {
 		return fmt.Errorf("concept graph contains a cycle (including encompasses)")
 	}
 
+	// Enforce density invariants on the full curriculum graph
+	if len(raw) >= 1000 {
+		totalInDegree := 0
+		keyPrereqCount := 0
+		encompassCount := 0
+		for _, c := range raw {
+			totalInDegree += len(c.Prerequisites) + len(c.Encompasses)
+			if len(c.KeyPrerequisites) > 0 {
+				keyPrereqCount++
+			}
+			if len(c.Encompasses) > 0 {
+				encompassCount++
+			}
+		}
+		meanInDegree := float64(totalInDegree) / float64(len(raw))
+		if meanInDegree < 2.20 {
+			return fmt.Errorf("curriculum mean in-degree %.2f is below density floor 2.20", meanInDegree)
+		}
+		keyPrereqPct := float64(keyPrereqCount) / float64(len(raw))
+		if keyPrereqPct < 0.80 {
+			return fmt.Errorf("curriculum key_prerequisites coverage %.1f%% is below 80.0%% floor", keyPrereqPct*100)
+		}
+		encompassPct := float64(encompassCount) / float64(len(raw))
+		if encompassPct < 0.50 {
+			return fmt.Errorf("curriculum encompasses coverage %.1f%% is below 50.0%% floor", encompassPct*100)
+		}
+	}
+
 	return nil
 }
