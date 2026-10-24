@@ -87,21 +87,16 @@ func (g *orderElementGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type lagrangeIndexGen struct{}
 
 func (g *lagrangeIndexGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct{ group, subgroup int }
-	claims := []claim{
-		{group: 8, subgroup: 4}, {group: 12, subgroup: 3}, {group: 12, subgroup: 4},
-		{group: 16, subgroup: 8}, {group: 18, subgroup: 6}, {group: 20, subgroup: 5},
-		{group: 24, subgroup: 8}, {group: 27, subgroup: 9}, {group: 32, subgroup: 16},
-	}
-	c := claims[rand.Intn(len(claims))]
-	index := c.group / c.subgroup
+	subgroup := 2 + rand.Intn(28)
+	index := 2 + rand.Intn(18)
+	group := subgroup * index
 	return generator.Problem{
-		Question: fmt.Sprintf("A group G has order %d and H is a subgroup of order %d. By Lagrange's theorem, what is the index of H in G, that is, the number of distinct left cosets of H?", c.group, c.subgroup),
+		Question: fmt.Sprintf("A group G has order %d and H is a subgroup of order %d. By Lagrange's theorem, what is the index of H in G, that is, the number of distinct left cosets of H?", group, subgroup),
 		Answer:   fmt.Sprintf("%d", index),
 		Explanation: fmt.Sprintf("Lagrange's theorem gives the order of G as the product of the order of H and the number of cosets, so the index is %d divided by %d, which is %d.",
-			c.group, c.subgroup, index),
+			group, subgroup, index),
 		Facts: map[string]string{
-			"group_order": fmt.Sprintf("%d", c.group), "subgroup_order": fmt.Sprintf("%d", c.subgroup),
+			"group_order": fmt.Sprintf("%d", group), "subgroup_order": fmt.Sprintf("%d", subgroup),
 			"answer": fmt.Sprintf("%d", index),
 		},
 	}
@@ -134,11 +129,20 @@ func (g *cyclicGeneratorsGen) Generate(ctx generator.GeneratorContext) generator
 type symmetricOrderGen struct{}
 
 func (g *symmetricOrderGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	ns := []int{3, 4, 5, 6, 7}
+	ns := []int{3, 4, 5, 6, 7, 8, 9, 10}
 	n := ns[rand.Intn(len(ns))]
 	order := abstractFactorial(n)
+	var q string
+	switch rand.Intn(3) {
+	case 0:
+		q = fmt.Sprintf("How many permutations are there of a set with %d elements, that is, what is the order of the symmetric group on %d letters?", n, n)
+	case 1:
+		q = fmt.Sprintf("What is the order of the symmetric group S_{%d} of all bijections on a set of %d elements?", n, n)
+	default:
+		q = fmt.Sprintf("In abstract algebra, the symmetric group on %d symbols is denoted S_{%d}. How many elements does S_{%d} contain?", n, n, n)
+	}
 	return generator.Problem{
-		Question: fmt.Sprintf("How many permutations are there of a set with %d elements, that is, what is the order of the symmetric group on %d letters?", n, n),
+		Question: q,
 		Answer:   fmt.Sprintf("%d", order),
 		Explanation: fmt.Sprintf("A permutation is an arrangement of the %d letters, and there are %d of them, so the symmetric group has order %d.",
 			n, order, order),
@@ -179,21 +183,16 @@ func (g *dihedralOrderGen) Generate(ctx generator.GeneratorContext) generator.Pr
 type orbitSizeGen struct{}
 
 func (g *orbitSizeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct{ group, stabilizer int }
-	claims := []claim{
-		{group: 6, stabilizer: 2}, {group: 8, stabilizer: 4}, {group: 12, stabilizer: 3},
-		{group: 12, stabilizer: 4}, {group: 16, stabilizer: 8}, {group: 18, stabilizer: 6},
-		{group: 24, stabilizer: 6}, {group: 24, stabilizer: 8},
-	}
-	c := claims[rand.Intn(len(claims))]
-	orbit := c.group / c.stabilizer
+	stabilizer := 2 + rand.Intn(28)
+	orbit := 2 + rand.Intn(18)
+	group := stabilizer * orbit
 	return generator.Problem{
-		Question: fmt.Sprintf("A group of order %d acts on a set, and the stabilizer of a point has order %d. By the orbit-stabilizer theorem, how many points lie in that point's orbit?", c.group, c.stabilizer),
+		Question: fmt.Sprintf("A group of order %d acts on a set, and the stabilizer of a point has order %d. By the orbit-stabilizer theorem, how many points lie in that point's orbit?", group, stabilizer),
 		Answer:   fmt.Sprintf("%d", orbit),
 		Explanation: fmt.Sprintf("The orbit-stabilizer theorem says the size of the group is the size of the orbit times the size of the stabilizer, so the orbit has %d divided by %d points, which is %d.",
-			c.group, c.stabilizer, orbit),
+			group, stabilizer, orbit),
 		Facts: map[string]string{
-			"group_order": fmt.Sprintf("%d", c.group), "stabilizer_order": fmt.Sprintf("%d", c.stabilizer),
+			"group_order": fmt.Sprintf("%d", group), "stabilizer_order": fmt.Sprintf("%d", stabilizer),
 			"answer": fmt.Sprintf("%d", orbit),
 		},
 	}
@@ -206,21 +205,16 @@ func (g *orbitSizeGen) Generate(ctx generator.GeneratorContext) generator.Proble
 type kernelSizeGen struct{}
 
 func (g *kernelSizeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct{ group, image int }
-	claims := []claim{
-		{group: 8, image: 2}, {group: 12, image: 3}, {group: 12, image: 4},
-		{group: 16, image: 4}, {group: 18, image: 6}, {group: 20, image: 5},
-		{group: 24, image: 8}, {group: 27, image: 9},
-	}
-	c := claims[rand.Intn(len(claims))]
-	kernel := c.group / c.image
+	image := 2 + rand.Intn(28)
+	kernel := 2 + rand.Intn(18)
+	group := image * kernel
 	return generator.Problem{
-		Question: fmt.Sprintf("A homomorphism is defined on a group of order %d and its image has order %d. What is the order of its kernel?", c.group, c.image),
+		Question: fmt.Sprintf("A homomorphism is defined on a group of order %d and its image has order %d. What is the order of its kernel?", group, image),
 		Answer:   fmt.Sprintf("%d", kernel),
 		Explanation: fmt.Sprintf("The first isomorphism theorem identifies the image with the quotient by the kernel, so the order of the group is the order of the kernel times the order of the image. The kernel therefore has %d divided by %d elements, which is %d.",
-			c.group, c.image, kernel),
+			group, image, kernel),
 		Facts: map[string]string{
-			"group_order": fmt.Sprintf("%d", c.group), "image_order": fmt.Sprintf("%d", c.image),
+			"group_order": fmt.Sprintf("%d", group), "image_order": fmt.Sprintf("%d", image),
 			"answer": fmt.Sprintf("%d", kernel),
 		},
 	}
@@ -253,20 +247,22 @@ func (g *automorphismCountGen) Generate(ctx generator.GeneratorContext) generato
 type euclideanGCDGen struct{}
 
 func (g *euclideanGCDGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	type claim struct{ a, b int }
-	claims := []claim{
-		{a: 48, b: 18}, {a: 84, b: 30}, {a: 1071, b: 462}, {a: 270, b: 192},
-		{a: 252, b: 105}, {a: 144, b: 60}, {a: 391, b: 299}, {a: 1001, b: 273},
+	gFactor := 2 + rand.Intn(40)
+	u := 2 + rand.Intn(25)
+	v := 2 + rand.Intn(25)
+	for abstractGCD(u, v) != 1 || u == v {
+		v = 2 + rand.Intn(25)
 	}
-	c := claims[rand.Intn(len(claims))]
-	divisor := abstractGCD(c.a, c.b)
+	a := u * gFactor
+	b := v * gFactor
+	divisor := gFactor
 	return generator.Problem{
-		Question: fmt.Sprintf("Use the Euclidean algorithm to find the greatest common divisor of %d and %d.", c.a, c.b),
+		Question: fmt.Sprintf("Use the Euclidean algorithm to find the greatest common divisor of %d and %d.", a, b),
 		Answer:   fmt.Sprintf("%d", divisor),
 		Explanation: fmt.Sprintf("Replacing the larger number by its remainder on division by the smaller, and repeating, ends at the greatest common divisor. For %d and %d that divisor is %d.",
-			c.a, c.b, divisor),
+			a, b, divisor),
 		Facts: map[string]string{
-			"a": fmt.Sprintf("%d", c.a), "b": fmt.Sprintf("%d", c.b), "answer": fmt.Sprintf("%d", divisor),
+			"a": fmt.Sprintf("%d", a), "b": fmt.Sprintf("%d", b), "answer": fmt.Sprintf("%d", divisor),
 		},
 	}
 }

@@ -101,11 +101,30 @@ func Test2PL_ItemParametersCalibration(t *testing.T) {
 		Prerequisites:    []string{"a", "b", "c"},
 		KeyPrerequisites: []string{"a"},
 		Encompasses:      []string{"b"},
+		MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 45},
 	}
 
-	a, _ := eng.ItemParameters(s, c)
+	a, b := eng.ItemParameters(s, c)
 	// Base (1.0) + connectivity + key prereq bonus + encompasses bonus
 	if a <= 1.2 {
 		t.Fatalf("expected composite node discrimination > 1.2, got %f", a)
+	}
+	if b < -3.0 || b > 3.0 {
+		t.Fatalf("expected difficulty calibrated in [-3.0, 3.0], got %f", b)
+	}
+
+	// Verify monotonic depth calibration on DAG
+	root := dag.Concept("a")
+	capstone := dag.Concept("j")
+	if root == nil || capstone == nil {
+		t.Fatalf("expected concepts a and j in testDAG")
+	}
+	_, bRoot := eng.ItemParameters(s, root)
+	_, bCap := eng.ItemParameters(s, capstone)
+	if bRoot >= bCap {
+		t.Fatalf("expected root difficulty (%f) < capstone difficulty (%f)", bRoot, bCap)
+	}
+	if bCap < 1.5 {
+		t.Fatalf("expected capstone difficulty >= 1.5, got %f", bCap)
 	}
 }

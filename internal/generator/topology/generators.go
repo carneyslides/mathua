@@ -136,32 +136,47 @@ func (g *metricGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 type openClosedGen struct{}
 
 func (g *openClosedGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
+	mode := rand.Intn(6)
+	a := rand.Intn(20) - 10
+	b := a + rand.Intn(10) + 1
+	switch mode {
+	case 0:
+		q := fmt.Sprintf("Is the interval \\((%d, %d)\\) open, closed, both or neither in \\(\\mathbb{R}\\)? (type one word)", a, b)
+		ans := "open"
+		reason := fmt.Sprintf("Every point in (%d, %d) has an epsilon-neighborhood contained in the interval, but endpoints %d and %d are boundary limit points outside it, so open and not closed.", a, b, a, b)
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 1:
+		q := fmt.Sprintf("Is the interval \\([%d, %d]\\) open, closed, both or neither in \\(\\mathbb{R}\\)? (type one word)", a, b)
+		ans := "closed"
+		reason := fmt.Sprintf("[%d, %d] contains all its limit points, so it is closed; endpoints %d and %d have no epsilon-neighborhood inside it, so it is not open.", a, b, a, b)
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 2:
+		q := fmt.Sprintf("Is the half-open interval \\((%d, %d]\\) open, closed, both or neither in \\(\\mathbb{R}\\)? (type one word)", a, b)
+		ans := "neither"
+		reason := fmt.Sprintf("(%d, %d] misses limit point %d so not closed, and %d has no epsilon-neighborhood inside so not open.", a, b, a, b)
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 3:
+		if rand.Intn(2) == 0 {
+			q := fmt.Sprintf("Is the ray \\([%d, \\infty)\\) closed in \\(\\mathbb{R}\\)? (yes/no)", a)
+			ans := "yes"
+			reason := fmt.Sprintf("[%d, \\infty) contains all its limit points, so it is closed.", a)
+			return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+		}
+		q := fmt.Sprintf("Is the open ray \\((-\\infty, %d)\\) open in \\(\\mathbb{R}\\)? (yes/no)", b)
+		ans := "yes"
+		reason := fmt.Sprintf("Every point in (-\\infty, %d) has an epsilon-neighborhood inside it, so it is open.", b)
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 4:
+		q := fmt.Sprintf("Is the finite set \\(\\{%d, %d\\}\\) closed in \\(\\mathbb{R}\\)? (yes/no)", a, b)
+		ans := "yes"
+		reason := "Any finite subset of R is closed because it contains all its limit points (it has none)."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	default:
+		q := "Is \\(\\mathbb{R}\\) open, closed, both or neither? (type one word)"
+		ans := "both"
+		reason := "R is open by definition of topology and closed because its complement (the empty set) is open."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
 	}
-	easy := []entry{
-		{"Is (0,1) open, closed, both, or neither? (type one word)", "open", "Every point of (0,1) has an ε-neighborhood inside it, but 0 and 1 are limit points outside, so open and not closed."},
-		{"Is [0,1] open, closed, both, or neither? (type one word)", "closed", "[0,1] contains all its limit points, so closed; endpoints have no ε-neighborhood inside, so not open."},
-		{"Is R open, closed, both, or neither? (type one word)", "both", "R is open by definition and closed because its complement (empty set) is open."},
-		{"Is (0,1] open, closed, both, or neither? (type one word)", "neither", "(0,1] misses limit point 0 so not closed, and 1 has no ε-neighborhood inside so not open."},
-		{"Is the interval/set (0,1) open in R? (yes/no)", "yes", "(0,1) is open in R because every point has an ε-neighborhood contained in the interval."},
-		{"Is the interval/set (0,1) closed in R? (yes/no)", "no", "(0,1) is not closed because 0 and 1 are limit points not in the set."},
-	}
-	hard := []entry{
-		{"Is the interval/set {0} closed in R? (yes/no)", "yes", "A singleton {0} is closed in R (it contains its only limit point)."},
-		{"Is the interval/set {1/n : n∈N} ∪ {0} closed in R? (yes/no)", "yes", "This set is closed because it contains its limit point 0."},
-		{"Is the interval/set (0,∞) open in R? (yes/no)", "yes", "(0,∞) is open in R because every positive x has an ε-neighborhood in (0,∞)."},
-		{"Is the interval/set [0,∞) closed in R? (yes/no)", "yes", "[0,∞) is closed in R because it contains all its limit points."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 // ----- 3. continuous -----
@@ -169,33 +184,47 @@ func (g *openClosedGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type continuousGen struct{}
 
 func (g *continuousGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
+	mode := rand.Intn(5)
+	a := rand.Intn(16) - 8
+	switch mode {
+	case 0:
+		var poleStr string
+		if a == 0 {
+			poleStr = "1/x"
+		} else if a > 0 {
+			poleStr = fmt.Sprintf("1/(x - %d)", a)
+		} else {
+			poleStr = fmt.Sprintf("1/(x + %d)", -a)
+		}
+		ans := fmt.Sprintf("x=%d", a)
+		q := fmt.Sprintf("At which point is \\(f(x) = %s\\) discontinuous? (type like x=0)", poleStr)
+		reason := fmt.Sprintf("The limit as x approaches %d does not exist (the denominator vanishes), so %s breaks at x=%d.", a, poleStr, a)
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 1:
+		c1 := rand.Intn(5) + 1
+		c2 := rand.Intn(7) - 3
+		q := fmt.Sprintf("Is the polynomial \\(f(x) = %d x^2 + %d x + %d\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", c1, c2, a)
+		ans := "yes"
+		reason := "All polynomials are continuous everywhere on R."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 2:
+		shift := rand.Intn(10) + 1
+		q := fmt.Sprintf("Is \\(f(x) = |x - %d|\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", shift)
+		ans := "yes"
+		reason := "The absolute value function is continuous everywhere on R."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 3:
+		q := "Is the floor function \\(\\lfloor x \\rfloor\\) continuous on \\(\\mathbb{R}\\)? (yes/no)"
+		ans := "no"
+		reason := "The floor function is discontinuous at every integer because the left and right limits differ."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	default:
+		k := rand.Intn(8) + 1
+		q := fmt.Sprintf("Is \\(f(x) = \\frac{1}{x^2 + %d}\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", k)
+		ans := "yes"
+		reason := fmt.Sprintf("Since x^2 + %d is strictly positive for all real x, the denominator is never zero, so f(x) is continuous on R.", k)
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
 	}
-	easy := []entry{
-		{"At which point is f(x)=1/x discontinuous? (type like x=0)", "x=0", "The limit as x→0 does not exist (approaches ±∞), so 1/x breaks at x=0."},
-		{"Which function is discontinuous at x=0: x^2 or 1/x? (type it)", "1/x", "x^2 is a polynomial hence continuous everywhere; 1/x blows up at x=0."},
-		{"Is \\(f(x)=x^{2}\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", "yes", "f(x)=x^2 is a polynomial, and all polynomials are continuous on R."},
-		{"Is the floor function \\(\\lfloor x \\rfloor\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", "no", "The floor function is discontinuous at every integer because the left and right limits differ."},
-		{"Is \\(f(x)=|x|\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", "yes", "f(x)=|x| is continuous on R (although not differentiable at x=0, continuity holds)."},
-		{"Is \\(f(x)=\\tan(x)\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", "no", "tan(x) is discontinuous at x=π/2 + nπ where the function approaches ±∞."},
-	}
-	hard := []entry{
-		{"Is \\(f(x)=\\sin(x)\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", "yes", "sin(x) is continuous on R, a trigonometric function with no breaks."},
-		{"Is \\(f(x)=e^{x}\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", "yes", "f(x)=e^x is continuous on R as an exponential function."},
-		{"Is \\(f(x)=\\sqrt{x}\\) continuous on \\([0,\\infty)\\)? (yes/no)", "yes", "f(x)=√x is continuous on its domain [0,∞)."},
-		{"Is \\(f(x)=1/(x^{2}-1)\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", "no", "f(x)=1/(x^2-1) is discontinuous at x=±1 where the denominator is zero."},
-		{"Is \\(f(x)=x^{3}-3x+1\\) continuous on \\(\\mathbb{R}\\)? (yes/no)", "yes", "f(x)=x^3-3x+1 is a polynomial, and all polynomials are continuous on R."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 // ----- 4. compact -----
@@ -203,31 +232,38 @@ func (g *continuousGen) Generate(ctx generator.GeneratorContext) generator.Probl
 type compactGen struct{}
 
 func (g *compactGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
+	mode := rand.Intn(5)
+	a := rand.Intn(16) - 8
+	b := a + rand.Intn(8) + 1
+	switch mode {
+	case 0:
+		q := fmt.Sprintf("Which Heine-Borel condition fails for \\((%d, %d)\\): closed or bounded? (type one word)", a, b)
+		ans := "closed"
+		reason := fmt.Sprintf("(%d, %d) is bounded but misses limit points %d and %d, so it fails closedness.", a, b, a, b)
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 1:
+		q := fmt.Sprintf("Which Heine-Borel condition fails for the ray \\([%d, \\infty)\\): closed or bounded? (type one word)", a)
+		ans := "bounded"
+		reason := fmt.Sprintf("[%d, \\infty) is closed but unbounded, so it fails boundedness and is not compact.", a)
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 2:
+		q := fmt.Sprintf("Is the closed bounded interval \\([%d, %d]\\) compact in \\(\\mathbb{R}\\)? (yes/no)", a, b)
+		ans := "yes"
+		reason := fmt.Sprintf("By the Heine-Borel theorem, [%d, %d] is closed and bounded in R, hence compact.", a, b)
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 3:
+		q := fmt.Sprintf("Is the open interval \\((%d, %d)\\) compact in \\(\\mathbb{R}\\)? (yes/no)", a, b)
+		ans := "no"
+		reason := fmt.Sprintf("(%d, %d) is not closed in R because it misses boundary limit points %d and %d, so it is not compact.", a, b, a, b)
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	default:
+		c := b + rand.Intn(6) + 1
+		d := c + rand.Intn(6) + 1
+		q := fmt.Sprintf("Is the union \\([%d, %d] \\cup [%d, %d]\\) compact in \\(\\mathbb{R}\\)? (yes/no)", a, b, c, d)
+		ans := "yes"
+		reason := "A finite union of compact sets is compact in R."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
 	}
-	easy := []entry{
-		{"Which Heine-Borel condition fails for (0,1): closed or bounded? (type one word)", "closed", "(0,1) is bounded but misses limit points 0 and 1, so it fails closedness."},
-		{"Which Heine-Borel condition fails for R: closed or bounded? (type one word)", "bounded", "R is closed but unbounded, so it fails boundedness and is not compact."},
-		{"Is the set [0,1] compact in \\(\\mathbb{R}\\)? (yes/no)", "yes", "Heine-Borel: [0,1] is closed and bounded in R, hence compact."},
-		{"Is the set (0,1) compact in \\(\\mathbb{R}\\)? (yes/no)", "no", "(0,1) is not closed (0 and 1 are limit points outside), so not compact."},
-		{"Is the set R compact in \\(\\mathbb{R}\\)? (yes/no)", "no", "R is not bounded, so not compact (Heine-Borel)."},
-	}
-	hard := []entry{
-		{"Is the set \\(\\{0\\} \\cup \\{1/n : n\\in\\mathbb{N}\\}\\) compact in \\(\\mathbb{R}\\)? (yes/no)", "yes", "This set is closed and bounded, and every open cover has a finite subcover."},
-		{"Is the set \\((0,1]\\) compact in \\(\\mathbb{R}\\)? (yes/no)", "no", "(0,1] is not closed (0 missing), so not compact."},
-		{"Is the set \\([0,1] \\cup [2,3]\\) compact in \\(\\mathbb{R}\\)? (yes/no)", "yes", "Finite union of compact sets is compact; both intervals are compact."},
-		{"Is the set \\(\\{x : x\\geq 0\\}\\) compact in \\(\\mathbb{R}\\)? (yes/no)", "no", "Unbounded above, so not compact."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 // ----- 5. connected -----
@@ -235,31 +271,40 @@ func (g *compactGen) Generate(ctx generator.GeneratorContext) generator.Problem 
 type connectedGen struct{}
 
 func (g *connectedGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*4)
-	type entry struct {
-		question string
-		answer   string
-		reason   string
+	mode := rand.Intn(5)
+	a := rand.Intn(10) - 5
+	b := a + rand.Intn(4) + 1
+	c := b + rand.Intn(4) + 1
+	d := c + rand.Intn(4) + 1
+	switch mode {
+	case 0:
+		q := fmt.Sprintf("How many connected components does the union \\((%d, %d) \\cup (%d, %d)\\) have in \\(\\mathbb{R}\\)?", a, b, c, d)
+		ans := "2"
+		reason := "The two disjoint open intervals cannot meet, giving one component each."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 1:
+		e := d + rand.Intn(4) + 1
+		f := e + rand.Intn(4) + 1
+		q := fmt.Sprintf("How many connected components does the union \\((%d, %d) \\cup (%d, %d) \\cup (%d, %d)\\) have in \\(\\mathbb{R}\\)?", a, b, c, d, e, f)
+		ans := "3"
+		reason := "Three pairwise-disjoint open intervals form three connected components."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 2:
+		q := fmt.Sprintf("Is the interval \\((%d, %d)\\) connected in \\(\\mathbb{R}\\)? (yes/no)", a, b)
+		ans := "yes"
+		reason := "Every interval in R is connected."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	case 3:
+		q := fmt.Sprintf("Is the disjoint union \\((%d, %d) \\cup (%d, %d)\\) connected in \\(\\mathbb{R}\\)? (yes/no)", a, b, c, d)
+		ans := "no"
+		reason := "Disjoint open intervals can be separated by open sets, so the union is not connected."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
+	default:
+		q := "Is the set of rational numbers \\(\\mathbb{Q}\\) connected in \\(\\mathbb{R}\\)? (yes/no)"
+		ans := "no"
+		reason := "Q is totally disconnected: between any two rationals an irrational separates them into disjoint opens."
+		return generator.Problem{Question: q, Answer: ans, Explanation: reason}
 	}
-	easy := []entry{
-		{"How many connected components does (0,1) union (2,3) have?", "2", "The two disjoint open intervals separate, giving one component each."},
-		{"How many connected components does R have?", "1", "R is connected (intervals are connected), so a single component."},
-		{"Is the set (0,1) connected in \\(\\mathbb{R}\\)? (yes/no)", "yes", "(0,1) is an interval, hence connected in R."},
-		{"Is the set Q connected in \\(\\mathbb{R}\\)? (yes/no)", "no", "Q is totally disconnected: between any two rationals an irrational separates them."},
-		{"Is the set \\(\\{0,1\\}\\) connected in \\(\\mathbb{R}\\)? (yes/no)", "no", "Two isolated points can be separated by disjoint opens, so not connected."},
-	}
-	hard := []entry{
-		{"Is the set \\(\\mathbb{R}\\) connected in \\(\\mathbb{R}\\)? (yes/no)", "yes", "R is connected (intervals are connected)."},
-		{"Is the set \\([0,1]\\) connected in \\(\\mathbb{R}\\)? (yes/no)", "yes", "Closed intervals are connected."},
-		{"Is the set \\((0,1]\\) connected in \\(\\mathbb{R}\\)? (yes/no)", "yes", "(0,1] is an interval, hence connected."},
-		{"Is the set \\((0,1) \\cup (2,3)\\) connected in \\(\\mathbb{R}\\)? (yes/no)", "no", "Two disjoint open intervals can be separated by open sets, so not connected."},
-	}
-	pool := easy
-	if scale > 3 {
-		pool = append(easy, hard...)
-	}
-	e := pool[rand.Intn(len(pool))]
-	return generator.Problem{Question: e.question, Answer: e.answer, Explanation: e.reason}
 }
 
 // ----- 6. hausdorff -----

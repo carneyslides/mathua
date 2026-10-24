@@ -132,10 +132,49 @@ type Progress struct {
 type Engine struct {
 	dag      *concepts.DAG
 	registry *generator.Registry
+	depths   map[string]int
+	maxDepth int
 }
 
 func NewEngine(dag *concepts.DAG, reg *generator.Registry) *Engine {
-	return &Engine{dag: dag, registry: reg}
+	e := &Engine{dag: dag, registry: reg}
+	if dag != nil {
+		e.initDepths()
+	}
+	return e
+}
+
+func (e *Engine) initDepths() {
+	if e.dag == nil {
+		return
+	}
+	e.depths = concepts.ConceptDepths(e.dag)
+	e.maxDepth = 0
+	for _, d := range e.depths {
+		if d > e.maxDepth {
+			e.maxDepth = d
+		}
+	}
+}
+
+func (e *Engine) conceptDepth(id string) int {
+	if e.depths == nil && e.dag != nil {
+		e.initDepths()
+	}
+	if e.depths != nil {
+		return e.depths[id]
+	}
+	return 0
+}
+
+func (e *Engine) conceptMaxDepth() int {
+	if e.depths == nil && e.dag != nil {
+		e.initDepths()
+	}
+	if e.maxDepth > 0 {
+		return e.maxDepth
+	}
+	return 1
 }
 
 // Snapshot is the durable form of a Session.
@@ -542,7 +581,9 @@ func FisherInformation(theta, a, b float64) float64 {
 }
 
 // ItemParameters calculates the discrimination (a) and difficulty (b) parameters for concept c.
-// Difficulty b is calibrated relative to the student's current knowledge frontier.
+// Difficulty b is calibrated to standard psychometric ability space [-3.0, +3.0] using the
+// concept's topological depth in the curriculum DAG, cognitive duration from mastery thresholds
+// and session probe counts.
 // Discrimination a scales with graph connectivity, key prerequisites and encompasses metadata.
 func (e *Engine) ItemParameters(s *Session, c *concepts.Concept) (float64, float64) {
 	if c == nil {
@@ -571,20 +612,51 @@ func (e *Engine) ItemParameters(s *Session, c *concepts.Concept) (float64, float
 		a = 2.5
 	}
 
-	// Calibrate difficulty b relative to the knowledge frontier in s.order.
-	frontierIdx := 0
-	for i, concept := range s.order {
-		if s.beliefs[concept.ID] >= beliefThreshold {
-			frontierIdx = i
+	// 1. Calibrate difficulty relative to the student's knowledge frontier using DAG topological depth.
+	frontierDepth := 0
+	if s != nil {
+		for _, concept := range s.order {
+			if s.beliefs[concept.ID] >= beliefThreshold {
+				cd := e.conceptDepth(concept.ID)
+				if cd > frontierDepth {
+					frontierDepth = cd
+				}
+			}
 		}
 	}
-	idx := s.index(c.ID)
-	bBase := float64(idx-frontierIdx) / 5.0
-	probes := s.probeCounts[c.ID]
-	if probes > 1 {
-		bBase += 0.3 * float64(probes-1)
+	d := e.conceptDepth(c.ID)
+	if d == 0 && prereqCount > 0 && e.dag == nil {
+		d = prereqCount
 	}
-	return a, bBase
+	b := float64(d-frontierDepth) / 3.0
+
+	// 2. Adjust for cognitive duration if defined.
+	if c.MasteryThreshold.AvgTimeSeconds > 0 {
+		bTime := (c.MasteryThreshold.AvgTimeSeconds - 25.0) / 50.0
+		if bTime > 0.4 {
+			bTime = 0.4
+		} else if bTime < -0.4 {
+			bTime = -0.4
+		}
+		b += bTime
+	}
+
+	// 3. Multi-probe progression for repeated attempts within session.
+	if s != nil {
+		probes := s.probeCounts[c.ID]
+		if probes > 1 {
+			b += 0.25 * float64(probes-1)
+		}
+	}
+
+	if b < -3.0 {
+		b = -3.0
+	}
+	if b > 3.0 {
+		b = 3.0
+	}
+
+	return a, b
 }
 
 // entropy is the binary entropy of a belief p (uncertainty).
@@ -668,7 +740,21 @@ func (e *Engine) NextQuestion(s *Session) (*generator.Problem, string, error) {
 		s.LastProblem = nil
 		return nil, "", nil
 	}
-	concept := s.order[s.index(cid)]
+	var concept *concepts.Concept
+	if e.dag != nil {
+		concept = e.dag.Concept(cid)
+	}
+	if concept == nil {
+		idx := s.index(cid)
+		if idx < len(s.order) {
+			concept = s.order[idx]
+		}
+	}
+	if concept == nil {
+		s.State = StateDone
+		s.LastProblem = nil
+		return nil, "", nil
+	}
 	s.probeCounts[cid]++
 	// Vary difficulty: start low, increase on later probes.
 	difficulty := 0.3
@@ -719,7 +805,7 @@ func (e *Engine) retryEligibleForLocked(s *Session, missedCID, nextCID string) b
 	if prior, ok := last.BeliefSnapshot[last.ConceptID]; ok && prior >= confidenceThreshold {
 		return true
 	}
-	if nextCID != "" && s.index(nextCID) < s.index(missedCID) {
+	if nextCID != "" && (e.conceptDepth(nextCID) < e.conceptDepth(missedCID) || (e.conceptDepth(nextCID) == e.conceptDepth(missedCID) && s.index(nextCID) < s.index(missedCID))) {
 		return true
 	}
 	return s.probeCounts[missedCID] <= 1
