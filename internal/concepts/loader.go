@@ -48,13 +48,38 @@ func LoadDir(dir string) (*DAG, error) {
 		}
 		raw = append(raw, batch...)
 	}
-	// Merge enrichment heuristics (Variants, Encompasses, InterferenceGroup, KeyPrerequisites)
+	// Merge enrichment heuristics (Variants, Encompasses, InterferenceGroup, KeyPrerequisites, Prerequisites)
 	if err := mergeEnrichment(dir, raw); err != nil {
 		return nil, err
 	}
 	// Ingest knowledge points from data/lessons/kp/<concept_id>.json
 	if err := mergeKnowledgePoints(dir, raw); err != nil {
 		return nil, err
+	}
+	// When loading a curriculum with 500 or more concepts, enforce graph density invariants.
+	if len(raw) >= 500 {
+		totalPrereqs := 0
+		withKeyPrereqs := 0
+		withEncompasses := 0
+		for _, c := range raw {
+			totalPrereqs += len(c.Prerequisites)
+			if len(c.KeyPrerequisites) > 0 {
+				withKeyPrereqs++
+			}
+			if len(c.Encompasses) > 0 {
+				withEncompasses++
+			}
+		}
+		meanInDegree := float64(totalPrereqs) / float64(len(raw))
+		if meanInDegree < 2.2 {
+			return nil, fmt.Errorf("curriculum graph density invariant violated: mean in-degree %.2f < 2.20", meanInDegree)
+		}
+		if float64(withKeyPrereqs)/float64(len(raw)) < 0.80 {
+			return nil, fmt.Errorf("curriculum key_prerequisites coverage violated: %.1f%% < 80%%", float64(withKeyPrereqs)/float64(len(raw))*100)
+		}
+		if float64(withEncompasses)/float64(len(raw)) < 0.50 {
+			return nil, fmt.Errorf("curriculum encompasses coverage violated: %.1f%% < 50%%", float64(withEncompasses)/float64(len(raw))*100)
+		}
 	}
 	return Build(raw)
 }
@@ -64,6 +89,7 @@ type enrichmentEntry struct {
 	ID                string           `json:"id"`
 	Heuristic         string           `json:"heuristic"`
 	Note              string           `json:"note"`
+	Prerequisites     []string         `json:"prerequisites"`
 	Encompasses       []string         `json:"encompasses"`
 	KeyPrerequisites  []string         `json:"key_prerequisites"`
 	InterferenceGroup string           `json:"interference_group"`
@@ -95,6 +121,9 @@ func mergeEnrichment(dir string, raw []Concept) error {
 			c, ok := idx[e.ID]
 			if !ok {
 				return fmt.Errorf("enrichment id %q not found in DAG", e.ID)
+			}
+			if len(e.Prerequisites) > 0 {
+				c.Prerequisites = appendUnique(c.Prerequisites, e.Prerequisites)
 			}
 			if len(e.Encompasses) > 0 {
 				c.Encompasses = appendUnique(c.Encompasses, e.Encompasses)

@@ -33,6 +33,10 @@ type DiagnosticReport struct {
 	// saved destination, and leaves it null otherwise.
 	CompletionEstimates map[int]string `json:"completion_estimates"`
 	TotalQuestions      int            `json:"total_questions"`
+	// Latent ability estimate under 2PL Item Response Theory.
+	Theta float64 `json:"theta,omitempty"`
+	// Standard error of measurement SE(theta).
+	SE float64 `json:"se,omitempty"`
 }
 
 // Report builds the done-branch summary for a session.
@@ -46,6 +50,8 @@ func (e *Engine) Report(s *Session) *DiagnosticReport {
 		MasteryLevels:  map[string]float64{},
 		Confidence:     map[string]float64{},
 		TotalQuestions: s.totalAsked,
+		Theta:          s.theta,
+		SE:             s.se,
 	}
 
 	var confSum float64

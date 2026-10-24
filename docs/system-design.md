@@ -521,7 +521,7 @@ Mathua implements a compressed-covering + info-gain CAT to locate a student's kn
 5. Propagate evidence: **correct** → `+0.3` belief to all prerequisites; **wrong** → `-0.3` to all dependents + related (Bayes conflict weighting)
 6. Track per-concept `KnowledgeConfidence 0–1`; `Frontier` is the highest belief drop between sorted beliefs
 7. Stop when every concept has `≥2` probes and `confidence ≥0.7`; otherwise run `supplementalDiagnostic()` to probe low-confidence concepts
-8. Report `DiagnosticReport{PlacementCourseID, FrontierIdx, GapsByDomain, MasteryLevels, CompletionEstimates}` (`report.go:11`) with `50/100/300 XP` completion estimates (`report.go:41`)
+8. Report `DiagnosticReport{PlacementCourseID, FrontierIdx, GapsByDomain, MasteryLevels, CompletionEstimates}` (`report.go:11`) with `50/100/300 XP` completion estimates (`report.go:43`)
 
 ### Key Properties
 

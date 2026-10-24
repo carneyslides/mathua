@@ -95,6 +95,10 @@ type Session struct {
 	// retryUsed marks that the pending question's "silly mistake" retry was
 	// consumed; reset whenever NextQuestion serves a new problem.
 	retryUsed bool
+
+	// 2PL Item Response Theory latent ability and measurement precision.
+	theta float64
+	se    float64
 }
 
 type Attempt struct {
@@ -171,6 +175,8 @@ type Snapshot struct {
 	Focus      map[string]bool `json:"focus,omitempty"`
 	TotalAsked int             `json:"total_asked"`
 	RetryUsed  bool            `json:"retry_used"`
+	Theta      float64         `json:"theta,omitempty"`
+	SE         float64         `json:"se,omitempty"`
 }
 
 // Encode renders the session for storage. The lock is held across marshaling,
@@ -215,6 +221,8 @@ func (s *Session) Encode() ([]byte, error) {
 		Focus:             s.focus,
 		TotalAsked:        s.totalAsked,
 		RetryUsed:         s.retryUsed,
+		Theta:             s.theta,
+		SE:                s.se,
 	}
 	return json.Marshal(snap)
 }
@@ -269,6 +277,11 @@ func (e *Engine) Decode(data []byte) (*Session, error) {
 		supplementalCount: orZeroInt(snap.SupplementalCount),
 		totalAsked:        snap.TotalAsked,
 		retryUsed:         snap.RetryUsed,
+		theta:             snap.Theta,
+		se:                snap.SE,
+	}
+	if s.se == 0 {
+		s.se = 1.0
 	}
 	return s, nil
 }
@@ -334,6 +347,8 @@ func (e *Engine) StartWithPathFocus(path []*concepts.Concept, focusIDs []string)
 		doneSet:           make(map[string]bool, len(path)),
 		supplementalCount: make(map[string]int),
 		focus:             focus,
+		theta:             0.0,
+		se:                1.0,
 	}
 	for _, c := range path {
 		s.beliefs[c.ID] = 0.5
@@ -381,6 +396,72 @@ func (s *Session) index(id string) int {
 	return len(s.order)
 }
 
+// Prob2PL computes the 2-Parameter Logistic item response probability:
+// P_i(theta) = 1 / (1 + exp(-a_i * (theta - b_i))).
+func Prob2PL(theta, a, b float64) float64 {
+	z := a * (theta - b)
+	if z > 35 {
+		return 1.0
+	}
+	if z < -35 {
+		return 0.0
+	}
+	return 1.0 / (1.0 + math.Exp(-z))
+}
+
+// FisherInformation computes item information under 2PL IRT:
+// I_i(theta) = a_i^2 * P_i(theta) * (1 - P_i(theta)).
+func FisherInformation(theta, a, b float64) float64 {
+	p := Prob2PL(theta, a, b)
+	return a * a * p * (1.0 - p)
+}
+
+// ItemParameters calculates the discrimination (a) and difficulty (b) parameters for concept c.
+// Difficulty b is calibrated relative to the student's current knowledge frontier.
+// Discrimination a scales with graph connectivity, key prerequisites and encompasses metadata.
+func (e *Engine) ItemParameters(s *Session, c *concepts.Concept) (float64, float64) {
+	if c == nil {
+		return 1.0, 0.0
+	}
+	prereqCount := len(c.Prerequisites)
+	depCount := 0
+	if e.dag != nil {
+		depCount = len(e.dag.DependentsOf(c.ID))
+	}
+	connectivity := prereqCount + depCount
+	if connectivity > 6 {
+		connectivity = 6
+	}
+	a := 1.0 + 0.15*float64(connectivity)
+	if len(c.KeyPrerequisites) > 0 {
+		a += 0.25
+	}
+	if len(c.Encompasses) > 0 {
+		a += 0.25
+	}
+	if a < 0.8 {
+		a = 0.8
+	}
+	if a > 2.5 {
+		a = 2.5
+	}
+
+	// Calibrate difficulty b relative to the knowledge frontier in s.order.
+	frontierIdx := 0
+	for i, concept := range s.order {
+		if s.beliefs[concept.ID] >= beliefThreshold {
+			frontierIdx = i
+		}
+	}
+	idx := s.index(c.ID)
+	bBase := float64(idx-frontierIdx) / 5.0
+	probes := s.probeCounts[c.ID]
+	if probes > 1 {
+		bBase += 0.3 * float64(probes-1)
+	}
+	return a, bBase
+}
+
 // entropy is the binary entropy of a belief p (uncertainty).
 func entropy(p float64) float64 {
 	if p <= 0 || p >= 1 {
@@ -389,10 +470,14 @@ func entropy(p float64) float64 {
 	return -(p*math.Log2(p) + (1-p)*math.Log2(1-p))
 }
 
-// infoGain scores a candidate concept: uncertainty times coverage influence.
+// infoGain scores a candidate concept using 2PL Fisher Information and belief uncertainty scaled by coverage influence.
+// Fisher Information is maximized when item difficulty b matches current latent ability theta.
 // Coverage = how many other cover concepts it reaches through prereqs/dependents.
 func (e *Engine) infoGain(s *Session, c *concepts.Concept, coverSet map[string]bool) float64 {
+	a, b := e.ItemParameters(s, c)
+	info := FisherInformation(s.theta, a, b)
 	unc := entropy(s.beliefs[c.ID])
+
 	influence := 1.0
 	for _, dep := range e.dag.DependentsOf(c.ID) {
 		if coverSet[dep.ID] {
@@ -404,13 +489,10 @@ func (e *Engine) infoGain(s *Session, c *concepts.Concept, coverSet map[string]b
 			influence += 0.25
 		}
 	}
-	// A concept the learner chose outranks a foundation of equal uncertainty.
-	// This is a preference between probes, not a filter: every covered concept
-	// is still asked, and a miss anywhere still pulls the frontier backwards.
 	if s.focus[c.ID] {
-		influence += 0.5
+		influence += 2.5
 	}
-	return unc * influence
+	return unc * influence * (1.0 + 0.2*info)
 }
 
 // pickByInfoGain selects the highest-gain cover concept not yet settled.
@@ -556,6 +638,7 @@ func (e *Engine) RetryServe(s *Session, conceptID string) (*generator.Problem, s
 	s.totalAsked--
 	s.beliefs = last.BeliefSnapshot
 	s.doneSet[last.ConceptID] = s.totalCount[last.ConceptID] >= 2
+	e.updateThetaLocked(s)
 	s.LastProblem, s.LastConceptID, s.LastConceptName = s.prevProblem, s.prevConceptID, s.prevConceptName
 	s.prevProblem, s.prevConceptID, s.prevConceptName = nil, "", ""
 	s.retryUsed = true
@@ -683,6 +766,9 @@ func (e *Engine) recordTimed(s *Session, conceptID string, correct bool, elapsed
 	// incorrect answers lend negative evidence to dependents and strip
 	// barely-passing "conditional" credit from prerequisites.
 	e.propagateEvidence(s, conceptID, correct, slowFactor)
+
+	// Update latent ability theta and measurement error SE via 2PL IRT MAP estimation.
+	e.updateThetaLocked(s)
 
 	// Confidence: 2 probes settle a concept.
 	s.confidence[conceptID] = math.Min(1.0, float64(s.probeCounts[conceptID])*0.5)
@@ -945,4 +1031,70 @@ func (e *Engine) KnowledgeConfidence(s *Session) map[string]float64 {
 		out[k] = v
 	}
 	return out
+}
+
+// updateThetaLocked estimates latent ability theta via Newton-Raphson MAP with standard normal prior.
+// It also updates measurement precision se = 1 / sqrt(total Fisher Information + 1).
+func (e *Engine) updateThetaLocked(s *Session) {
+	if len(s.Attempts) == 0 {
+		s.theta = 0.0
+		s.se = 1.0
+		return
+	}
+	theta := s.theta
+	for iter := 0; iter < 5; iter++ {
+		firstDeriv := -theta
+		secondDeriv := -1.0
+		for _, att := range s.Attempts {
+			var c *concepts.Concept
+			if e.dag != nil {
+				c = e.dag.Concept(att.ConceptID)
+			}
+			a, b := e.ItemParameters(s, c)
+			p := Prob2PL(theta, a, b)
+			u := 0.0
+			if att.Correct {
+				u = 1.0
+				if att.ElapsedSeconds > 0 {
+					thresh := 10.0
+					if att.ElapsedSeconds > 4*thresh {
+						u = 0.6
+					} else if att.ElapsedSeconds > 2*thresh {
+						u = 0.75
+					}
+				}
+			}
+			firstDeriv += a * (u - p)
+			secondDeriv -= a * a * p * (1.0 - p)
+		}
+		delta := -firstDeriv / secondDeriv
+		theta += delta
+		if theta < -3.5 {
+			theta = -3.5
+		}
+		if theta > 3.5 {
+			theta = 3.5
+		}
+		if math.Abs(delta) < 1e-4 {
+			break
+		}
+	}
+	s.theta = theta
+	var totalInfo float64
+	for _, att := range s.Attempts {
+		var c *concepts.Concept
+		if e.dag != nil {
+			c = e.dag.Concept(att.ConceptID)
+		}
+		a, b := e.ItemParameters(s, c)
+		totalInfo += FisherInformation(theta, a, b)
+	}
+	s.se = 1.0 / math.Sqrt(totalInfo + 1.0)
+}
+
+// AbilityEstimate returns the current estimated latent ability theta and its standard error SE.
+func (e *Engine) AbilityEstimate(s *Session) (float64, float64) {
+	s.Lock()
+	defer s.Unlock()
+	return s.theta, s.se
 }
