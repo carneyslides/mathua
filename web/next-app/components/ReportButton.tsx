@@ -43,7 +43,7 @@ export default function ReportButton(props: ReportButtonProps) {
   useEffect(() => {
     setSent(false)
     setError('')
-  }, [props.attemptId, props.question, props.conceptId])
+  }, [props.attemptId, props.question, props.conceptId, props.sessionId])
 
   useEffect(() => {
     if (!sent) return
@@ -86,9 +86,14 @@ export default function ReportButton(props: ReportButtonProps) {
 
   if (sent) {
     return (
-      <span className="font-mono text-[10px] text-mathua-green uppercase tracking-wider">
+      <button
+        type="button"
+        onClick={() => setSent(false)}
+        title="Dismiss confirmation"
+        className="font-mono text-[10px] text-mathua-green hover:underline uppercase tracking-wider"
+      >
         ✓ Thanks — reported
-      </span>
+      </button>
     )
   }
 

@@ -208,6 +208,12 @@ export default function MathInput({
   // from `value` because a host's value is the *plain* answer it will submit, and it
   // only catches up after a render — the hint must not wait for the round trip.
   const [typedLatex, setTypedLatex] = useState('')
+
+  useEffect(() => {
+    if (!value) {
+      setTypedLatex('')
+    }
+  }, [value])
   // What has been typed into the plain input while MathLive loads. Local, because the
   // host's `value` is LaTeX and this control is showing plain text; the two only meet
   // when `MathLiveField` mounts and pushes `value` in.
@@ -303,7 +309,7 @@ export default function MathInput({
             and React discards the already-rendered field — remounting it, which reset
             the answer to the host's last value and lost what the learner had typed. */}
         <Suspense fallback={null}>
-          <SelfCheck latex={typedLatex} active={!isDisabled} />
+          <SelfCheck latex={typedLatex} active={!isDisabled && status === 'default'} />
         </Suspense>
       </div>
     </MathLiveBoundary>

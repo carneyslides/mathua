@@ -266,7 +266,7 @@ export default function ReviewHost() {
               </div>
               <div className="mt-2 flex justify-end">
                 <ReportButton
-                  key={reviewQuestion}
+                  key={`rev-${reviewCount}-${reviewAttemptId.current || reviewQuestion}`}
                   conceptId={reviewConceptId.current}
                   kind="question"
                   question={reviewQuestion}

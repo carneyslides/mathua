@@ -77,4 +77,16 @@ describe('the report sheet', () => {
       vi.useRealTimers()
     }
   })
+
+  it('dismisses confirmation message on click', async () => {
+    render(<ReportButton kind="question" conceptId="a" question="q1" />)
+    fireEvent.click(screen.getByRole('button', { name: /report a problem/i }))
+    fireEvent.click(screen.getByRole('button', { name: /send report/i }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /thanks — reported/i })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /thanks — reported/i }))
+
+    expect(screen.queryByText(/thanks — reported/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /report a problem/i })).toBeInTheDocument()
+  })
 })

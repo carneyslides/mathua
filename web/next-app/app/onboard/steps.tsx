@@ -371,7 +371,7 @@ export function DiagnosticStep({
           </div>
           <div className="mt-2 flex justify-end">
             <ReportButton
-              key={question}
+              key={`diag-${shownNumber}-${question}`}
               conceptId={conceptId}
               kind="question"
               question={question}

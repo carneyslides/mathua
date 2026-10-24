@@ -26,6 +26,7 @@ export interface Engine {
   valid(expr: Expression): boolean
   simplify(expr: Expression): Expression
   latexOf(expr: Expression): string
+  isEquivalent?: (a: Expression, b: Expression) => boolean
 }
 
 export interface Expression {
@@ -95,6 +96,16 @@ export function loadEngine(): Promise<Engine | null> {
           // CE's own serialization. Falls back to the display form if unavailable.
           return withLatex.toLatex?.() ?? e.toString()
         },
+        isEquivalent: (a: Expression, b: Expression): boolean => {
+          try {
+            if (a.isIdenticallyEqual(b) === true) return true
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const diff = (ce.box(['Subtract', a as any, b as any]) as any).simplify().toString()
+            return diff === '0'
+          } catch {
+            return false
+          }
+        },
       }
     })
     .catch(err => {
@@ -161,8 +172,10 @@ export function simplificationHint(
 
   let simplified: string
   let asTyped: string
+  let simpExpr: Expression
   try {
-    simplified = engine.simplify(expr).toString()
+    simpExpr = engine.simplify(expr)
+    simplified = simpExpr.toString()
     // `ce.parse` canonicalises eagerly, so the *parsed* form is already the answer.
     // The comparison has to be against what the learner actually wrote, or every
     // expression looks identical to its own simplification and the hint never fires.
@@ -174,6 +187,17 @@ export function simplificationHint(
   // Cosmetic spacing and implicit-multiplication markers are not a simplification:
   // "2x+3" and "2x + 3" are the same expression.
   if (compact(simplified) === compact(asTyped)) return null
+
+  // A valid simplification must be mathematically equivalent to the parsed expression.
+  if (engine.isEquivalent && !engine.isEquivalent(expr, simpExpr)) {
+    return null
+  }
+
+  // Never suggest space-separated juxtaposition of variable terms as implicit multiplication:
+  // e.g. "16x^2 8x" must not simplify to "128x^3" while typing terms.
+  if (/\b\d*[a-zA-Z](\^\{?\w+\}?)?\s+\d*[a-zA-Z]/u.test(cleaned)) {
+    return null
+  }
 
   return {
     latex: simplified,

@@ -107,6 +107,9 @@ describe('simplificationHint', () => {
     // MathLive inserts spacing commands like `\;` on spacebar presses.
     // Compute Engine must not read `16x^2 \; + \; 8x \; + \; 1` as `128x^3`.
     expect(simplificationHint(engine, '16x^2 \\; + \\; 8x \\; + \\; 1')).toBeNull()
+    expect(simplificationHint(engine, '16x^2 + 8x + 1')).toBeNull()
+    expect(simplificationHint(engine, '16x^2 8x')).toBeNull()
+    expect(simplificationHint(engine, '16x^2 8x + 1')).toBeNull()
     expect(simplificationHint(engine, '\\frac{1}{2} \\; + \\; \\frac{1}{3}')?.latex).toBe('5/6')
     expect(stripLatexSpaces('16x^2 \\; + \\; 8x \\; + \\; 1')).toBe('16x^2   +   8x   +   1')
   })
