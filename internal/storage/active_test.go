@@ -12,7 +12,15 @@ import (
 // count a session older than the window.
 func TestActiveLearnerCounts_SplitsGuestsAndWindows(t *testing.T) {
 	store := newTestStore(t)
-	now := time.Now().UTC()
+	// A fixed instant at midday, not time.Now().
+	//
+	// The test records an attempt an hour before "now" and expects it to count as
+	// active today, which is only true while now is at least an hour into the UTC day.
+	// Running the suite between 00:00 and 01:00 UTC put that attempt on the previous
+	// day and the assertion failed with "active today = 0 accounts", on a code path
+	// nobody had touched. Every timestamp the test writes is already explicit, so
+	// pinning the instant costs nothing and makes the case independent of the clock.
+	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
 	ada, err := store.CreateStudent("ada")
