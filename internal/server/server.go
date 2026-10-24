@@ -1824,10 +1824,15 @@ func (s *Server) handleLessonConcept(w http.ResponseWriter, r *http.Request) {
 			status := p.Status
 			if rp, ok := rawProgress[p.ID]; ok && rp != nil {
 				days := 999.0
-				if rp.LastReviewed != nil {
+				if rp.FSRSLastReview != nil && !rp.FSRSLastReview.IsZero() {
+					days = time.Since(*rp.FSRSLastReview).Hours() / 24
+				} else if rp.LastReviewed != nil {
 					days = time.Since(*rp.LastReviewed).Hours() / 24
 				}
-				status = string(mastery.EffectiveStatus(mastery.Status(rp.Status), days, mastery.DecayDays))
+				if days < 0 {
+					days = 0
+				}
+				status = string(mastery.EffectiveStatusFSRS(mastery.Status(rp.Status), days, rp.FSRSStability, mastery.DecayDays))
 			}
 			if status == string(mastery.StatusMastered) || status == "DECAYING" {
 				continue

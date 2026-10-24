@@ -47,22 +47,21 @@ func (e *Engine) SatisfyImplicitReviews(studentID string) error {
 		if p.NextReviewDue != nil && !p.NextReviewDue.After(now) {
 			isDue = true
 		}
-		if p.LastReviewed != nil && daysSinceReview(p.LastReviewed) >= mastery.DecayDays {
-			isDue = true
+		var elapsed float64
+		if p.FSRSLastReview != nil && !p.FSRSLastReview.IsZero() {
+			elapsed = now.Sub(*p.FSRSLastReview).Hours() / 24.0
+		} else if p.LastReviewed != nil && !p.LastReviewed.IsZero() {
+			elapsed = now.Sub(*p.LastReviewed).Hours() / 24.0
+		}
+		if elapsed < 0 {
+			elapsed = 0
 		}
 		if p.FSRSStability != nil && *p.FSRSStability > 0 {
-			var elapsed float64
-			if p.FSRSLastReview != nil && !p.FSRSLastReview.IsZero() {
-				elapsed = now.Sub(*p.FSRSLastReview).Hours() / 24.0
-			} else if p.LastReviewed != nil && !p.LastReviewed.IsZero() {
-				elapsed = now.Sub(*p.LastReviewed).Hours() / 24.0
-			}
-			if elapsed < 0 {
-				elapsed = 0
-			}
 			if fsrs.DefaultParameters().Retrievability(elapsed, *p.FSRSStability) < fsrs.DefaultRetention {
 				isDue = true
 			}
+		} else if elapsed >= mastery.DecayDays {
+			isDue = true
 		}
 		if !isDue {
 			continue
@@ -287,7 +286,13 @@ func (e *Engine) RecommendNext(studentID string, exclude []string) (scheduler.Re
 	// reading the comment.
 	mastered, attemptedDays := 0, map[string]bool{}
 	for _, p := range progress {
-		if mastery.EffectiveStatus(mastery.Status(p.Status), daysSinceReview(p.LastReviewed), mastery.DecayDays) == mastery.StatusMastered {
+		var elapsed float64
+		if p.FSRSLastReview != nil && !p.FSRSLastReview.IsZero() {
+			elapsed = daysSinceReview(p.FSRSLastReview)
+		} else if p.LastReviewed != nil {
+			elapsed = daysSinceReview(p.LastReviewed)
+		}
+		if mastery.EffectiveStatusFSRS(mastery.Status(p.Status), elapsed, p.FSRSStability, mastery.DecayDays) == mastery.StatusMastered {
 			mastered++
 		}
 		if p.LastAttempted != nil {
@@ -315,18 +320,31 @@ func (e *Engine) RecommendNext(studentID string, exclude []string) (scheduler.Re
 					c = e.dag.Concept(as.lastConceptID)
 				}
 				if c != nil {
+					isRemedialTarget := false
 					for _, kp := range c.KeyPrerequisites {
 						if kp == cid {
-							found := false
-							for _, existing := range remQueue {
-								if existing == cid {
-									found = true
-									break
-								}
+							isRemedialTarget = true
+							break
+						}
+					}
+					if !isRemedialTarget {
+						for _, p := range e.dag.PrereqsOf(c.ID) {
+							if p.ID == cid {
+								isRemedialTarget = true
+								break
 							}
-							if !found {
-								remQueue = append(remQueue, cid)
+						}
+					}
+					if isRemedialTarget {
+						found := false
+						for _, existing := range remQueue {
+							if existing == cid {
+								found = true
+								break
 							}
+						}
+						if !found {
+							remQueue = append(remQueue, cid)
 						}
 					}
 				}

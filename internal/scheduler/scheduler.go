@@ -338,28 +338,22 @@ func effectiveState(snap *ConceptSnapshot, now time.Time) (mastery.Status, bool)
 	if snap == nil {
 		return mastery.StatusUnseen, false
 	}
-	status := mastery.EffectiveStatus(snap.Status, daysSince(snap.LastReviewed), mastery.DecayDays)
-	isReview := status == "DECAYING"
-	if snap.Status == mastery.StatusMastered && snap.NextReviewDue != nil && !snap.NextReviewDue.After(now) {
-		isReview = true
+	if snap.Status != mastery.StatusMastered {
+		return snap.Status, false
 	}
-	if snap.Status == mastery.StatusMastered && snap.FSRSStability != nil && *snap.FSRSStability > 0 {
-		var elapsedDays float64
-		if snap.FSRSLastReview != nil && !snap.FSRSLastReview.IsZero() {
-			elapsedDays = now.Sub(*snap.FSRSLastReview).Hours() / 24.0
-		} else if !snap.LastReviewed.IsZero() {
-			elapsedDays = now.Sub(snap.LastReviewed).Hours() / 24.0
-		}
-		if elapsedDays < 0 {
-			elapsedDays = 0
-		}
-		r := fsrs.DefaultParameters().Retrievability(elapsedDays, *snap.FSRSStability)
-		if r < fsrs.DefaultRetention {
-			isReview = true
-			if status == mastery.StatusMastered {
-				status = "DECAYING"
-			}
-		}
+	var elapsedDays float64
+	if snap.FSRSLastReview != nil && !snap.FSRSLastReview.IsZero() {
+		elapsedDays = now.Sub(*snap.FSRSLastReview).Hours() / 24.0
+	} else if !snap.LastReviewed.IsZero() {
+		elapsedDays = now.Sub(snap.LastReviewed).Hours() / 24.0
+	}
+	if elapsedDays < 0 {
+		elapsedDays = 0
+	}
+	status := mastery.EffectiveStatusFSRS(snap.Status, elapsedDays, snap.FSRSStability, mastery.DecayDays)
+	isReview := status == "DECAYING"
+	if snap.NextReviewDue != nil && !snap.NextReviewDue.After(now) {
+		isReview = true
 	}
 	return status, isReview
 }

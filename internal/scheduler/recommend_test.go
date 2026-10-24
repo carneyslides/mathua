@@ -636,3 +636,76 @@ func TestRecommend_TargetedRemediation_NormalCompletionPath(t *testing.T) {
 		t.Errorf("primary reason = %q, want %q", got.Primary.Reason, ReasonNew)
 	}
 }
+
+func TestEffectiveState_HighFSRSStability_DoesNotDecayAt15Days(t *testing.T) {
+	now := time.Now()
+	lastRev := now.AddDate(0, 0, -15)
+	due := now.AddDate(0, 0, 30)
+	stability := 60.0
+
+	snap := &ConceptSnapshot{
+		Status:         mastery.StatusMastered,
+		LastReviewed:   lastRev,
+		NextReviewDue:  &due,
+		FSRSStability:  &stability,
+		FSRSLastReview: &lastRev,
+	}
+
+	status, isReview := effectiveState(snap, now)
+	if status != mastery.StatusMastered {
+		t.Errorf("status = %q, want %q at 15 days with stability 60", status, mastery.StatusMastered)
+	}
+	if isReview {
+		t.Error("expected isReview=false at 15 days when stability is 60 and NextReviewDue is in future")
+	}
+}
+
+func TestRecommend_TargetedRemediation_FallsBackToDAGPrereqWhenNoKeyPrerequisites(t *testing.T) {
+	d, err := concepts.Build([]concepts.Concept{
+		{
+			ID: "p1", Label: "Prereq 1", Domain: "d", Subdomain: "s",
+			Prerequisites:    []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
+		},
+		{
+			ID: "p2", Label: "Prereq 2", Domain: "d", Subdomain: "s",
+			Prerequisites:    []string{},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
+		},
+		{
+			ID: "c", Label: "Concept C", Domain: "d", Subdomain: "s",
+			Prerequisites:    []string{"p1", "p2"},
+			MasteryThreshold: concepts.MasteryThreshold{Streak: 3, AvgTimeSeconds: 10},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build DAG: %v", err)
+	}
+	s := New(d)
+	now := time.Now()
+
+	// Student halted on c. Concept c has no KeyPrerequisites declared.
+	// p1 is mastered (streak 5). p2 is learning (streak 1).
+	// Scheduler must fall back to the weakest prerequisite (p2) for targeted remediation.
+	got := s.Recommend(RecommendInput{
+		Now:              now,
+		AttemptedDays:    5,
+		ConceptsMastered: 1,
+		HaltedConceptID:  "c",
+		Snapshots: map[string]*ConceptSnapshot{
+			"p1": {Status: mastery.StatusMastered, Streak: 5, LastReviewed: now},
+			"p2": {Status: mastery.StatusLearning, Streak: 1, LastAttempted: now},
+			"c":  {Status: mastery.StatusPracticing, Streak: 0, LastAttempted: now},
+		},
+	})
+
+	if got.Primary == nil {
+		t.Fatal("expected primary recommendation on remedial fallback")
+	}
+	if got.Primary.ConceptID != "p2" {
+		t.Errorf("primary concept = %q, want weakest prerequisite p2", got.Primary.ConceptID)
+	}
+	if got.Primary.Reason != ReasonPrerequisite {
+		t.Errorf("primary reason = %q, want %q", got.Primary.Reason, ReasonPrerequisite)
+	}
+}

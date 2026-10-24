@@ -261,6 +261,40 @@ func TestEffectiveStatus_NonMasteredUnaffected(t *testing.T) {
 	}
 }
 
+func TestEffectiveStatusFSRS_HighStabilityDurablePast14Days(t *testing.T) {
+	// Stability of 60 days: at 15 days, retrievability remains well above 0.90.
+	stab60 := 60.0
+	if got := EffectiveStatusFSRS(StatusMastered, 15, &stab60, 14); got != StatusMastered {
+		t.Errorf("expected MASTERED for S=60 at 15 days, got %q", got)
+	}
+
+	// At 61 days (past stability window), retrievability drops below 0.90.
+	if got := EffectiveStatusFSRS(StatusMastered, 61, &stab60, 14); got != "DECAYING" {
+		t.Errorf("expected DECAYING for S=60 at 61 days, got %q", got)
+	}
+}
+
+func TestEffectiveStatusFSRS_LowStabilityDecaysPromptly(t *testing.T) {
+	// Low stability of 3.0 days: at 4 days, retrievability drops below 0.90.
+	stab3 := 3.0
+	if got := EffectiveStatusFSRS(StatusMastered, 4, &stab3, 14); got != "DECAYING" {
+		t.Errorf("expected DECAYING for S=3 at 4 days, got %q", got)
+	}
+	// At 2 days, retrievability is still above 0.90.
+	if got := EffectiveStatusFSRS(StatusMastered, 2, &stab3, 14); got != StatusMastered {
+		t.Errorf("expected MASTERED for S=3 at 2 days, got %q", got)
+	}
+}
+
+func TestEffectiveStatusFSRS_NilStabilityFallsBackToDecayDays(t *testing.T) {
+	if got := EffectiveStatusFSRS(StatusMastered, 13, nil, 14); got != StatusMastered {
+		t.Errorf("expected MASTERED for nil stability at 13 days, got %q", got)
+	}
+	if got := EffectiveStatusFSRS(StatusMastered, 14, nil, 14); got != "DECAYING" {
+		t.Errorf("expected DECAYING for nil stability at 14 days, got %q", got)
+	}
+}
+
 // SM2Quality
 
 func TestSM2Quality_Perfect(t *testing.T) {

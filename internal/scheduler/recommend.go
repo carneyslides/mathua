@@ -189,11 +189,48 @@ func (s *Scheduler) Recommend(in RecommendInput) RecommendationResponse {
 
 	var targetRemedials []string
 	if in.HaltedConceptID != "" {
-		if c := s.dag.Concept(in.HaltedConceptID); c != nil && len(c.KeyPrerequisites) > 0 {
-			for _, kp := range c.KeyPrerequisites {
-				if !remedialSeen[kp] {
-					remedialSeen[kp] = true
-					targetRemedials = append(targetRemedials, kp)
+		if c := s.dag.Concept(in.HaltedConceptID); c != nil {
+			if len(c.KeyPrerequisites) > 0 {
+				for _, kp := range c.KeyPrerequisites {
+					if !remedialSeen[kp] {
+						remedialSeen[kp] = true
+						targetRemedials = append(targetRemedials, kp)
+					}
+				}
+			} else {
+				// Fall back to the weakest prerequisite from the DAG
+				prereqs := s.dag.PrereqsOf(in.HaltedConceptID)
+				if len(prereqs) > 0 {
+					var weakestID string
+					bestRank := 999
+					bestStreak := 999999
+					for _, p := range prereqs {
+						snap := in.Snapshots[p.ID]
+						var rank int
+						var streak int
+						if snap == nil || snap.Status == mastery.StatusUnseen || snap.Status == "" {
+							rank = 0
+							streak = 0
+						} else if snap.Status == mastery.StatusLearning || snap.Status == mastery.StatusPracticing {
+							rank = 1
+							streak = snap.Streak
+						} else if snap.Status == "DECAYING" {
+							rank = 2
+							streak = snap.Streak
+						} else {
+							rank = 3
+							streak = snap.Streak
+						}
+						if rank < bestRank || (rank == bestRank && streak < bestStreak) {
+							bestRank = rank
+							bestStreak = streak
+							weakestID = p.ID
+						}
+					}
+					if weakestID != "" && !remedialSeen[weakestID] {
+						remedialSeen[weakestID] = true
+						targetRemedials = append(targetRemedials, weakestID)
+					}
 				}
 			}
 		}
