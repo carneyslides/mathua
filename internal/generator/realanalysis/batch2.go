@@ -637,10 +637,10 @@ func (g *powerSeriesGen) Generate(ctx generator.GeneratorContext) generator.Prob
 	c := claims[rand.Intn(len(claims))]
 	answer := decimal6(1 / float64(c))
 	return generator.Problem{
-		Question: "The power series Σ c^n x^n converges when |c·x| < 1, so its radius of convergence is 1/c. For c = " +
-			strconv.Itoa(c) + ", what is the radius of convergence? (enter a decimal)",
+		Question: "Find the radius of convergence \\(R\\) of the power series \\(\\sum_{n=1}^\\infty " +
+			strconv.Itoa(c) + "^n x^n\\). (enter as a decimal)",
 		Answer:      answer,
-		Explanation: "The ratio test gives |c·x| < 1, that is |x| < 1/c, so the radius is 1/c = " + answer + ".",
+		Explanation: "By the root test (or ratio test), \\(\\limsup_{n\\to\\infty} |" + strconv.Itoa(c) + "^n|^{1/n} = " + strconv.Itoa(c) + "\\), so the radius of convergence is \\(R = \\frac{1}{" + strconv.Itoa(c) + "} = " + answer + "\\).",
 		Facts: map[string]string{
 			"c": strconv.Itoa(c), "answer": answer,
 		},

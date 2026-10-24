@@ -589,20 +589,72 @@ func (g *eigenConceptGen) Generate(ctx generator.GeneratorContext) generator.Pro
 type eigenComputeGen struct{}
 
 func (g *eigenComputeGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	scale := int(1 + ctx.Difficulty*5)
-	a := rand.Intn(max(1, scale*2)) - scale
-	c := rand.Intn(max(1, scale*2)) - scale
-	d := rand.Intn(max(1, scale*2)) - scale
-	if a == 0 {
-		a = 2
+	transforms := [][4]int{
+		{1, 1, 1, 2},
+		{2, 1, 3, 2},
+		{1, 2, 1, 3},
+		{2, 3, 1, 2},
+		{1, -1, -1, 2},
+		{2, -1, -3, 2},
+		{3, 1, 2, 1},
+		{1, 3, 1, 4},
+		{3, 2, 4, 3},
+		{2, 5, 1, 3},
 	}
-	if d == 0 {
-		d = 1
-	}
-	return generator.Problem{
-		Question:    fmt.Sprintf("Find the eigenvalues of the triangular matrix \\(%s\\).", formatMatrix2([][]int{{a, c}, {0, d}})),
-		Answer:      fmt.Sprintf("%d,%d", a, d),
-		Explanation: fmt.Sprintf("For a triangular matrix, eigenvalues are the diagonal entries: λ₁=%d, λ₂=%d.", a, d),
+
+	for {
+		// Pick distinct integer eigenvalues
+		l1 := rand.Intn(7) - 3 // -3 to 3
+		if l1 == 0 {
+			l1 = -2
+		}
+		l2 := l1 + rand.Intn(4) + 1
+		if l2 == 0 {
+			l2 = 2
+		}
+		if l1 == l2 {
+			l2 = l1 + 1
+		}
+		if l1 > l2 {
+			l1, l2 = l2, l1
+		}
+
+		t := transforms[rand.Intn(len(transforms))]
+		p, q, r, s := t[0], t[1], t[2], t[3]
+
+		// A = P * D * P^{-1}
+		a11 := p*s*l1 - q*r*l2
+		a12 := p * q * (l2 - l1)
+		a21 := r * s * (l1 - l2)
+		a22 := -q*r*l1 + p*s*l2
+
+		// Reject triangular matrices or matrices where eigenvalues match any entry
+		if a12 == 0 || a21 == 0 {
+			continue
+		}
+		if a11 == l1 || a11 == l2 || a22 == l1 || a22 == l2 || a12 == l1 || a12 == l2 || a21 == l1 || a21 == l2 {
+			continue
+		}
+
+		ansStr := fmt.Sprintf("%d,%d", l1, l2)
+		matStr := formatMatrix2([][]int{{a11, a12}, {a21, a22}})
+		if strings.Contains(matStr, ansStr) {
+			continue
+		}
+
+		tr := a11 + a22
+		det := a11*a22 - a12*a21
+
+		return generator.Problem{
+			Question: fmt.Sprintf("Find the eigenvalues of the matrix \\(%s\\). (Enter from least to greatest separated by a comma)", matStr),
+			Answer:   ansStr,
+			Explanation: fmt.Sprintf(
+				"The characteristic equation is \\(\\det(A - \\lambda I) = \\lambda^2 - \\operatorname{tr}(A)\\lambda + \\det(A) = 0\\). "+
+					"Here \\(\\operatorname{tr}(A) = %d + %d = %d\\) and \\(\\det(A) = (%d)(%d) - (%d)(%d) = %d\\). "+
+					"Solving \\(\\lambda^2 - %d\\lambda + %d = (\\lambda - %d)(\\lambda - %d) = 0\\) gives eigenvalues %d and %d.",
+				a11, a22, tr, a11, a22, a12, a21, det, tr, det, l1, l2, l1, l2,
+			),
+		}
 	}
 }
 
@@ -1704,131 +1756,154 @@ func (g *svdGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 		mode := rand.Intn(5)
 		switch mode {
 		case 0:
-			s1 := smallInt(3, 7+tier*3)
-			s2 := smallInt(2, s1-1)
-			eig1 := s1 * s1
-			eig2 := s2 * s2
-			ansStr := strconv.Itoa(s1)
-			q := fmt.Sprintf("The symmetric matrix \\(A^T A\\) has eigenvalues %d, %d and 0. Compute the largest singular value \\(\\sigma_1\\) of \\(A\\).", eig1, eig2)
-			if s1 == eig1 || s1 == eig2 || containsWord(q, ansStr) {
+			// Largest singular value sigma_1 of symmetric matrix A = [[a, b], [b, a]]
+			// with a > b > 0. Gramian eigenvalues are (a+b)^2 and (a-b)^2, so sigma_1 = a+b.
+			b := smallInt(1, 4+tier)
+			a := b + smallInt(1, 4+tier)
+			sig1 := a + b
+			ansStr := strconv.Itoa(sig1)
+			matStr := formatMatrix2([][]int{{a, b}, {b, a}})
+			q := fmt.Sprintf("Find the largest singular value \\(\\sigma_1\\) of the matrix \\(A = %s\\).", matStr)
+			if containsWord(q, ansStr) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the definition of singular values from Gramian eigenvalues: \\(\\sigma_1 = \\sqrt{\\lambda_1(A^T A)}\\).\n"+
-				"Subgoal 2: Substitute the maximum eigenvalue \\(\\lambda_1 = %d\\): \\(\\sqrt{%d}\\).\n"+
-				"Subgoal 3: Evaluate the principal square root: \\(\\sigma_1 = %d\\).",
-				eig1, eig1, s1)
+			ex := fmt.Sprintf("Subgoal 1: Form the Gramian matrix \\(A^T A = %s\\).\n"+
+				"Subgoal 2: Compute its eigenvalues \\(\\lambda_1 = (%d + %d)^2 = %d\\) and \\(\\lambda_2 = (%d - %d)^2 = %d\\).\n"+
+				"Subgoal 3: Evaluate the principal square root \\(\\sigma_1 = \\sqrt{%d} = %d\\).",
+				formatMatrix2([][]int{{a*a + b*b, 2 * a * b}, {2 * a * b, a*a + b*b}}),
+				a, b, sig1*sig1, a, b, (a-b)*(a-b),
+				sig1*sig1, sig1)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
 				Explanation: ex,
 				Facts: map[string]string{
-					"eig1":   strconv.Itoa(eig1),
-					"eig2":   strconv.Itoa(eig2),
+					"a":      strconv.Itoa(a),
+					"b":      strconv.Itoa(b),
 					"answer": ansStr,
 				},
 			}
 		case 1:
-			s1 := smallInt(5, 8+tier*3)
-			s2 := smallInt(3, s1-1)
-			s3 := smallInt(1, s2-1)
-			k := smallInt(2, 4+tier)
-			ans := k * s1
+			// Spectral norm ||A||_2 of matrix A = [[a, b], [b, a]]
+			b := smallInt(1, 3+tier)
+			a := b + smallInt(1, 4+tier)
+			ans := a + b
 			ansStr := strconv.Itoa(ans)
-			q := fmt.Sprintf("A matrix \\(A\\) has singular values %d, %d and %d. Find the spectral norm \\(\\|%d A\\|_2\\) of the scaled matrix.", s1, s2, s3, k)
-			if ans == s1 || ans == s2 || ans == s3 || ans == k || containsWord(q, ansStr) {
+			matStr := formatMatrix2([][]int{{a, b}, {b, a}})
+			q := fmt.Sprintf("Find the spectral norm \\(\\|A\\|_2\\) of the matrix \\(A = %s\\).", matStr)
+			if containsWord(q, ansStr) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the scaled spectral norm property: \\(\\|k A\\|_2 = k \\|A\\|_2 = k \\sigma_{\\max}\\).\n"+
-				"Subgoal 2: Identify the maximum singular value \\(\\sigma_{\\max} = %d\\) and substitute scalar %d: \\((%d)(%d)\\).\n"+
-				"Subgoal 3: Evaluate product to find norm: %d.",
-				s1, k, k, s1, ans)
+			ex := fmt.Sprintf("Subgoal 1: Recall that the matrix 2-norm equals its maximum singular value: \\(\\|A\\|_2 = \\sigma_{\\max}(A)\\).\n"+
+				"Subgoal 2: For symmetric \\(A = %s\\), the eigenvalues of \\(A^T A\\) are \\((%d + %d)^2 = %d\\) and \\((%d - %d)^2 = %d\\).\n"+
+				"Subgoal 3: Take the principal square root of the maximum eigenvalue: \\(\\|A\\|_2 = %d\\).",
+				matStr, a, b, ans*ans, a, b, (a-b)*(a-b), ans)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
 				Explanation: ex,
 				Facts: map[string]string{
-					"s1":     strconv.Itoa(s1),
-					"s2":     strconv.Itoa(s2),
-					"s3":     strconv.Itoa(s3),
-					"k":      strconv.Itoa(k),
+					"a":      strconv.Itoa(a),
+					"b":      strconv.Itoa(b),
 					"answer": ansStr,
 				},
 			}
 		case 2:
-			s1 := smallInt(2, 5+tier*2)
-			s2 := smallInt(2, 4+tier)
-			s3 := smallInt(1, 3+tier)
-			frobSq := s1*s1 + s2*s2 + s3*s3
+			// Squared Frobenius norm ||A||_F^2 = a^2 + b^2 + c^2 + d^2
+			a := smallInt(1, 3+tier)
+			b := smallInt(1, 3+tier)
+			c := smallInt(1, 3+tier)
+			d := smallInt(1, 3+tier)
+			frobSq := a*a + b*b + c*c + d*d
 			ansStr := strconv.Itoa(frobSq)
-			q := fmt.Sprintf("A matrix \\(A\\) has singular values %d, %d and %d. Compute the squared Frobenius norm \\(\\|A\\|_F^2\\).", s1, s2, s3)
-			if frobSq == s1 || frobSq == s2 || frobSq == s3 || containsWord(q, ansStr) {
+			matStr := formatMatrix2([][]int{{a, b}, {c, d}})
+			q := fmt.Sprintf("Compute the squared Frobenius norm \\(\\|A\\|_F^2\\) of the matrix \\(A = %s\\).", matStr)
+			if containsWord(q, ansStr) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the unitary invariance identity for Frobenius norm: \\(\\|A\\|_F^2 = \\sum \\sigma_i^2\\).\n"+
-				"Subgoal 2: Substitute singular values into sum of squares: \\((%d)^2 + (%d)^2 + (%d)^2 = %d + %d + %d\\).\n"+
+			ex := fmt.Sprintf("Subgoal 1: State the Frobenius norm entrywise formula: \\(\\|A\\|_F^2 = \\sum_{i,j} a_{ij}^2\\).\n"+
+				"Subgoal 2: Sum the squares of all matrix entries: \\((%d)^2 + (%d)^2 + (%d)^2 + (%d)^2 = %d + %d + %d + %d\\).\n"+
 				"Subgoal 3: Evaluate the sum to find \\(\\|A\\|_F^2 = %d\\).",
-				s1, s2, s3, s1*s1, s2*s2, s3*s3, frobSq)
+				a, b, c, d, a*a, b*b, c*c, d*d, frobSq)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
 				Explanation: ex,
 				Facts: map[string]string{
-					"s1":     strconv.Itoa(s1),
-					"s2":     strconv.Itoa(s2),
-					"s3":     strconv.Itoa(s3),
+					"a":      strconv.Itoa(a),
+					"b":      strconv.Itoa(b),
+					"c":      strconv.Itoa(c),
+					"d":      strconv.Itoa(d),
 					"answer": ansStr,
 				},
 			}
 		case 3:
-			minSig := smallInt(2, 4+tier)
-			mult := smallInt(2, 5+tier*2)
-			maxSig := minSig * mult
-			midSig := minSig + smallInt(1, maxSig-minSig-1)
-			ansStr := strconv.Itoa(mult)
-			q := fmt.Sprintf("An invertible real matrix \\(A\\) has singular values %d, %d and %d. Find the 2-norm condition number \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}}\\).", maxSig, midSig, minSig)
-			if mult == maxSig || mult == midSig || mult == minSig || containsWord(q, ansStr) {
+			// Condition number kappa_2(A) = sigma_max / sigma_min for A = [[a, b], [b, a]]
+			// We select integer pairs (a, b) such that (a+b)/(a-b) = k exactly.
+			type condPair struct{ a, b, k int }
+			pairs := []condPair{
+				{3, 1, 2},
+				{6, 2, 2},
+				{2, 1, 3},
+				{4, 2, 3},
+				{5, 3, 4},
+				{3, 2, 5},
+				{6, 4, 5},
+			}
+			p := pairs[rand.Intn(len(pairs))]
+			ansStr := strconv.Itoa(p.k)
+			matStr := formatMatrix2([][]int{{p.a, p.b}, {p.b, p.a}})
+			q := fmt.Sprintf("Find the 2-norm condition number \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}}\\) of the matrix \\(A = %s\\).", matStr)
+			if containsWord(q, ansStr) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the 2-norm condition number formula: \\(\\kappa_2(A) = \\frac{\\sigma_{\\max}}{\\sigma_{\\min}}\\).\n"+
-				"Subgoal 2: Identify extreme singular values \\(\\sigma_{\\max} = %d\\) and \\(\\sigma_{\\min} = %d\\): \\(\\frac{%d}{%d}\\).\n"+
-				"Subgoal 3: Evaluate the ratio to obtain condition number \\(\\kappa_2(A) = %d\\).",
-				maxSig, minSig, maxSig, minSig, mult)
+			sigMax := p.a + p.b
+			sigMin := p.a - p.b
+			ex := fmt.Sprintf("Subgoal 1: Find singular values of \\(A\\): \\(\\sigma_{\\max} = %d + %d = %d\\) and \\(\\sigma_{\\min} = %d - %d = %d\\).\n"+
+				"Subgoal 2: Substitute into condition number formula: \\(\\kappa_2(A) = \\frac{%d}{%d}\\).\n"+
+				"Subgoal 3: Evaluate the quotient to find \\(\\kappa_2(A) = %d\\).",
+				p.a, p.b, sigMax, p.a, p.b, sigMin, sigMax, sigMin, p.k)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
 				Explanation: ex,
 				Facts: map[string]string{
-					"maxSig": strconv.Itoa(maxSig),
-					"midSig": strconv.Itoa(midSig),
-					"minSig": strconv.Itoa(minSig),
+					"a":      strconv.Itoa(p.a),
+					"b":      strconv.Itoa(p.b),
 					"answer": ansStr,
 				},
 			}
 		default:
-			numNonZero := smallInt(2, 3)
-			numZero := smallInt(1, 2)
-			vals := make([]int, 0, numNonZero+numZero)
-			for i := 0; i < numNonZero; i++ {
-				vals = append(vals, smallInt(4, 8+tier*2))
-			}
-			for i := 0; i < numZero; i++ {
-				vals = append(vals, 0)
-			}
-			var listStr string
-			if len(vals) == 3 {
-				listStr = fmt.Sprintf("%d, %d and %d", vals[0], vals[1], vals[2])
+			// Rank / non-zero singular values of A
+			isFullRank := rand.Intn(2) == 1
+			var a, b, c, d, rank int
+			if isFullRank {
+				a = smallInt(1, 4)
+				b = smallInt(1, 4)
+				c = smallInt(1, 4)
+				d = smallInt(1, 4)
+				if a*d-b*c == 0 {
+					d += 2
+				}
+				rank = 2
 			} else {
-				listStr = fmt.Sprintf("%d, %d, %d and %d", vals[0], vals[1], vals[2], vals[3])
+				a = smallInt(1, 3)
+				b = smallInt(1, 3)
+				m := smallInt(2, 3)
+				c = m * a
+				d = m * b
+				rank = 1
 			}
-			ansStr := strconv.Itoa(numNonZero)
-			q := fmt.Sprintf("A real matrix \\(A\\) has singular values %s. Find the rank of \\(A\\).", listStr)
+			ansStr := strconv.Itoa(rank)
+			matStr := formatMatrix2([][]int{{a, b}, {c, d}})
+			q := fmt.Sprintf("How many non-zero singular values does the matrix \\(A = %s\\) have?", matStr)
 			if containsWord(q, ansStr) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the SVD rank theorem: the rank of a matrix equals the number of nonzero singular values.\n"+
-				"Subgoal 2: Count the nonzero entries in singular value list (%s): exactly %d nonzero values.\n"+
-				"Subgoal 3: Conclude that \\(\\operatorname{rank}(A) = %d\\).",
-				listStr, numNonZero, numNonZero)
+			ex := fmt.Sprintf("Subgoal 1: State the SVD rank theorem: the number of non-zero singular values equals the matrix rank \\(\\operatorname{rank}(A)\\).\n"+
+				"Subgoal 2: Determine matrix determinant: \\(\\det(A) = (%d)(%d) - (%d)(%d) = %d\\).\n"+
+				"Subgoal 3: Conclude that \\(\\operatorname{rank}(A) = %d\\), so there are %d non-zero singular values.",
+				a, d, b, c, a*d-b*c, rank, rank)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
@@ -1849,47 +1924,53 @@ func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 		mode := rand.Intn(5)
 		switch mode {
 		case 0:
-			// Algebraic multiplicity from Jordan block sizes
-			eig := smallInt(2, 6+tier)
-			b1 := smallInt(1, 3)
-			b2 := smallInt(1, 3)
-			b3 := smallInt(1, 3)
-			ans := b1 + b2 + b3
-			ansStr := strconv.Itoa(ans)
-			q := fmt.Sprintf("In the Jordan canonical form of a matrix, the blocks corresponding to eigenvalue \\(\\lambda = %d\\) have sizes %d, %d and %d. What is the algebraic multiplicity of eigenvalue %d?", eig, b1, b2, b3, eig)
-			if ans == eig || ans == b1 || ans == b2 || ans == b3 || containsWord(q, ansStr) {
+			// Geometric multiplicity (dimension of eigenspace = number of Jordan blocks)
+			eig := smallInt(2, 5+tier)
+			mat := [][]int{
+				{eig, 1, 0},
+				{0, eig, 0},
+				{0, 0, eig},
+			}
+			ansStr := "2"
+			matStr := formatMatrix3(mat)
+			q := fmt.Sprintf("For the matrix in Jordan canonical form \\(J = %s\\), what is the geometric multiplicity of the eigenvalue \\(\\lambda = %d\\)?", matStr, eig)
+			if containsWord(q, ansStr) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the algebraic multiplicity theorem for Jordan form: the algebraic multiplicity of an eigenvalue equals the sum of the sizes of its associated Jordan blocks.\n"+
-				"Subgoal 2: Sum the sizes of the Jordan blocks: %d + %d + %d.\n"+
-				"Subgoal 3: Evaluate the sum to find the algebraic multiplicity: %d.",
-				b1, b2, b3, ans)
+			ex := fmt.Sprintf("Subgoal 1: State the Jordan form eigenspace theorem: the geometric multiplicity of an eigenvalue equals the number of Jordan blocks associated with that eigenvalue.\n"+
+				"Subgoal 2: Count the Jordan blocks for \\(\\lambda = %d\\): one \\(2 \\times 2\\) block and one \\(1 \\times 1\\) block, giving 2 blocks.\n"+
+				"Subgoal 3: Conclude that the geometric multiplicity is %s.",
+				eig, ansStr)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
 				Explanation: ex,
 				Facts: map[string]string{
 					"eig":    strconv.Itoa(eig),
-					"b1":     strconv.Itoa(b1),
-					"b2":     strconv.Itoa(b2),
-					"b3":     strconv.Itoa(b3),
 					"answer": ansStr,
 				},
 			}
 		case 1:
-			l1 := smallInt(2, 5+tier)
-			l2 := smallInt(2, 5+tier)
-			l3 := smallInt(2, 5+tier)
-			tr := 2*l1 + l2 + l3
+			// Trace of Jordan matrix
+			l1 := smallInt(1, 4+tier)
+			l2 := smallInt(1, 4+tier)
+			l3 := smallInt(1, 4+tier)
+			tr := l1 + l2 + l3
 			ansStr := strconv.Itoa(tr)
-			q := fmt.Sprintf("A \\(4 \\times 4\\) matrix has Jordan blocks \\(J_2(%d)\\), \\(J_1(%d)\\) and \\(J_1(%d)\\). Compute the trace of the matrix.", l1, l2, l3)
-			if tr == l1 || tr == l2 || tr == l3 || containsWord(q, ansStr) {
+			mat := [][]int{
+				{l1, 1, 0},
+				{0, l2, 1},
+				{0, 0, l3},
+			}
+			matStr := formatMatrix3(mat)
+			q := fmt.Sprintf("Compute the trace \\(\\operatorname{tr}(J)\\) of the upper-triangular Jordan form matrix \\(J = %s\\).", matStr)
+			if containsWord(q, ansStr) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the similarity invariance of trace: \\(\\operatorname{tr}(A)\\) equals the sum of diagonal entries in Jordan normal form.\n"+
-				"Subgoal 2: Sum diagonal entries across all blocks: \\(2(%d) + %d + %d = %d + %d + %d\\).\n"+
-				"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(A) = %d\\).",
-				l1, l2, l3, 2*l1, l2, l3, tr)
+			ex := fmt.Sprintf("Subgoal 1: State the trace property: \\(\\operatorname{tr}(J)\\) is the sum of all diagonal entries.\n"+
+				"Subgoal 2: Sum the diagonal entries: %d + %d + %d.\n"+
+				"Subgoal 3: Evaluate the sum to find \\(\\operatorname{tr}(J) = %d\\).",
+				l1, l2, l3, tr)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
@@ -1902,18 +1983,26 @@ func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 				},
 			}
 		case 2:
-			l1 := smallInt(2, 4+tier)
-			l2 := smallInt(2, 4+tier)
-			detA := l1 * l1 * l2
+			// Determinant of Jordan matrix
+			l1 := smallInt(2, 3+tier)
+			l2 := smallInt(2, 3+tier)
+			l3 := smallInt(1, 3+tier)
+			detA := l1 * l2 * l3
 			ansStr := strconv.Itoa(detA)
-			q := fmt.Sprintf("A \\(3 \\times 3\\) matrix has Jordan canonical form consisting of a \\(2 \\times 2\\) block \\(J_2(%d)\\) and a \\(1 \\times 1\\) block \\(J_1(%d)\\). Find \\(\\det(A)\\).", l1, l2)
-			if detA == l1 || detA == l2 || containsWord(q, ansStr) {
+			mat := [][]int{
+				{l1, 1, 0},
+				{0, l2, 0},
+				{0, 0, l3},
+			}
+			matStr := formatMatrix3(mat)
+			q := fmt.Sprintf("Find the determinant \\(\\det(J)\\) of the upper-triangular matrix in Jordan canonical form \\(J = %s\\).", matStr)
+			if containsWord(q, ansStr) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the triangular determinant property: \\(\\det(A)\\) is the product of all diagonal entries in Jordan canonical form.\n"+
-				"Subgoal 2: Multiply diagonal entries across both blocks: \\((%d)^2 \\times %d = %d \\times %d\\).\n"+
-				"Subgoal 3: Evaluate the product to find \\(\\det(A) = %d\\).",
-				l1, l2, l1*l1, l2, detA)
+			ex := fmt.Sprintf("Subgoal 1: State the triangular determinant property: \\(\\det(J)\\) is the product of all diagonal entries.\n"+
+				"Subgoal 2: Multiply diagonal entries: (%d)(%d)(%d).\n"+
+				"Subgoal 3: Evaluate the product to find \\(\\det(J) = %d\\).",
+				l1, l2, l3, detA)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
@@ -1921,58 +2010,63 @@ func (g *jordanGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 				Facts: map[string]string{
 					"l1":     strconv.Itoa(l1),
 					"l2":     strconv.Itoa(l2),
+					"l3":     strconv.Itoa(l3),
 					"answer": ansStr,
 				},
 			}
 		case 3:
-			alg := smallInt(3, 5+tier*2)
-			geom := smallInt(1, alg-1)
-			defect := alg - geom
-			eig := smallInt(2, 5+tier)
-			ansStr := strconv.Itoa(defect)
-			q := fmt.Sprintf("An eigenspace for eigenvalue \\(\\lambda = %d\\) has algebraic multiplicity %d and geometric multiplicity %d. How many generalized eigenvectors that are not ordinary eigenvectors are needed to complete a Jordan chain basis for this eigenspace?", eig, alg, geom)
-			if defect == eig || defect == alg || defect == geom || containsWord(q, ansStr) {
+			// Dimension of eigenspace for single 3x3 Jordan block
+			eig := smallInt(2, 6+tier)
+			mat := [][]int{
+				{eig, 1, 0},
+				{0, eig, 1},
+				{0, 0, eig},
+			}
+			matStr := formatMatrix3(mat)
+			ansStr := "1"
+			q := fmt.Sprintf("What is the dimension of the eigenspace \\(\\dim \\ker(J - %d I)\\) for the single Jordan block \\(J = %s\\)?", eig, matStr)
+			if containsWord(q, ansStr) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the generalized eigenvector defect formula: non-ordinary generalized eigenvectors equal algebraic minus geometric multiplicity.\n"+
-				"Subgoal 2: Substitute multiplicities: algebraic %d and geometric %d: %d - %d.\n"+
-				"Subgoal 3: Evaluate difference to find defect: %d.",
-				alg, geom, alg, geom, defect)
+			ex := fmt.Sprintf("Subgoal 1: State the Jordan block nullity property: a single Jordan block \\(J_k(\\lambda)\\) has nullity \\(\\dim \\ker(J - \\lambda I) = 1\\).\n"+
+				"Subgoal 2: Compute \\(J - %d I\\), which has rank 2 and nullity 3 - 2 = 1.\n"+
+				"Subgoal 3: Conclude that the eigenspace dimension is 1.",
+				eig)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
 				Explanation: ex,
 				Facts: map[string]string{
 					"eig":    strconv.Itoa(eig),
-					"alg":    strconv.Itoa(alg),
-					"geom":   strconv.Itoa(geom),
 					"answer": ansStr,
 				},
 			}
 		default:
-			e1 := smallInt(2, 4+tier)
-			e2 := smallInt(2, 4+tier)
-			l1 := smallInt(2, 5+tier)
-			l2 := l1 + smallInt(1, 3+tier)
-			ans := e1 + e2
-			ansStr := strconv.Itoa(ans)
-			q := fmt.Sprintf("A matrix has minimal polynomial \\(m(\\lambda) = (\\lambda - %d)^{%d}(\\lambda - %d)^{%d}\\). What is the sum of the sizes of the largest Jordan blocks for eigenvalues %d and %d?", l1, e1, l2, e2, l1, l2)
-			if ans == l1 || ans == l2 || ans == e1 || ans == e2 || containsWord(q, ansStr) {
+			// Minimal polynomial degree / largest block
+			eig := smallInt(2, 5+tier)
+			b1 := 2
+			b2 := 1
+			ansStr := "2"
+			mat := [][]int{
+				{eig, 1, 0},
+				{0, eig, 0},
+				{0, 0, eig},
+			}
+			matStr := formatMatrix3(mat)
+			q := fmt.Sprintf("For the matrix \\(J = %s\\), what is the degree of \\((\\lambda - %d)\\) in the minimal polynomial \\(m(\\lambda)\\)?", matStr, eig)
+			if containsWord(q, ansStr) {
 				continue
 			}
-			ex := fmt.Sprintf("Subgoal 1: State the minimal polynomial Jordan block theorem: the size of the largest Jordan block for each eigenvalue equals its exponent in \\(m(\\lambda)\\).\n"+
-				"Subgoal 2: Read maximum block sizes %d and %d for eigenvalues %d and %d: %d + %d.\n"+
-				"Subgoal 3: Evaluate sum of block sizes: %d.",
-				e1, e2, l1, l2, e1, e2, ans)
+			ex := fmt.Sprintf("Subgoal 1: State the minimal polynomial Jordan theorem: the exponent of \\((\\lambda - \\lambda_i)\\) in \\(m(\\lambda)\\) equals the size of the largest Jordan block for that eigenvalue.\n"+
+				"Subgoal 2: Identify block sizes for \\(\\lambda = %d\\): sizes %d and %d. The maximum size is %s.\n"+
+				"Subgoal 3: Conclude that the minimal polynomial factor has degree %s.",
+				eig, b1, b2, ansStr, ansStr)
 			return generator.Problem{
 				Question:    q,
 				Answer:      ansStr,
 				Explanation: ex,
 				Facts: map[string]string{
-					"l1":     strconv.Itoa(l1),
-					"e1":     strconv.Itoa(e1),
-					"l2":     strconv.Itoa(l2),
-					"e2":     strconv.Itoa(e2),
+					"eig":    strconv.Itoa(eig),
 					"answer": ansStr,
 				},
 			}

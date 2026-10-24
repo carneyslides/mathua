@@ -3,8 +3,11 @@ package odes
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
 
 	"github.com/chuma-beep/mathua/internal/generator"
+	"github.com/chuma-beep/mathua/internal/grader"
 )
 
 func Register(reg *generator.Registry) {
@@ -388,92 +391,165 @@ func (g *exactGen) Generate(ctx generator.GeneratorContext) generator.Problem {
 
 type homogeneousGen struct{}
 
+func (g *homogeneousGen) AnswerFormat() generator.AnswerFormat {
+	return generator.AnswerFormat{
+		Hint:      "Select the option or enter the answer",
+		InputMode: "text",
+	}
+}
+
+func (g *homogeneousGen) Grade(expected, userAnswer string) grader.Result {
+	normExp := strings.TrimSpace(expected)
+	normUser := strings.TrimSpace(userAnswer)
+	if normExp == normUser {
+		return grader.Result{Correct: true, Score: 1}
+	}
+	r := grader.NewRouter()
+	if strings.Contains(expected, "\\(y(x)") {
+		return r.Grade(grader.GradingMultipleChoice, expected, userAnswer)
+	}
+	return r.Grade(grader.GradingNumeric, expected, userAnswer)
+}
+
 func (g *homogeneousGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	mode := rand.Intn(5)
-	switch mode {
-	case 0:
-		// Characteristic discriminant Delta = b^2 - 4ac for y'' + b y' + c y = 0
-		b := smallInt(2, 7)
-		c := smallInt(1, 9)
-		disc := b*b - 4*c
-		return generator.Problem{
-			Question: fmt.Sprintf("What is the discriminant \\(\\Delta = b^2 - 4ac\\) of the characteristic equation for the differential equation \\(y'' + %d y' + %d y = 0\\)?", b, c),
-			Answer:   fmt.Sprintf("%d", disc),
-			Explanation: fmt.Sprintf(
+	for {
+		mode := rand.Intn(5)
+		switch mode {
+		case 0:
+			// Characteristic discriminant Delta = b^2 - 4ac for y'' + b y' + c y = 0
+			b := smallInt(2, 7)
+			c := smallInt(1, 9)
+			disc := b*b - 4*c
+			ansStr := fmt.Sprintf("%d", disc)
+			q := fmt.Sprintf("What is the discriminant \\(\\Delta = b^2 - 4ac\\) of the characteristic equation for the differential equation \\(y'' + %d y' + %d y = 0\\)?", b, c)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf(
 				"The characteristic equation is \\(r^2 + %d r + %d = 0\\). The discriminant is \\(\\Delta = b^2 - 4ac = (%d)^2 - 4(1)(%d) = %d - %d = %d\\).",
 				b, c, b, c, b*b, 4*c, disc,
-			),
-		}
+			)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+			}
 
-	case 1:
-		// Single repeated root value r0 for y'' - 2 r0 y' + r0^2 y = 0
-		r0 := smallInt(1, 6+int(ctx.Difficulty*2))
-		bCoeff := 2 * r0
-		cSq := r0 * r0
-		return generator.Problem{
-			Question: fmt.Sprintf("The differential equation \\(y'' - %d y' + %d y = 0\\) has a single repeated real characteristic root. What is the value of this repeated root \\(r\\)?", bCoeff, cSq),
-			Answer:   fmt.Sprintf("%d", r0),
-			Explanation: fmt.Sprintf(
-				"The characteristic equation is \\(r^2 - %d r + %d = (r - %d)^2 = 0\\), yielding repeated root %d.",
-				bCoeff, cSq, r0, r0,
-			),
-		}
+		case 1:
+			// Repeated root general solution y(x) = (c1 + c2 x) e^{r0 x}
+			r0 := smallInt(1, 5)
+			bCoeff := 2 * r0
+			cSq := r0 * r0
 
-	case 2:
-		// Underdamped complex conjugate angular frequency beta for y'' + 2 alpha y' + (alpha^2 + beta^2) y = 0
-		alpha := smallInt(1, 4)
-		beta := smallInt(2, 7)
-		bCoeff := 2 * alpha
-		cVal := alpha*alpha + beta*beta
-		discNeg := 4 * beta * beta
-		return generator.Problem{
-			Question: fmt.Sprintf("The underdamped differential equation \\(y'' + %d y' + %d y = 0\\) has complex characteristic roots \\(r = -\\alpha \\pm i \\beta\\). What is the oscillatory angular frequency \\(\\beta\\)?", bCoeff, cVal),
-			Answer:   fmt.Sprintf("%d", beta),
-			Explanation: fmt.Sprintf(
+			correct := fmt.Sprintf(`\(y(x) = (c_1 + c_2 x) e^{%d x}\)`, r0)
+			dist1 := fmt.Sprintf(`\(y(x) = c_1 e^{%d x} + c_2 e^{-%d x}\)`, r0, r0)
+			dist2 := fmt.Sprintf(`\(y(x) = c_1 \cos(%d x) + c_2 \sin(%d x)\)`, r0, r0)
+			dist3 := fmt.Sprintf(`\(y(x) = c_1 e^{%d x} + c_2 x^2 e^{%d x}\)`, r0, r0)
+
+			choices := []string{correct, dist1, dist2, dist3}
+			rand.Shuffle(len(choices), func(i, j int) { choices[i], choices[j] = choices[j], choices[i] })
+
+			q := fmt.Sprintf("Which expression is the general solution of the differential equation \\(y'' - %d y' + %d y = 0\\)?\n\nA) %s\n\nB) %s\n\nC) %s\n\nD) %s",
+				bCoeff, cSq, choices[0], choices[1], choices[2], choices[3])
+
+			ex := fmt.Sprintf(
+				"The characteristic equation is \\(r^2 - %d r + %d = (r - %d)^2 = 0\\), giving repeated root \\(r = %d\\). For a repeated real root, the linearly independent solutions are \\(e^{%d x}\\) and \\(x e^{%d x}\\), yielding general solution %s.",
+				bCoeff, cSq, r0, r0, r0, r0, correct,
+			)
+			return generator.Problem{
+				Question:    q,
+				Answer:      correct,
+				Explanation: ex,
+				Facts: map[string]string{
+					"r0":     strconv.Itoa(r0),
+					"answer": correct,
+				},
+			}
+
+		case 2:
+			// Underdamped complex conjugate angular frequency beta for y'' + 2 alpha y' + (alpha^2 + beta^2) y = 0
+			alpha := smallInt(1, 4)
+			beta := smallInt(2, 7)
+			bCoeff := 2 * alpha
+			cVal := alpha*alpha + beta*beta
+			discNeg := 4 * beta * beta
+			ansStr := fmt.Sprintf("%d", beta)
+			q := fmt.Sprintf("The underdamped differential equation \\(y'' + %d y' + %d y = 0\\) has complex characteristic roots \\(r = -\\alpha \\pm i \\beta\\). What is the oscillatory angular frequency \\(\\beta\\)?", bCoeff, cVal)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			ex := fmt.Sprintf(
 				"The characteristic equation is \\(r^2 + %d r + %d = 0\\). By the quadratic formula, \\(r = \\frac{-%d \\pm \\sqrt{(%d)^2 - 4(%d)}}{2} = \\frac{-%d \\pm \\sqrt{-%d}}{2} = -%d \\pm %d i\\). Thus the angular frequency is %d.",
 				bCoeff, cVal, bCoeff, bCoeff, cVal, bCoeff, discNeg, alpha, beta, beta,
-			),
-		}
+			)
+			return generator.Problem{
+				Question:    q,
+				Answer:      ansStr,
+				Explanation: ex,
+			}
 
-	case 3:
-		// Sum of squares of distinct positive real characteristic roots r1, r2
-		r1 := smallInt(1, 4)
-		r2 := r1 + smallInt(1, 3)
-		sumR := r1 + r2
-		prodR := r1 * r2
-		sumSq := r1*r1 + r2*r2
-		return generator.Problem{
-			Question: fmt.Sprintf("The differential equation \\(y'' - %d y' + %d y = 0\\) has two distinct real characteristic roots \\(r_1\\) and \\(r_2\\). What is the sum of their squares \\(r_1^2 + r_2^2\\)?", sumR, prodR),
-			Answer:   fmt.Sprintf("%d", sumSq),
-			Explanation: fmt.Sprintf(
-				"The characteristic equation factors as \\(r^2 - %d r + %d = (r - %d)(r - %d) = 0\\), giving roots \\(r_1 = %d\\) and \\(r_2 = %d\\). The sum of their squares is \\((%d)^2 + (%d)^2 = %d + %d = %d\\).",
-				sumR, prodR, r1, r2, r1, r2, r1, r2, r1*r1, r2*r2, sumSq,
-			),
-		}
+		case 3:
+			// Symbolic general solution for distinct real roots r1, r2: y(x) = c_1 e^{r1 x} + c_2 e^{r2 x}
+			r1 := smallInt(1, 4)
+			r2 := r1 + smallInt(1, 3)
+			sumR := r1 + r2
+			prodR := r1 * r2
 
-	default:
-		// Harmonic oscillator amplitude A = sqrt(y0^2 + (v0/omega)^2) with Pythagorean pairs
-		type pair struct {
-			y0, k, a int
-		}
-		pairs := []pair{
-			{3, 4, 5},
-			{4, 3, 5},
-			{6, 8, 10},
-			{8, 6, 10},
-			{5, 12, 13},
-		}
-		p := pairs[rand.Intn(len(pairs))]
-		omega := smallInt(2, 4)
-		omegaSq := omega * omega
-		v0 := omega * p.k
-		return generator.Problem{
-			Question: fmt.Sprintf("The undamped oscillator \\(y'' + %d y = 0\\) satisfies initial displacement \\(y(0) = %d\\) and velocity \\(y'(0) = %d\\). What is the amplitude \\(A\\) of the resulting motion \\(y(t) = A \\cos(\\omega t - \\phi)\\)?", omegaSq, p.y0, v0),
-			Answer:   fmt.Sprintf("%d", p.a),
-			Explanation: fmt.Sprintf(
-				"The natural frequency is \\(\\omega = \\sqrt{%d} = %d\\). The solution is \\(y(t) = %d \\cos(%d t) + %d \\sin(%d t)\\). The amplitude is \\(A = \\sqrt{(%d)^2 + (%d)^2} = \\sqrt{%d + %d} = \\sqrt{%d} = %d\\).",
-				omegaSq, omega, p.y0, omega, p.k, omega, p.y0, p.k, p.y0*p.y0, p.k*p.k, p.a*p.a, p.a,
-			),
+			correct := fmt.Sprintf(`\(y(x) = c_1 e^{%d x} + c_2 e^{%d x}\)`, r1, r2)
+			dist1 := fmt.Sprintf(`\(y(x) = c_1 e^{-%d x} + c_2 e^{-%d x}\)`, r1, r2)
+			dist2 := fmt.Sprintf(`\(y(x) = (c_1 + c_2 x) e^{%d x}\)`, r1)
+			dist3 := fmt.Sprintf(`\(y(x) = c_1 \cos(%d x) + c_2 \sin(%d x)\)`, r1, r2)
+
+			choices := []string{correct, dist1, dist2, dist3}
+			rand.Shuffle(len(choices), func(i, j int) { choices[i], choices[j] = choices[j], choices[i] })
+
+			q := fmt.Sprintf("Which expression is the general solution of the differential equation \\(y'' - %d y' + %d y = 0\\)?\n\nA) %s\n\nB) %s\n\nC) %s\n\nD) %s",
+				sumR, prodR, choices[0], choices[1], choices[2], choices[3])
+
+			ex := fmt.Sprintf(
+				"The characteristic equation is \\(r^2 - %d r + %d = (r - %d)(r - %d) = 0\\), with distinct real roots \\(r_1 = %d\\) and \\(r_2 = %d\\). Therefore the general solution is %s.",
+				sumR, prodR, r1, r2, r1, r2, correct,
+			)
+			return generator.Problem{
+				Question:    q,
+				Answer:      correct,
+				Explanation: ex,
+				Facts: map[string]string{
+					"r1":     strconv.Itoa(r1),
+					"r2":     strconv.Itoa(r2),
+					"answer": correct,
+				},
+			}
+
+		default:
+			// Harmonic oscillator amplitude A = sqrt(y0^2 + (v0/omega)^2) with Pythagorean pairs
+			type pair struct {
+				y0, k, a int
+			}
+			pairs := []pair{
+				{3, 4, 5},
+				{4, 3, 5},
+				{6, 8, 10},
+				{8, 6, 10},
+				{5, 12, 13},
+			}
+			p := pairs[rand.Intn(len(pairs))]
+			omega := smallInt(2, 4)
+			omegaSq := omega * omega
+			v0 := omega * p.k
+			ansStr := fmt.Sprintf("%d", p.a)
+			q := fmt.Sprintf("The undamped oscillator \\(y'' + %d y = 0\\) satisfies initial displacement \\(y(0) = %d\\) and velocity \\(y'(0) = %d\\). What is the amplitude \\(A\\) of the resulting motion \\(y(t) = A \\cos(\\omega t - \\phi)\\)?", omegaSq, p.y0, v0)
+			if strings.Contains(q, ansStr) {
+				continue
+			}
+			return generator.Problem{
+				Question: q,
+				Answer:   ansStr,
+				Explanation: fmt.Sprintf(
+					"The natural frequency is \\(\\omega = \\sqrt{%d} = %d\\). The solution is \\(y(t) = %d \\cos(%d t) + %d \\sin(%d t)\\). The amplitude is \\(A = \\sqrt{(%d)^2 + (%d)^2} = \\sqrt{%d + %d} = \\sqrt{%d} = %d\\).",
+					omegaSq, omega, p.y0, omega, p.k, omega, p.y0, p.k, p.y0*p.y0, p.k*p.k, p.a*p.a, p.a,
+				),
+			}
 		}
 	}
 }
