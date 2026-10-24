@@ -99,7 +99,6 @@ export function loadEngine(): Promise<Engine | null> {
         isEquivalent: (a: Expression, b: Expression): boolean => {
           try {
             if (a.isIdenticallyEqual(b) === true) return true
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const diff = (ce.box(['Subtract', a as any, b as any]) as any).simplify().toString()
             return diff === '0'
           } catch {

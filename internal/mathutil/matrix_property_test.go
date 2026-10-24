@@ -79,7 +79,7 @@ func TestMatrix3x3_JordanMatrix(t *testing.T) {
 	for i := 0; i < 500; i++ {
 		lambda := rng.Intn(7) - 3
 		mu := lambda + 1 + rng.Intn(4)
-		singleBlock := (i % 2 == 0)
+		singleBlock := (i%2 == 0)
 
 		a, p, ok := JordanMatrix3x3(rng, lambda, mu, singleBlock, 2)
 		if !ok {

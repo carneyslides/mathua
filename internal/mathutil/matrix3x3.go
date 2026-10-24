@@ -264,9 +264,12 @@ func IntegerEigenvalues3x3(rng *rand.Rand, l1, l2, l3 int, maxShear int) (Matrix
 // JordanMatrix3x3 constructs an authentic non-triangular 3x3 matrix with a non-trivial
 // Jordan canonical form J = P^{-1} * A * P.
 // If singleBlock is true:
-//   J has a single 3x3 Jordan block: [lambda 1 0; 0 lambda 1; 0 0 lambda]
+//
+//	J has a single 3x3 Jordan block: [lambda 1 0; 0 lambda 1; 0 0 lambda]
+//
 // If singleBlock is false:
-//   J has a 2x2 Jordan block and a 1x1 block: [lambda 1 0; 0 lambda 0; 0 0 mu]
+//
+//	J has a 2x2 Jordan block and a 1x1 block: [lambda 1 0; 0 lambda 0; 0 0 mu]
 func JordanMatrix3x3(rng *rand.Rand, lambda, mu int, singleBlock bool, maxShear int) (Matrix3x3, Matrix3x3, bool) {
 	var j Matrix3x3
 	if singleBlock {
