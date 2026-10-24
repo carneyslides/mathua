@@ -165,64 +165,6 @@ func (g *bearingsGen) Generate(ctx generator.GeneratorContext) generator.Problem
 }
 
 // ---------------------------------------------------------------------------
-// Product to sum (multiple choice)
-// ---------------------------------------------------------------------------
-
-type productToSumGen struct{}
-
-func (g *productToSumGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return trigPickMC([]trigMCClaim{
-		{
-			q:           "Which identity rewrites the product of a sine and a cosine as a sum?",
-			correct:     "sin A cos B = (sin(A + B) + sin(A - B))/2",
-			distractors: []string{"sin A cos B = (cos(A - B) - cos(A + B))/2", "sin A cos B = (sin(A + B) - sin(A - B))/2", "sin A cos B = 2 sin(A + B) cos(A - B)"},
-			reason:      "Adding the sum and difference formulas for sine cancels the cosine terms and leaves twice the product, so the product is half their sum.",
-		},
-		{
-			q:           "The product-to-sum identity for two cosines is...",
-			correct:     "cos A cos B = (cos(A - B) + cos(A + B))/2",
-			distractors: []string{"cos A cos B = (cos(A - B) - cos(A + B))/2", "cos A cos B = (sin(A + B) + sin(A - B))/2", "cos A cos B = 2 cos(A + B) cos(A - B)"},
-			reason:      "The sum and difference formulas for cosine both contain the product of the two cosines with the same sign, so adding them doubles it.",
-		},
-		{
-			q:           "Which product becomes a difference of two cosines?",
-			correct:     "sin A sin B = (cos(A - B) - cos(A + B))/2",
-			distractors: []string{"sin A sin B = (cos(A - B) + cos(A + B))/2", "sin A sin B = (sin(A + B) - sin(A - B))/2", "sin A sin B = 2 cos(A - B) cos(A + B)"},
-			reason:      "The difference of the two cosine formulas leaves twice the product of the sines, and the signs come out opposite, so the product is half their difference.",
-		},
-	})
-}
-
-// ---------------------------------------------------------------------------
-// Sum to product (multiple choice)
-// ---------------------------------------------------------------------------
-
-type sumToProductGen struct{}
-
-func (g *sumToProductGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return trigPickMC([]trigMCClaim{
-		{
-			q:           "Which identity rewrites sin A + sin B as a product?",
-			correct:     "sin A + sin B = 2 sin((A + B)/2) cos((A - B)/2)",
-			distractors: []string{"sin A + sin B = 2 cos((A + B)/2) cos((A - B)/2)", "sin A + sin B = 2 sin((A + B)/2) sin((A - B)/2)", "sin A + sin B = 2 sin((A - B)/2) cos((A + B)/2)"},
-			reason:      "Substituting A for u plus v and B for u minus v in the product-to-sum form gives a sum of sines equal to twice a sine times a cosine.",
-		},
-		{
-			q:           "The sum of two cosines equals...",
-			correct:     "cos A + cos B = 2 cos((A + B)/2) cos((A - B)/2)",
-			distractors: []string{"cos A + cos B = 2 sin((A + B)/2) sin((A - B)/2)", "cos A + cos B = -2 sin((A + B)/2) sin((A - B)/2)", "cos A + cos B = 2 cos((A - B)/2) sin((A + B)/2)"},
-			reason:      "The cosines add to twice the product of the cosine of the mean and the cosine of the half-difference, both with a plus sign.",
-		},
-		{
-			q:           "The difference of two cosines equals...",
-			correct:     "cos A - cos B = -2 sin((A + B)/2) sin((A - B)/2)",
-			distractors: []string{"cos A - cos B = 2 sin((A + B)/2) sin((A - B)/2)", "cos A - cos B = 2 sin((A - B)/2) cos((A + B)/2)", "cos A - cos B = -2 cos((A + B)/2) cos((A - B)/2)"},
-			reason:      "Subtracting the two cosine formulas reverses the sign of the product of the sines, which is the one sum-to-product form with a minus sign in front.",
-		},
-	})
-}
-
-// ---------------------------------------------------------------------------
 // Triple angle (numeric)
 // ---------------------------------------------------------------------------
 
@@ -250,95 +192,8 @@ func (g *powerReductionGen) Generate(ctx generator.GeneratorContext) generator.P
 }
 
 // ---------------------------------------------------------------------------
-// Pythagorean variants (multiple choice)
-// ---------------------------------------------------------------------------
-
-type pythagoreanVariantsGen struct{}
-
-func (g *pythagoreanVariantsGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return trigPickMC([]trigMCClaim{
-		{
-			q:           "Dividing sin^2 t + cos^2 t = 1 by cos^2 t gives...",
-			correct:     "tan^2 t + 1 = sec^2 t",
-			distractors: []string{"1 + cot^2 t = csc^2 t", "tan^2 t - 1 = sec^2 t", "sin^2 t + 1 = cos^2 t"},
-			reason:      "Each term is divided by the squared cosine, and sine over cosine is the tangent while one over cosine is the secant.",
-		},
-		{
-			q:           "Dividing sin^2 t + cos^2 t = 1 by sin^2 t gives...",
-			correct:     "1 + cot^2 t = csc^2 t",
-			distractors: []string{"tan^2 t + 1 = sec^2 t", "1 - cot^2 t = csc^2 t", "1 + tan^2 t = csc^2 t"},
-			reason:      "Each term is divided by the squared sine, and cosine over sine is the cotangent while one over sine is the cosecant.",
-		},
-		{
-			q:           "The value of sec^2 t - tan^2 t is...",
-			correct:     "1",
-			distractors: []string{"0", "-1", "sin^2 t"},
-			reason:      "Rearranging tan^2 t + 1 = sec^2 t gives sec^2 t - tan^2 t = 1 for every angle where the functions are defined.",
-		},
-	})
-}
-
-// ---------------------------------------------------------------------------
-// General solutions (multiple choice)
-// ---------------------------------------------------------------------------
-
-type generalSolutionGen struct{}
-
-func (g *generalSolutionGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return trigPickMC([]trigMCClaim{
-		{
-			q:           "The general solution of sin t = 1/2, in degrees, is...",
-			correct:     "t = 30 + 360k or t = 150 + 360k",
-			distractors: []string{"t = 30 + 180k", "t = 150 + 360k only", "t = 30 + 360k only"},
-			reason:      "The sine takes the value one half at 30 and at its mirror 150 in the first turn, and each repeats every full turn.",
-		},
-		{
-			q:           "The general solution of cos t = 1/2, in degrees, is...",
-			correct:     "t = 60 + 360k or t = -60 + 360k",
-			distractors: []string{"t = 60 + 180k", "t = 120 + 360k or t = 240 + 360k", "t = 60 + 360k only"},
-			reason:      "The cosine is symmetric about the horizontal axis, so the two solutions in a turn are 60 and its negative, and both repeat every turn.",
-		},
-		{
-			q:           "The general solution of tan t = 1, in degrees, is...",
-			correct:     "t = 45 + 180k",
-			distractors: []string{"t = 45 + 360k", "t = 45 + 360k or t = 225 + 360k", "t = 135 + 180k"},
-			reason:      "The tangent has period 180 degrees, so one solution generates all of them by adding whole half-turns.",
-		},
-	})
-}
-
-// ---------------------------------------------------------------------------
 // Linear equations (numeric)
 // ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Advanced inequalities (multiple choice)
-// ---------------------------------------------------------------------------
-
-type advancedIneqGen struct{}
-
-func (g *advancedIneqGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return trigPickMC([]trigMCClaim{
-		{
-			q:           "The solution of sin t > 1/2 in the interval from 0 to 360 degrees is...",
-			correct:     "30 < t < 150",
-			distractors: []string{"0 < t < 30 or 150 < t < 360", "30 < t < 330", "150 < t < 360"},
-			reason:      "The sine rises past one half at 30, stays above it through the top of the circle, and falls back below at the mirror angle 150.",
-		},
-		{
-			q:           "The solution of cos t < 0 in the interval from 0 to 360 degrees is...",
-			correct:     "90 < t < 270",
-			distractors: []string{"0 < t < 90 or 270 < t < 360", "270 < t < 360", "0 < t < 180"},
-			reason:      "The cosine is negative in the second and third quadrants, which run from 90 to 270 degrees.",
-		},
-		{
-			q:           "The solution of tan t >= 1 in the interval from 0 to 180 degrees is...",
-			correct:     "45 <= t < 90",
-			distractors: []string{"0 <= t <= 45", "45 <= t <= 90", "90 < t < 180"},
-			reason:      "The tangent reaches one at 45, grows without bound as the angle approaches 90, and is undefined at 90 itself, so the endpoint 90 is excluded.",
-		},
-	})
-}
 
 // ---------------------------------------------------------------------------
 // The tangent graph (multiple choice)
@@ -355,35 +210,6 @@ func (g *advancedIneqGen) Generate(ctx generator.GeneratorContext) generator.Pro
 // ---------------------------------------------------------------------------
 // Reciprocal graphs (multiple choice)
 // ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Hyperbolic identities (multiple choice)
-// ---------------------------------------------------------------------------
-
-type hyperbolicIdentGen struct{}
-
-func (g *hyperbolicIdentGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return trigPickMC([]trigMCClaim{
-		{
-			q:           "The fundamental hyperbolic identity is...",
-			correct:     "cosh^2 x - sinh^2 x = 1",
-			distractors: []string{"cosh^2 x + sinh^2 x = 1", "sinh^2 x - cosh^2 x = 1", "cosh x - sinh x = 1"},
-			reason:      "The hyperbolic functions parametrise a rectangular hyperbola, and the difference of the squares is the constant that the hyperbola fixes.",
-		},
-		{
-			q:           "Dividing the fundamental hyperbolic identity by cosh^2 x gives...",
-			correct:     "1 - tanh^2 x = sech^2 x",
-			distractors: []string{"1 + tanh^2 x = sech^2 x", "coth^2 x - 1 = csch^2 x", "tanh^2 x - 1 = sech^2 x"},
-			reason:      "The hyperbolic tangent is the ratio of the sine to the cosine, and the hyperbolic secant is the reciprocal of the cosine.",
-		},
-		{
-			q:           "The addition formula for the hyperbolic sine is...",
-			correct:     "sinh(x + y) = sinh x cosh y + cosh x sinh y",
-			distractors: []string{"sinh(x + y) = sinh x cosh y - cosh x sinh y", "sinh(x + y) = cosh x cosh y + sinh x sinh y", "sinh(x + y) = sinh x sinh y + cosh x cosh y"},
-			reason:      "The hyperbolic addition formulas carry plus signs where the circular ones alternate, which is the algebraic trace of the hyperbola rather than the circle.",
-		},
-	})
-}
 
 // ---------------------------------------------------------------------------
 // Hyperbolic inverses (numeric)
@@ -403,35 +229,6 @@ func (g *hyperbolicInverseGen) Generate(ctx generator.GeneratorContext) generato
 			tr.opp*tr.opp, tr.adj*tr.adj, tr.hyp*tr.hyp, tr.adj*tr.adj, answer, tr.opp, tr.adj, tr.hyp),
 		Facts: map[string]string{"opp": strconv.Itoa(tr.opp), "adj": strconv.Itoa(tr.adj), "hyp": strconv.Itoa(tr.hyp), "answer": answer},
 	}
-}
-
-// ---------------------------------------------------------------------------
-// Hyperbolic derivatives (multiple choice)
-// ---------------------------------------------------------------------------
-
-type hyperbolicDerivGen struct{}
-
-func (g *hyperbolicDerivGen) Generate(ctx generator.GeneratorContext) generator.Problem {
-	return trigPickMC([]trigMCClaim{
-		{
-			q:           "The derivative of sinh x is...",
-			correct:     "cosh x",
-			distractors: []string{"sinh x", "-cosh x", "sech^2 x"},
-			reason:      "The hyperbolic sine and cosine are each other's derivatives, with no sign change, which is what distinguishes them from the circular pair.",
-		},
-		{
-			q:           "The derivative of cosh x is...",
-			correct:     "sinh x",
-			distractors: []string{"-sinh x", "cosh x", "-csch^2 x"},
-			reason:      "Differentiating the hyperbolic cosine gives the hyperbolic sine with a plus sign, unlike the circular cosine whose derivative carries a minus.",
-		},
-		{
-			q:           "The derivative of tanh x is...",
-			correct:     "sech^2 x",
-			distractors: []string{"coth^2 x", "-sech^2 x", "1 - tanh^2 x only when x is positive"},
-			reason:      "The hyperbolic tangent is a quotient, and the quotient rule together with the fundamental identity gives the squared hyperbolic secant.",
-		},
-	})
 }
 
 // ---------------------------------------------------------------------------
